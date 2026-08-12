@@ -1,0 +1,26 @@
+/**
+ * Edge-safe Auth.js config (no Prisma / node-only imports).
+ * Used by middleware for route protection; full config lives in src/auth.ts.
+ */
+import type { NextAuthConfig } from "next-auth";
+
+export const SESSION_MAX_AGE_SECONDS = 8 * 60 * 60; // absolute timeout: 8h
+
+export const authConfig = {
+  pages: { signIn: "/login" },
+  session: { strategy: "jwt", maxAge: SESSION_MAX_AGE_SECONDS },
+  providers: [],
+  callbacks: {
+    authorized({ auth, request }) {
+      const { pathname } = request.nextUrl;
+      const isPublic =
+        pathname === "/login" ||
+        pathname.startsWith("/api/auth") ||
+        pathname.startsWith("/scan") ||
+        pathname.startsWith("/_next") ||
+        pathname === "/favicon.ico";
+      if (isPublic) return true;
+      return !!auth?.user;
+    },
+  },
+} satisfies NextAuthConfig;

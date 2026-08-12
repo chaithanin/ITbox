@@ -1,0 +1,1093 @@
+// ITBox — Enterprise IT Management System
+// PostgreSQL + Prisma. Multi-tenant: every business table carries organizationId.
+// Vault secrets are stored ONLY as AES-256-GCM ciphertext with a KMS-wrapped DEK.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================
+// Tenancy
+// ============================================================
+
+model Organization {
+  id        String    @id @default(uuid()) @db.Uuid
+  name      String
+  slug      String    @unique
+  taxId     String?
+  address   String?
+  logoUrl   String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  users             User[]
+  roles             Role[]
+  employees         Employee[]
+  departments       Department[]
+  locations         Location[]
+  assetCategories   AssetCategory[]
+  assets            Asset[]
+  vaultCategories   VaultCategory[]
+  vaultItems        VaultItem[]
+  licenses          License[]
+  subscriptions     Subscription[]
+  vendors           Vendor[]
+  purchaseRequests  PurchaseRequest[]
+  notifications     Notification[]
+  auditLogs         AuditLog[]
+  systemSettings    SystemSetting[]
+  maintenanceTickets MaintenanceTicket[]
+  offboardings      Offboarding[]
+
+  @@map("organizations")
+}
+
+// ============================================================
+// Identity / RBAC
+// ============================================================
+
+enum UserStatus {
+  ACTIVE
+  DISABLED
+  LOCKED
+}
+
+model User {
+  id             String     @id @default(uuid()) @db.Uuid
+  organizationId String     @db.Uuid
+  email          String     @unique
+  name           String
+  image          String?
+  // Argon2id hash — never plaintext. Null for OAuth-only users.
+  passwordHash   String?
+  status         UserStatus @default(ACTIVE)
+
+  // MFA (TOTP). Secret is encrypted with the org KMS envelope, never plaintext.
+  mfaEnabled       Boolean @default(false)
+  totpSecretEnc    String?
+  totpSecretDekEnc String?
+
+  // Login protection
+  failedLoginCount Int       @default(0)
+  lockedUntil      DateTime?
+  lastLoginAt      DateTime?
+
+  // Language / theme preferences
+  locale String @default("th")
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  employee     Employee?
+  userRoles    UserRole[]
+  sessions     UserSession[]
+  accounts     OAuthAccount[]
+
+  vaultItemsOwned    VaultItem[]     @relation("VaultOwner")
+  vaultSharesGranted VaultShare[]    @relation("SharedBy")
+  vaultSharesReceived VaultShare[]   @relation("SharedWithUser")
+  vaultFavorites     VaultFavorite[]
+  auditLogs          AuditLog[]
+  notifications      Notification[]
+  approvalsAssigned  Approval[]      @relation("Approver")
+  emergencyRequests  VaultEmergencyRequest[] @relation("EmergencyRequester")
+
+  @@index([organizationId])
+  @@map("users")
+}
+
+model OAuthAccount {
+  id                String  @id @default(uuid()) @db.Uuid
+  userId            String  @db.Uuid
+  provider          String
+  providerAccountId String
+  type              String
+  access_token      String?
+  refresh_token     String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+  @@map("oauth_accounts")
+}
+
+model UserSession {
+  id         String    @id @default(uuid()) @db.Uuid
+  userId     String    @db.Uuid
+  tokenId    String    @unique // jti in the JWT
+  ip         String?
+  userAgent  String?
+  createdAt  DateTime  @default(now())
+  lastSeenAt DateTime  @default(now())
+  expiresAt  DateTime
+  revokedAt  DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("user_sessions")
+}
+
+model Role {
+  id             String  @id @default(uuid()) @db.Uuid
+  organizationId String  @db.Uuid
+  // Machine key, e.g. SUPER_ADMIN, IT_MANAGER
+  key            String
+  name           String
+  nameTh         String?
+  description    String?
+  isSystem       Boolean @default(false)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  organization    Organization     @relation(fields: [organizationId], references: [id])
+  userRoles       UserRole[]
+  rolePermissions RolePermission[]
+  vaultShares     VaultShare[]     @relation("SharedWithRole")
+
+  @@unique([organizationId, key])
+  @@map("roles")
+}
+
+model Permission {
+  id          String @id @default(uuid()) @db.Uuid
+  // e.g. asset:create, vault:reveal, vault:manage
+  key         String @unique
+  description String?
+
+  rolePermissions RolePermission[]
+
+  @@map("permissions")
+}
+
+model RolePermission {
+  roleId       String @db.Uuid
+  permissionId String @db.Uuid
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+model UserRole {
+  userId String @db.Uuid
+  roleId String @db.Uuid
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
+  @@map("user_roles")
+}
+
+// ============================================================
+// Organization structure
+// ============================================================
+
+enum EmployeeStatus {
+  ACTIVE
+  ON_LEAVE
+  OFFBOARDING
+  RESIGNED
+}
+
+model Employee {
+  id             String         @id @default(uuid()) @db.Uuid
+  organizationId String         @db.Uuid
+  employeeCode   String
+  firstName      String
+  lastName       String
+  email          String?
+  phone          String?
+  position       String?
+  status         EmployeeStatus @default(ACTIVE)
+  startDate      DateTime?
+  endDate        DateTime?
+
+  departmentId String? @db.Uuid
+  locationId   String? @db.Uuid
+  managerId    String? @db.Uuid
+  userId       String? @unique @db.Uuid
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  department   Department?  @relation(fields: [departmentId], references: [id])
+  location     Location?    @relation(fields: [locationId], references: [id])
+  manager      Employee?    @relation("EmployeeManager", fields: [managerId], references: [id])
+  reports      Employee[]   @relation("EmployeeManager")
+  user         User?        @relation(fields: [userId], references: [id])
+
+  assetAssignments   AssetAssignment[]
+  licenseAssignments LicenseAssignment[]
+  offboardings       Offboarding[]
+
+  @@unique([organizationId, employeeCode])
+  @@index([organizationId, departmentId])
+  @@map("employees")
+}
+
+model Department {
+  id             String  @id @default(uuid()) @db.Uuid
+  organizationId String  @db.Uuid
+  code           String
+  name           String
+  division       String?
+  costCenter     String?
+  managerId      String? @db.Uuid
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  employees    Employee[]
+  assets       Asset[]
+  vaultItems   VaultItem[]
+  vaultShares  VaultShare[] @relation("SharedWithDepartment")
+  purchaseRequests PurchaseRequest[]
+
+  @@unique([organizationId, code])
+  @@map("departments")
+}
+
+model Location {
+  id             String  @id @default(uuid()) @db.Uuid
+  organizationId String  @db.Uuid
+  code           String
+  name           String
+  address        String?
+  building       String?
+  floor          String?
+  room           String?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  employees    Employee[]
+  assets       Asset[]
+
+  @@unique([organizationId, code])
+  @@map("locations")
+}
+
+// ============================================================
+// Assets
+// ============================================================
+
+enum AssetStatus {
+  AVAILABLE
+  ASSIGNED
+  IN_USE
+  IN_REPAIR
+  LOST
+  STOLEN
+  DAMAGED
+  RETIRED
+  DISPOSED
+}
+
+enum AssetCondition {
+  NEW
+  GOOD
+  FAIR
+  DAMAGED
+  CRITICAL
+}
+
+model AssetCategory {
+  id             String  @id @default(uuid()) @db.Uuid
+  organizationId String  @db.Uuid
+  name           String
+  nameTh         String?
+  parentId       String? @db.Uuid
+  icon           String?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  organization Organization    @relation(fields: [organizationId], references: [id])
+  parent       AssetCategory?  @relation("CategoryParent", fields: [parentId], references: [id])
+  children     AssetCategory[] @relation("CategoryParent")
+  assets       Asset[]
+
+  @@unique([organizationId, name])
+  @@map("asset_categories")
+}
+
+model Asset {
+  id             String         @id @default(uuid()) @db.Uuid
+  organizationId String         @db.Uuid
+  assetTag       String
+  serialNumber   String?
+  name           String
+  brand          String?
+  model          String?
+  specification  String?
+  purchaseDate   DateTime?
+  purchasePrice  Decimal?       @db.Decimal(14, 2)
+  currentValue   Decimal?       @db.Decimal(14, 2)
+  depreciationMonths Int?
+  invoiceNumber  String?
+  warrantyStart  DateTime?
+  warrantyEnd    DateTime?
+  status         AssetStatus    @default(AVAILABLE)
+  condition      AssetCondition @default(NEW)
+  costCenter     String?
+  project        String?
+  notes          String?
+  imageUrl       String?
+  ipAddress      String?
+
+  categoryId   String? @db.Uuid
+  departmentId String? @db.Uuid
+  locationId   String? @db.Uuid
+  vendorId     String? @db.Uuid
+  // Employee currently holding the asset (denormalized from open assignment)
+  assignedToId String? @db.Uuid
+  custodian    String?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  organization Organization   @relation(fields: [organizationId], references: [id])
+  category     AssetCategory? @relation(fields: [categoryId], references: [id])
+  department   Department?    @relation(fields: [departmentId], references: [id])
+  location     Location?      @relation(fields: [locationId], references: [id])
+  vendor       Vendor?        @relation(fields: [vendorId], references: [id])
+
+  assignments AssetAssignment[]
+  transfers   AssetTransfer[]
+  history     AssetHistory[]
+  documents   AssetDocument[]
+  maintenance MaintenanceTicket[]
+  vaultLinks  AssetVaultLink[]
+
+  @@unique([organizationId, assetTag])
+  @@index([organizationId, status])
+  @@index([organizationId, categoryId])
+  @@index([organizationId, departmentId])
+  @@index([organizationId, serialNumber])
+  @@map("assets")
+}
+
+enum AssignmentStatus {
+  CHECKED_OUT
+  RETURNED
+}
+
+model AssetAssignment {
+  id             String           @id @default(uuid()) @db.Uuid
+  organizationId String           @db.Uuid
+  assetId        String           @db.Uuid
+  employeeId     String           @db.Uuid
+  status         AssignmentStatus @default(CHECKED_OUT)
+
+  assignedAt         DateTime        @default(now())
+  assignedById       String?         @db.Uuid
+  purpose            String?
+  expectedReturnDate DateTime?
+  conditionBefore    AssetCondition?
+
+  returnedAt     DateTime?
+  returnedById   String?         @db.Uuid
+  conditionAfter AssetCondition?
+  damageNotes    String?
+  remark         String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  asset    Asset    @relation(fields: [assetId], references: [id])
+  employee Employee @relation(fields: [employeeId], references: [id])
+
+  @@index([organizationId, assetId])
+  @@index([organizationId, employeeId, status])
+  @@map("asset_assignments")
+}
+
+enum TransferStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  COMPLETED
+}
+
+model AssetTransfer {
+  id             String         @id @default(uuid()) @db.Uuid
+  organizationId String         @db.Uuid
+  assetId        String         @db.Uuid
+  fromDepartmentId String?      @db.Uuid
+  toDepartmentId   String?      @db.Uuid
+  fromLocationId   String?      @db.Uuid
+  toLocationId     String?      @db.Uuid
+  fromEmployeeId   String?      @db.Uuid
+  toEmployeeId     String?      @db.Uuid
+  reason         String?
+  status         TransferStatus @default(PENDING)
+  requestedById  String?        @db.Uuid
+  approvedById   String?        @db.Uuid
+  completedAt    DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  asset Asset @relation(fields: [assetId], references: [id])
+
+  @@index([organizationId, assetId])
+  @@map("asset_transfers")
+}
+
+model AssetHistory {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @db.Uuid
+  assetId        String   @db.Uuid
+  action         String // PURCHASE, REGISTER, ASSIGN, RETURN, TRANSFER, REPAIR, RETIRE, DISPOSE, ...
+  detail         String?
+  actorId        String?  @db.Uuid
+  createdAt      DateTime @default(now())
+
+  asset Asset @relation(fields: [assetId], references: [id])
+
+  @@index([organizationId, assetId, createdAt])
+  @@map("asset_history")
+}
+
+model AssetDocument {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @db.Uuid
+  assetId        String   @db.Uuid
+  name           String
+  type           String // INVOICE, WARRANTY, MANUAL, PHOTO, OTHER
+  storagePath    String // GCS object path
+  contentType    String?
+  sizeBytes      Int?
+  uploadedById   String?  @db.Uuid
+  createdAt      DateTime @default(now())
+  deletedAt      DateTime?
+
+  asset Asset @relation(fields: [assetId], references: [id])
+
+  @@index([organizationId, assetId])
+  @@map("asset_documents")
+}
+
+// ============================================================
+// Password / Secret Vault (envelope-encrypted)
+// ============================================================
+
+enum SecretClassification {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum VaultItemType {
+  PASSWORD
+  SERVER
+  DATABASE
+  API_KEY
+  SSH_KEY
+  WIFI
+  NETWORK_DEVICE
+  CERTIFICATE
+  LICENSE_KEY
+  TOKEN
+  OTHER
+}
+
+model VaultCategory {
+  id             String  @id @default(uuid()) @db.Uuid
+  organizationId String  @db.Uuid
+  name           String
+  nameTh         String?
+  icon           String?
+  isSystem       Boolean @default(false)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  items        VaultItem[]
+
+  @@unique([organizationId, name])
+  @@map("vault_categories")
+}
+
+// Sensitive fields are ONLY stored encrypted (AES-256-GCM, per-item DEK
+// wrapped by Cloud KMS). Metadata (name, category, classification, host...)
+// stays plaintext for search — never the secret values themselves.
+model VaultItem {
+  id             String               @id @default(uuid()) @db.Uuid
+  organizationId String               @db.Uuid
+  name           String
+  type           VaultItemType        @default(PASSWORD)
+  classification SecretClassification @default(MEDIUM)
+  categoryId     String?              @db.Uuid
+  departmentId   String?              @db.Uuid
+  ownerId        String?              @db.Uuid
+  environment    String? // Production / Staging / Development
+  url            String?
+  host           String?
+  port           Int?
+  protocol       String?
+  username       String? // login name is metadata (searchable), not secret
+  tags           String[]             @default([])
+  notes          String?
+
+  // --- Encrypted payload (JSON of secret fields) ---
+  // ciphertext = AES-256-GCM(secretJson, DEK); dekEnc = KMS-wrapped DEK
+  ciphertext          String
+  iv                  String
+  authTag             String
+  dekEnc              String
+  kmsKeyVersion       String?
+  encryptionAlgorithm String  @default("AES-256-GCM")
+
+  // Rotation policy
+  rotationDays  Int?
+  lastRotatedAt DateTime?
+  nextRotationAt DateTime?
+  expiresAt     DateTime?
+
+  // Policy: require MFA to reveal (defaults on for HIGH/CRITICAL)
+  requireMfaToReveal Boolean @default(false)
+  requireApprovalToReveal Boolean @default(false)
+
+  createdById String? @db.Uuid
+  updatedById String? @db.Uuid
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  organization Organization   @relation(fields: [organizationId], references: [id])
+  category     VaultCategory? @relation(fields: [categoryId], references: [id])
+  department   Department?    @relation(fields: [departmentId], references: [id])
+  owner        User?          @relation("VaultOwner", fields: [ownerId], references: [id])
+
+  shares       VaultShare[]
+  accessLogs   VaultAccessLog[]
+  rotationLogs VaultRotationLog[]
+  emergencyRequests VaultEmergencyRequest[]
+  assetLinks   AssetVaultLink[]
+  favorites    VaultFavorite[]
+
+  @@index([organizationId, categoryId])
+  @@index([organizationId, ownerId])
+  @@index([organizationId, name])
+  @@index([organizationId, nextRotationAt])
+  @@map("vault_items")
+}
+
+// Link between an Asset and its related credentials
+model AssetVaultLink {
+  assetId     String   @db.Uuid
+  vaultItemId String   @db.Uuid
+  label       String? // e.g. "Windows Administrator", "iDRAC"
+  createdAt   DateTime @default(now())
+
+  asset     Asset     @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  vaultItem VaultItem @relation(fields: [vaultItemId], references: [id], onDelete: Cascade)
+
+  @@id([assetId, vaultItemId])
+  @@map("asset_vault_links")
+}
+
+enum VaultPermissionLevel {
+  VIEW
+  REVEAL
+  COPY
+  EDIT
+  SHARE
+}
+
+model VaultShare {
+  id          String               @id @default(uuid()) @db.Uuid
+  vaultItemId String               @db.Uuid
+  // Share target: exactly one of userId / roleId / departmentId
+  userId       String? @db.Uuid
+  roleId       String? @db.Uuid
+  departmentId String? @db.Uuid
+  permission   VaultPermissionLevel @default(VIEW)
+  sharedById   String  @db.Uuid
+  // Temporary access window
+  startsAt  DateTime  @default(now())
+  expiresAt DateTime?
+  revokedAt DateTime?
+  reason    String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  vaultItem  VaultItem   @relation(fields: [vaultItemId], references: [id], onDelete: Cascade)
+  user       User?       @relation("SharedWithUser", fields: [userId], references: [id])
+  role       Role?       @relation("SharedWithRole", fields: [roleId], references: [id])
+  department Department? @relation("SharedWithDepartment", fields: [departmentId], references: [id])
+  sharedBy   User        @relation("SharedBy", fields: [sharedById], references: [id])
+
+  @@index([vaultItemId])
+  @@index([userId])
+  @@map("vault_shares")
+}
+
+model VaultFavorite {
+  userId      String   @db.Uuid
+  vaultItemId String   @db.Uuid
+  createdAt   DateTime @default(now())
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  vaultItem VaultItem @relation(fields: [vaultItemId], references: [id], onDelete: Cascade)
+
+  @@id([userId, vaultItemId])
+  @@map("vault_favorites")
+}
+
+// Vault access log — append-only; NEVER stores secret values.
+model VaultAccessLog {
+  id          String   @id @default(uuid()) @db.Uuid
+  organizationId String @db.Uuid
+  vaultItemId String   @db.Uuid
+  userId      String   @db.Uuid
+  action      String // VIEW_SECRET, REVEAL_SECRET, COPY_SECRET, ...
+  result      String   @default("SUCCESS") // SUCCESS | DENIED
+  reason      String?
+  ip          String?
+  userAgent   String?
+  createdAt   DateTime @default(now())
+
+  vaultItem VaultItem @relation(fields: [vaultItemId], references: [id])
+
+  @@index([organizationId, vaultItemId, createdAt])
+  @@index([organizationId, userId, createdAt])
+  @@map("vault_access_logs")
+}
+
+model VaultRotationLog {
+  id          String   @id @default(uuid()) @db.Uuid
+  vaultItemId String   @db.Uuid
+  rotatedById String?  @db.Uuid
+  status      String // ROTATED | VERIFIED | SKIPPED
+  reason      String?
+  createdAt   DateTime @default(now())
+
+  vaultItem VaultItem @relation(fields: [vaultItemId], references: [id])
+
+  @@index([vaultItemId])
+  @@map("vault_rotation_logs")
+}
+
+enum EmergencyStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  EXPIRED
+  USED
+}
+
+model VaultEmergencyRequest {
+  id          String          @id @default(uuid()) @db.Uuid
+  organizationId String       @db.Uuid
+  vaultItemId String          @db.Uuid
+  requesterId String          @db.Uuid
+  reason      String
+  status      EmergencyStatus @default(PENDING)
+  approvedById String?        @db.Uuid
+  decidedAt   DateTime?
+  expiresAt   DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  vaultItem VaultItem @relation(fields: [vaultItemId], references: [id])
+  requester User      @relation("EmergencyRequester", fields: [requesterId], references: [id])
+
+  @@index([organizationId, status])
+  @@map("vault_emergency_requests")
+}
+
+// Metadata about org encryption keys (never key material)
+model EncryptionKeyMetadata {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @db.Uuid
+  provider       String // gcp | local
+  keyRing        String?
+  cryptoKey      String?
+  keyVersion     String?
+  rotatedAt      DateTime?
+  createdAt      DateTime @default(now())
+
+  @@map("encryption_key_metadata")
+}
+
+// ============================================================
+// Licenses & Subscriptions
+// ============================================================
+
+model License {
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String    @db.Uuid
+  softwareName   String
+  vendorId       String?   @db.Uuid
+  licenseType    String? // PERPETUAL, SUBSCRIPTION, OEM, VOLUME
+  // License key encrypted like a vault secret when sensitive
+  licenseKeyEnc  String?
+  licenseKeyIv   String?
+  licenseKeyTag  String?
+  licenseKeyDekEnc String?
+  totalSeats     Int       @default(1)
+  purchaseDate   DateTime?
+  startDate      DateTime?
+  expiresAt      DateTime?
+  cost           Decimal?  @db.Decimal(14, 2)
+  renewalCost    Decimal?  @db.Decimal(14, 2)
+  autoRenewal    Boolean   @default(false)
+  notes          String?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  organization Organization        @relation(fields: [organizationId], references: [id])
+  vendor       Vendor?             @relation(fields: [vendorId], references: [id])
+  assignments  LicenseAssignment[]
+
+  @@index([organizationId, expiresAt])
+  @@map("licenses")
+}
+
+model LicenseAssignment {
+  id         String    @id @default(uuid()) @db.Uuid
+  licenseId  String    @db.Uuid
+  employeeId String    @db.Uuid
+  assignedAt DateTime  @default(now())
+  revokedAt  DateTime?
+
+  license  License  @relation(fields: [licenseId], references: [id])
+  employee Employee @relation(fields: [employeeId], references: [id])
+
+  @@index([licenseId])
+  @@index([employeeId])
+  @@map("license_assignments")
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  CANCELLED
+  EXPIRED
+}
+
+model Subscription {
+  id             String             @id @default(uuid()) @db.Uuid
+  organizationId String             @db.Uuid
+  serviceName    String
+  vendorId       String?            @db.Uuid
+  plan           String?
+  quantity       Int                @default(1)
+  cost           Decimal?           @db.Decimal(14, 2)
+  billingCycle   String? // MONTHLY, YEARLY
+  startDate      DateTime?
+  renewalDate    DateTime?
+  ownerId        String?            @db.Uuid
+  status         SubscriptionStatus @default(ACTIVE)
+  notes          String?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  vendor       Vendor?      @relation(fields: [vendorId], references: [id])
+
+  @@index([organizationId, renewalDate])
+  @@map("subscriptions")
+}
+
+// ============================================================
+// Vendors, Maintenance, Procurement
+// ============================================================
+
+model Vendor {
+  id             String  @id @default(uuid()) @db.Uuid
+  organizationId String  @db.Uuid
+  name           String
+  contactName    String?
+  phone          String?
+  email          String?
+  address        String?
+  taxId          String?
+  category       String?
+  rating         Int?
+  notes          String?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  organization Organization        @relation(fields: [organizationId], references: [id])
+  assets       Asset[]
+  licenses     License[]
+  subscriptions Subscription[]
+  maintenance  MaintenanceTicket[]
+  purchaseRequests PurchaseRequest[]
+
+  @@index([organizationId])
+  @@map("vendors")
+}
+
+enum MaintenanceStatus {
+  OPEN
+  IN_PROGRESS
+  WAITING_PART
+  WAITING_VENDOR
+  COMPLETED
+  CANCELLED
+}
+
+enum MaintenancePriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+model MaintenanceTicket {
+  id             String              @id @default(uuid()) @db.Uuid
+  organizationId String              @db.Uuid
+  ticketNumber   String
+  assetId        String              @db.Uuid
+  problem        String
+  reportedById   String?             @db.Uuid
+  technicianId   String?             @db.Uuid
+  vendorId       String?             @db.Uuid
+  priority       MaintenancePriority @default(MEDIUM)
+  status         MaintenanceStatus   @default(OPEN)
+  diagnosis      String?
+  repairCost     Decimal?            @db.Decimal(14, 2)
+  parts          String?
+  remark         String?
+  startedAt      DateTime?
+  completedAt    DateTime?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  asset        Asset        @relation(fields: [assetId], references: [id])
+  vendor       Vendor?      @relation(fields: [vendorId], references: [id])
+
+  @@unique([organizationId, ticketNumber])
+  @@index([organizationId, status])
+  @@map("asset_maintenance")
+}
+
+enum PurchaseStatus {
+  DRAFT
+  PENDING_MANAGER
+  PENDING_IT
+  PENDING_FINANCE
+  APPROVED
+  REJECTED
+  ORDERED
+  RECEIVED
+  REGISTERED
+  CANCELLED
+}
+
+model PurchaseRequest {
+  id             String         @id @default(uuid()) @db.Uuid
+  organizationId String         @db.Uuid
+  requestNumber  String
+  requesterId    String?        @db.Uuid
+  departmentId   String?        @db.Uuid
+  vendorId       String?        @db.Uuid
+  reason         String?
+  status         PurchaseStatus @default(DRAFT)
+  totalEstimated Decimal?       @db.Decimal(14, 2)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  organization Organization   @relation(fields: [organizationId], references: [id])
+  department   Department?    @relation(fields: [departmentId], references: [id])
+  vendor       Vendor?        @relation(fields: [vendorId], references: [id])
+  items        PurchaseItem[]
+  approvals    Approval[]
+
+  @@unique([organizationId, requestNumber])
+  @@index([organizationId, status])
+  @@map("purchase_requests")
+}
+
+model PurchaseItem {
+  id                String  @id @default(uuid()) @db.Uuid
+  purchaseRequestId String  @db.Uuid
+  description       String
+  quantity          Int     @default(1)
+  estimatedCost     Decimal? @db.Decimal(14, 2)
+
+  purchaseRequest PurchaseRequest @relation(fields: [purchaseRequestId], references: [id], onDelete: Cascade)
+
+  @@map("purchase_items")
+}
+
+enum ApprovalDecision {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model Approval {
+  id                String           @id @default(uuid()) @db.Uuid
+  organizationId    String           @db.Uuid
+  // What is being approved
+  subjectType       String // PURCHASE_REQUEST, ASSET_TRANSFER, ASSET_DISPOSAL, VAULT_EMERGENCY, VAULT_REVEAL
+  subjectId         String           @db.Uuid
+  step              Int              @default(1)
+  stepName          String? // MANAGER, IT, FINANCE, SECURITY
+  approverId        String?          @db.Uuid
+  decision          ApprovalDecision @default(PENDING)
+  comment           String?
+  decidedAt         DateTime?
+  purchaseRequestId String?          @db.Uuid
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  approver        User?            @relation("Approver", fields: [approverId], references: [id])
+  purchaseRequest PurchaseRequest? @relation(fields: [purchaseRequestId], references: [id])
+
+  @@index([organizationId, subjectType, subjectId])
+  @@index([approverId, decision])
+  @@map("approvals")
+}
+
+// ============================================================
+// Offboarding
+// ============================================================
+
+enum OffboardingStatus {
+  OPEN
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+model Offboarding {
+  id             String            @id @default(uuid()) @db.Uuid
+  organizationId String            @db.Uuid
+  employeeId     String            @db.Uuid
+  requestedById  String?           @db.Uuid
+  status         OffboardingStatus @default(OPEN)
+  lastWorkDate   DateTime?
+  notes          String?
+  // Checklist state
+  assetsReturned  Boolean @default(false)
+  licensesRevoked Boolean @default(false)
+  vaultRevoked    Boolean @default(false)
+  accountDisabled Boolean @default(false)
+  completedAt    DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  employee     Employee     @relation(fields: [employeeId], references: [id])
+
+  @@index([organizationId, status])
+  @@map("offboardings")
+}
+
+// ============================================================
+// Notifications, Audit, Settings
+// ============================================================
+
+enum NotificationLevel {
+  INFO
+  WARNING
+  CRITICAL
+}
+
+model Notification {
+  id             String            @id @default(uuid()) @db.Uuid
+  organizationId String            @db.Uuid
+  userId         String?           @db.Uuid
+  type           String // ASSET_ASSIGNED, WARRANTY_EXPIRING, LICENSE_EXPIRING, ROTATION_DUE, APPROVAL_PENDING, SECURITY_ALERT, ...
+  level          NotificationLevel @default(INFO)
+  title          String
+  body           String?
+  link           String?
+  readAt         DateTime?
+  createdAt      DateTime          @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  user         User?        @relation(fields: [userId], references: [id])
+
+  @@index([organizationId, userId, readAt])
+  @@map("notifications")
+}
+
+// Append-only audit log. No secret values are ever written here.
+model AuditLog {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @db.Uuid
+  userId         String?  @db.Uuid
+  action         String // LOGIN, LOGOUT, CREATE, UPDATE, DELETE, ASSIGN, REVEAL_SECRET, ...
+  entityType     String?
+  entityId       String?
+  detail         Json?
+  ip             String?
+  userAgent      String?
+  result         String   @default("SUCCESS")
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  user         User?        @relation(fields: [userId], references: [id])
+
+  @@index([organizationId, createdAt])
+  @@index([organizationId, action, createdAt])
+  @@index([organizationId, entityType, entityId])
+  @@map("audit_logs")
+}
+
+model SystemSetting {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @db.Uuid
+  key            String
+  value          Json
+
+  updatedAt DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@unique([organizationId, key])
+  @@map("system_settings")
+}

@@ -1,0 +1,58 @@
+{
+  "name": "itbox",
+  "version": "1.0.0",
+  "private": true,
+  "description": "ITBox — Enterprise IT Management System: Asset Management + Password Vault + License + Procurement",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate dev",
+    "db:deploy": "prisma migrate deploy",
+    "db:seed": "prisma db seed",
+    "db:studio": "prisma studio"
+  },
+  "prisma": {
+    "seed": "node --experimental-strip-types prisma/seed.ts"
+  },
+  "dependencies": {
+    "@auth/prisma-adapter": "^2.11.3",
+    "@node-rs/argon2": "^2.0.2",
+    "@prisma/client": "^6.19.3",
+    "@radix-ui/react-dialog": "^1.1.23",
+    "@radix-ui/react-dropdown-menu": "^2.1.24",
+    "@radix-ui/react-label": "^2.1.15",
+    "@radix-ui/react-select": "^2.3.7",
+    "@radix-ui/react-slot": "^1.3.3",
+    "@radix-ui/react-switch": "^1.3.7",
+    "@radix-ui/react-tabs": "^1.1.21",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "date-fns": "^4.4.0",
+    "lucide-react": "^1.31.0",
+    "next": "^15.5.23",
+    "next-auth": "^5.0.0-beta.32",
+    "otpauth": "^9.5.1",
+    "qrcode": "^1.5.4",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "tailwind-merge": "^3.6.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^26.2.0",
+    "@types/qrcode": "^1.5.6",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
+    "autoprefixer": "^10.5.4",
+    "postcss": "^8.5.26",
+    "prisma": "^6.19.3",
+    "tailwindcss": "^3.4.19",
+    "typescript": "5.9",
+    "vitest": "^4.1.10"
+  }
+}
