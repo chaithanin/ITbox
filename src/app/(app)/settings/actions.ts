@@ -226,6 +226,20 @@ export async function disableMfaAction(formData: FormData) {
   redirect("/settings/profile?ok=mfa-disabled");
 }
 
+export async function deletePasskeyAction(credentialId: string) {
+  const user = await requireUser();
+  await prisma.webAuthnCredential.deleteMany({
+    where: { id: credentialId, userId: user.id },
+  });
+  await auditLog(user, {
+    action: "UPDATE",
+    entityType: "USER",
+    entityId: user.id,
+    detail: { event: "PASSKEY_REMOVED", credentialId },
+  });
+  revalidatePath("/settings/profile");
+}
+
 export async function revokeSessionAction(sessionId: string) {
   const user = await requireUser();
   await prisma.userSession.updateMany({

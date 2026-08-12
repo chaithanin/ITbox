@@ -7,6 +7,8 @@ import { checkRateLimit } from "@/lib/rate-limit";
 
 const bodySchema = z.object({
   mfaCode: z.string().max(10).optional(),
+  // WebAuthn assertion (passkey) — alternative MFA factor to TOTP
+  webauthn: z.record(z.string(), z.unknown()).optional(),
   reason: z.string().max(500).optional(),
   action: z.enum(["REVEAL_SECRET", "COPY_SECRET"]).default("REVEAL_SECRET"),
 });
@@ -23,7 +25,12 @@ export const POST = apiHandler(async (req: Request, ctx: { params: Promise<{ id:
   }
   const { id } = await ctx.params;
   const body = bodySchema.parse(await req.json().catch(() => ({})));
-  const secret = await revealVaultItem(user, id, body);
+  const secret = await revealVaultItem(user, id, {
+    mfaCode: body.mfaCode,
+    webauthnResponse: body.webauthn,
+    reason: body.reason,
+    action: body.action,
+  });
   return NextResponse.json(
     { secret },
     {

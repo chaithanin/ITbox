@@ -36,7 +36,8 @@ from `LOCAL_KMS_MASTER_KEY`; it refuses to run with `NODE_ENV=production`.
 2. RBAC permission (`vault:reveal` / `vault:copy`)
 3. Per-item access level (owner / vault:manage / active share ≥ REVEAL)
 4. MFA policy — HIGH/CRITICAL or `requireMfaToReveal` ⇒ verified TOTP code
-   required; account without MFA enrollment is refused
+   **or WebAuthn/passkey assertion** required; an account with neither factor
+   enrolled is refused
 5. Approval policy — `requireApprovalToReveal` ⇒ approved, unexpired
    emergency request required
 6. Decrypt (KMS unwrap → AES-GCM)

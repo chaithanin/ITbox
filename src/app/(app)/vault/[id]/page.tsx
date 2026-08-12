@@ -77,7 +77,7 @@ export default async function SecretDetailPage({
     },
   });
 
-  const [favorite, accessLogs] = await Promise.all([
+  const [favorite, accessLogs, passkeyCount] = await Promise.all([
     prisma.vaultFavorite.findUnique({
       where: { userId_vaultItemId: { userId: user.id, vaultItemId: item.id } },
     }),
@@ -88,6 +88,7 @@ export default async function SecretDetailPage({
           take: 10,
         })
       : Promise.resolve([]),
+    prisma.webAuthnCredential.count({ where: { userId: user.id } }),
   ]);
 
   const logUsers = accessLogs.length
@@ -191,6 +192,7 @@ export default async function SecretDetailPage({
                 requireApproval={item.requireApprovalToReveal}
                 canReveal={canReveal}
                 canCopy={canCopy}
+                hasPasskey={passkeyCount > 0}
               />
               {item.requireApprovalToReveal && (
                 <form action={requestEmergencyAction} className="mt-4 space-y-2 rounded-md border border-dashed p-3">

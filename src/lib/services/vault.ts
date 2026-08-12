@@ -139,24 +139,44 @@ function classificationRequiresMfa(item: VaultItem): boolean {
 async function verifyMfaIfRequired(
   user: CurrentUser,
   item: VaultItem,
-  mfaCode: string | undefined,
+  opts: { mfaCode?: string; webauthnResponse?: unknown },
   action: string
 ): Promise<void> {
   if (!classificationRequiresMfa(item)) return;
   const dbUser = await prisma.user.findUnique({ where: { id: user.id } });
-  if (!dbUser?.mfaEnabled) {
+  if (!dbUser) throw new AuthError("UNAUTHENTICATED", 401);
+
+  // Passkey assertion counts as an MFA factor equivalent to TOTP.
+  if (opts.webauthnResponse) {
+    const { verifyPasskeyAuthentication } = await import("@/lib/webauthn");
+    const ok = await verifyPasskeyAuthentication(
+      user.id,
+      opts.webauthnResponse as never
+    );
+    if (ok) return;
+    await logAccess(user, item, action, "DENIED", "MFA_INVALID");
+    throw new AuthError("MFA_INVALID", 403);
+  }
+
+  const { hasPasskeys } = await import("@/lib/webauthn");
+  const passkeyEnrolled = await hasPasskeys(user.id);
+  if (!dbUser.mfaEnabled && !passkeyEnrolled) {
     // Policy: sensitive secrets require the account itself to have MFA.
     await logAccess(user, item, action, "DENIED", "MFA_NOT_ENROLLED");
     throw new AuthError("MFA_ENROLLMENT_REQUIRED", 403);
   }
-  if (!mfaCode) {
+  if (!mfaCodeUsable(dbUser.mfaEnabled, opts.mfaCode)) {
     throw new AuthError("MFA_REQUIRED", 403);
   }
-  const ok = await verifyTotp(dbUser, mfaCode);
+  const ok = await verifyTotp(dbUser, opts.mfaCode!);
   if (!ok) {
     await logAccess(user, item, action, "DENIED", "MFA_INVALID");
     throw new AuthError("MFA_INVALID", 403);
   }
+}
+
+function mfaCodeUsable(totpEnabled: boolean, code: string | undefined): boolean {
+  return totpEnabled && !!code;
 }
 
 async function checkApprovalIfRequired(
@@ -347,7 +367,12 @@ export async function deleteVaultItem(user: CurrentUser, id: string) {
 export async function revealVaultItem(
   user: CurrentUser,
   id: string,
-  opts: { mfaCode?: string; reason?: string; action?: "REVEAL_SECRET" | "COPY_SECRET" }
+  opts: {
+    mfaCode?: string;
+    webauthnResponse?: unknown;
+    reason?: string;
+    action?: "REVEAL_SECRET" | "COPY_SECRET";
+  }
 ): Promise<SecretPayload> {
   const action = opts.action ?? "REVEAL_SECRET";
   const item = await getItemOrThrow(user, id);
@@ -366,7 +391,12 @@ export async function revealVaultItem(
     throw new AuthError("FORBIDDEN", 403);
   }
 
-  await verifyMfaIfRequired(user, item, opts.mfaCode, action);
+  await verifyMfaIfRequired(
+    user,
+    item,
+    { mfaCode: opts.mfaCode, webauthnResponse: opts.webauthnResponse },
+    action
+  );
   await checkApprovalIfRequired(user, item, action);
 
   const plaintext = await decryptSecret(item);

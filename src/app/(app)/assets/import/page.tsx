@@ -72,8 +72,8 @@ export default async function AssetImportPage() {
   return (
     <div>
       <PageHeader
-        title="นำเข้าทรัพย์สินจาก CSV / Import Assets from CSV"
-        description="อัปโหลดไฟล์ CSV เพื่อสร้างทรัพย์สินหลายรายการพร้อมกัน / Upload a CSV file to create multiple assets at once"
+        title="นำเข้าทรัพย์สินจากไฟล์ / Import Assets from File"
+        description="อัปโหลดไฟล์ CSV หรือ Excel (.xlsx) เพื่อสร้างทรัพย์สินหลายรายการพร้อมกัน / Upload a CSV or Excel (.xlsx) file to create multiple assets at once"
       >
         <Button variant="outline" asChild>
           <Link href="/assets">
@@ -94,8 +94,9 @@ export default async function AssetImportPage() {
           <CardHeader>
             <CardTitle>อัปโหลดไฟล์ / Upload File</CardTitle>
             <CardDescription>
-              ไฟล์ .csv (UTF-8) ขนาดไม่เกิน 2MB สูงสุด 2,000 แถว — แถวที่ไม่ผ่านการตรวจสอบจะถูกข้าม /
-              .csv file (UTF-8), max 2MB and 2,000 rows — rows that fail validation are skipped.
+              ไฟล์ CSV หรือ Excel (.xlsx) ขนาดไม่เกิน 2MB สูงสุด 2,000 แถว —
+              แถวที่ไม่ผ่านการตรวจสอบจะถูกข้าม / CSV (UTF-8) or Excel (.xlsx) file, max 2MB and
+              2,000 rows — rows that fail validation are skipped.
             </CardDescription>
           </CardHeader>
           <CardContent>

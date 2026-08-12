@@ -11,9 +11,12 @@ Secure by default · Fail secure · Audit everything.
 - Google OAuth (Workspace / Cloud Identity): only pre-provisioned ACTIVE users
   may sign in; unverified emails rejected. Microsoft Entra ID can be added as
   another Auth.js provider without schema changes.
-- MFA: TOTP (RFC 6238). The TOTP secret is stored envelope-encrypted. QR is
-  served only during pending enrollment. MFA is enforced for HIGH/CRITICAL
-  secret reveals.
+- MFA: TOTP (RFC 6238) — the TOTP secret is stored envelope-encrypted and the
+  QR is served only during pending enrollment — plus **WebAuthn/Passkeys**
+  (Touch ID / Windows Hello / security keys) as an equivalent factor. Only
+  public keys are stored; ceremony challenges are server-side, single-use and
+  expire in 5 minutes (multi-instance safe). Either factor satisfies the
+  HIGH/CRITICAL vault-reveal MFA policy. Login-time MFA uses TOTP.
 
 ## Sessions
 - JWT cookie (HttpOnly, Secure in production, SameSite=Lax) + server-side

@@ -11,8 +11,10 @@ import { ConfirmButton } from "@/components/confirm-button";
 import { formatDateTime } from "@/lib/utils";
 import {
   updateProfileAction, changePasswordAction, startMfaEnrollmentAction,
-  confirmMfaEnrollmentAction, disableMfaAction, revokeSessionAction, revokeAllSessionsAction,
+  confirmMfaEnrollmentAction, disableMfaAction, revokeSessionAction,
+  revokeAllSessionsAction, deletePasskeyAction,
 } from "../actions";
+import { AddPasskeyButton } from "./passkeys";
 
 export const dynamic = "force-dynamic";
 
@@ -37,6 +39,10 @@ export default async function ProfilePage({
     where: { userId: user.id, revokedAt: null, expiresAt: { gt: new Date() } },
     orderBy: { lastSeenAt: "desc" },
     take: 20,
+  });
+  const passkeys = await prisma.webAuthnCredential.findMany({
+    where: { userId: user.id },
+    orderBy: { createdAt: "asc" },
   });
   const enrollmentPending = !dbUser.mfaEnabled && !!dbUser.totpSecretEnc;
   const msg = MESSAGES[sp.ok ?? sp.error ?? ""];
@@ -135,6 +141,44 @@ export default async function ProfilePage({
                 </ConfirmButton>
               </form>
             )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              Passkeys (WebAuthn)
+              {passkeys.length > 0
+                ? <Badge variant="success">{passkeys.length} อุปกรณ์</Badge>
+                : <Badge variant="secondary">ยังไม่มี / None</Badge>}
+            </CardTitle>
+            <CardDescription>
+              ใช้ Touch ID / Windows Hello / Security Key เป็นอีกทางเลือกแทนรหัส TOTP
+              สำหรับการเปิดเผยข้อมูลลับระดับ HIGH/CRITICAL
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {passkeys.map((p) => {
+              const del = deletePasskeyAction.bind(null, p.id);
+              return (
+                <div key={p.id} className="flex items-center justify-between gap-2 rounded-md border p-2.5 text-sm">
+                  <div className="min-w-0">
+                    <p className="truncate font-medium">{p.name ?? "Passkey"}</p>
+                    <p className="text-xs text-muted-foreground">
+                      เพิ่มเมื่อ {formatDateTime(p.createdAt)}
+                      {p.lastUsedAt && ` · ใช้ล่าสุด ${formatDateTime(p.lastUsedAt)}`}
+                      {p.backedUp && " · ซิงก์ข้ามอุปกรณ์"}
+                    </p>
+                  </div>
+                  <form action={del}>
+                    <ConfirmButton variant="outline" size="sm" confirmText="ลบ Passkey นี้? / Remove this passkey?">
+                      ลบ / Remove
+                    </ConfirmButton>
+                  </form>
+                </div>
+              );
+            })}
+            <AddPasskeyButton />
           </CardContent>
         </Card>
 

@@ -90,6 +90,7 @@ model User {
   userRoles    UserRole[]
   sessions     UserSession[]
   accounts     OAuthAccount[]
+  webauthnCredentials WebAuthnCredential[]
 
   vaultItemsOwned    VaultItem[]     @relation("VaultOwner")
   vaultSharesGranted VaultShare[]    @relation("SharedBy")
@@ -102,6 +103,39 @@ model User {
 
   @@index([organizationId])
   @@map("users")
+}
+
+// WebAuthn / Passkey credentials (public keys only — no secrets stored)
+model WebAuthnCredential {
+  id         String    @id // credential ID (base64url)
+  userId     String    @db.Uuid
+  publicKey  String // base64url COSE public key
+  counter    BigInt    @default(0)
+  transports String[]  @default([])
+  deviceType String?
+  backedUp   Boolean   @default(false)
+  name       String?
+  createdAt  DateTime  @default(now())
+  lastUsedAt DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("webauthn_credentials")
+}
+
+// Short-lived server-side WebAuthn ceremony challenges (multi-instance safe)
+model WebAuthnChallenge {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @db.Uuid
+  type      String // REGISTRATION | AUTHENTICATION
+  challenge String
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId, type])
+  @@map("webauthn_challenges")
 }
 
 model OAuthAccount {

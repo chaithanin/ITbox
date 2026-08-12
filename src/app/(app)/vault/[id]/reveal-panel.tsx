@@ -6,7 +6,8 @@
  * 30s where the browser allows; clears all plaintext from state on hide.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Eye, EyeOff, Copy, ShieldAlert, Check, Loader2 } from "lucide-react";
+import { startAuthentication } from "@simplewebauthn/browser";
+import { Eye, EyeOff, Copy, ShieldAlert, Check, Loader2, Fingerprint } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -34,6 +35,7 @@ export function RevealPanel({
   requireApproval,
   canReveal,
   canCopy,
+  hasPasskey = false,
 }: {
   itemId: string;
   classification: string;
@@ -41,6 +43,7 @@ export function RevealPanel({
   requireApproval: boolean;
   canReveal: boolean;
   canCopy: boolean;
+  hasPasskey?: boolean;
 }) {
   const [secret, setSecret] = useState<Secret | null>(null);
   const [countdown, setCountdown] = useState(0);
@@ -76,14 +79,18 @@ export function RevealPanel({
   }, [clearSecret]);
 
   const doFetch = useCallback(
-    async (action: "REVEAL_SECRET" | "COPY_SECRET", code?: string) => {
+    async (
+      action: "REVEAL_SECRET" | "COPY_SECRET",
+      code?: string,
+      webauthn?: unknown
+    ) => {
       setLoading(true);
       setError(null);
       try {
         const res = await fetch(`/api/vault/${itemId}/reveal`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action, mfaCode: code || undefined }),
+          body: JSON.stringify({ action, mfaCode: code || undefined, webauthn }),
         });
         if (!res.ok) {
           const data = (await res.json().catch(() => ({}))) as { error?: string };
@@ -110,8 +117,8 @@ export function RevealPanel({
   );
 
   const reveal = useCallback(
-    async (code?: string) => {
-      const s = await doFetch("REVEAL_SECRET", code);
+    async (code?: string, webauthn?: unknown) => {
+      const s = await doFetch("REVEAL_SECRET", code, webauthn);
       if (s) {
         setNeedMfa(false);
         setMfaCode("");
@@ -121,6 +128,24 @@ export function RevealPanel({
     },
     [doFetch, startCountdown]
   );
+
+  const revealWithPasskey = useCallback(async () => {
+    setError(null);
+    try {
+      const optRes = await fetch("/api/me/webauthn/auth-options", { method: "POST" });
+      if (!optRes.ok) throw new Error("options");
+      const optionsJSON = await optRes.json();
+      const assertion = await startAuthentication({ optionsJSON });
+      await reveal(undefined, assertion);
+    } catch (e) {
+      const err = e as { name?: string };
+      setError(
+        err.name === "NotAllowedError"
+          ? "ยกเลิกหรือหมดเวลา / Cancelled or timed out"
+          : "ยืนยันด้วย Passkey ไม่สำเร็จ / Passkey verification failed"
+      );
+    }
+  }, [reveal]);
 
   const copyField = useCallback(
     async (field: string, code?: string) => {
@@ -211,6 +236,11 @@ export function RevealPanel({
           <Button type="submit" disabled={mfaCode.length !== 6 || loading}>
             ยืนยัน / Verify
           </Button>
+          {hasPasskey && (
+            <Button type="button" variant="outline" disabled={loading} onClick={revealWithPasskey}>
+              <Fingerprint className="h-4 w-4" /> ใช้ Passkey
+            </Button>
+          )}
         </form>
       )}
 
