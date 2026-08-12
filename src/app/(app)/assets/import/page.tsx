@@ -108,10 +108,12 @@ export default async function AssetImportPage() {
           <CardHeader>
             <CardTitle>รูปแบบไฟล์ / File Format</CardTitle>
             <CardDescription>
-              แถวแรกต้องเป็นหัวตาราง (ชื่อคอลัมน์ไม่สนตัวพิมพ์เล็ก-ใหญ่) ค่า category / department /
-              location / vendor ต้องมีอยู่ในระบบแล้ว — ระบบจะไม่สร้างให้อัตโนมัติ / The first row must
-              be a header (column names are case-insensitive). Category, department, location and
-              vendor values must already exist — they are not auto-created.
+              ใช้ได้ทั้ง CSV และ Excel (.xlsx — ใช้แผ่นงานแรก) แถวแรกต้องเป็นหัวตาราง
+              (ชื่อคอลัมน์ไม่สนตัวพิมพ์เล็ก-ใหญ่) ค่า category / department / location / vendor
+              ต้องมีอยู่ในระบบแล้ว — ระบบจะไม่สร้างให้อัตโนมัติ / Works with CSV and Excel (.xlsx —
+              first worksheet is used). The first row must be a header (column names are
+              case-insensitive). Category, department, location and vendor values must already
+              exist — they are not auto-created.
             </CardDescription>
           </CardHeader>
           <CardContent>

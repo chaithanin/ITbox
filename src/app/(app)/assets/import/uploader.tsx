@@ -40,7 +40,9 @@ export function ImportUploader() {
     e.preventDefault();
     const file = fileInputRef.current?.files?.[0];
     if (!file) {
-      setErrorMessage("กรุณาเลือกไฟล์ .csv / Please choose a .csv file");
+      setErrorMessage(
+        "กรุณาเลือกไฟล์ CSV หรือ Excel (.xlsx) / Please choose a CSV or Excel (.xlsx) file"
+      );
       return;
     }
 
@@ -96,7 +98,7 @@ export function ImportUploader() {
         <input
           ref={fileInputRef}
           type="file"
-          accept=".csv,text/csv"
+          accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
           disabled={loading}
           onChange={(e) => {
             setFileName(e.target.files?.[0]?.name ?? null);

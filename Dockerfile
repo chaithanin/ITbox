@@ -29,6 +29,8 @@ RUN groupadd -r nodejs && useradd -r -g nodejs nextjs
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 COPY --from=builder --chown=nextjs:nodejs /app/public ./public
+# Thai font for PDF report export (read at runtime relative to cwd)
+COPY --from=builder --chown=nextjs:nodejs /app/src/assets ./src/assets
 # Prisma engine + migrations for `prisma migrate deploy` (run as a job/step)
 COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
 COPY --from=builder --chown=nextjs:nodejs /app/node_modules/prisma ./node_modules/prisma

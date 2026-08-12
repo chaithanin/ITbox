@@ -59,6 +59,12 @@ const REPORTS: { title: string; description: string; href: string }[] = [
   },
 ];
 
+const EXPORT_FORMATS: { format: string; label: string }[] = [
+  { format: "csv", label: "CSV" },
+  { format: "xlsx", label: "Excel" },
+  { format: "pdf", label: "PDF" },
+];
+
 export default async function ReportsPage() {
   const user = await requireUser();
 
@@ -82,7 +88,7 @@ export default async function ReportsPage() {
     <div>
       <PageHeader
         title="รายงาน / Reports"
-        description="ส่งออกข้อมูลเป็นไฟล์ CSV / Export data as CSV files"
+        description="ส่งออกข้อมูลเป็นไฟล์ CSV, Excel (.xlsx) หรือ PDF / Export data as CSV, Excel or PDF files"
       />
       <div className="mb-4 flex items-start gap-2 rounded-lg border bg-card p-3 text-sm text-muted-foreground">
         <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
@@ -100,12 +106,16 @@ export default async function ReportsPage() {
             </CardHeader>
             <CardContent>
               {canExport ? (
-                <Button variant="outline" size="sm" asChild>
-                  <a href={r.href}>
-                    <Download className="h-4 w-4" />
-                    ส่งออก CSV / Export CSV
-                  </a>
-                </Button>
+                <div className="flex flex-wrap gap-2">
+                  {EXPORT_FORMATS.map((f) => (
+                    <Button key={f.format} variant="outline" size="sm" asChild>
+                      <a href={`${r.href}?format=${f.format}`} title={`ส่งออก / Export ${f.label}`}>
+                        <Download className="h-4 w-4" />
+                        {f.label}
+                      </a>
+                    </Button>
+                  ))}
+                </div>
               ) : (
                 <p className="text-xs text-muted-foreground">
                   ต้องมีสิทธิ์ report:export / Requires report:export

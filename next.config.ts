@@ -16,6 +16,10 @@ const nextConfig: NextConfig = {
   output: "standalone",
   poweredByHeader: false,
   serverExternalPackages: ["@node-rs/argon2"],
+  // Ensure the Thai PDF font ships with the standalone server bundle
+  outputFileTracingIncludes: {
+    "/api/reports/[report]": ["./src/assets/fonts/*.ttf"],
+  },
   async headers() {
     return [{ source: "/(.*)", headers: securityHeaders }];
   },

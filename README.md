@@ -122,15 +122,20 @@ offboarding, dashboard/reports/audit/security center, notifications (in-app +
 **Email/SMTP** + LINE broadcast), users/roles/permissions/sessions/profile/MFA
 enrollment, **file uploads** (asset documents & images → Cloud Storage in
 production, local disk in dev, org-scoped download route),
-**asset bulk CSV import** with template download + row-level error report,
+**asset bulk import** from CSV **and Excel (.xlsx)** with template download +
+row-level error report, **report export in CSV / Excel (.xlsx) / PDF**
+(PDF with embedded Thai font, capped at 1,000 rows by design),
+**WebAuthn/Passkey MFA** (Touch ID / Windows Hello / security keys as an
+alternative factor to TOTP for HIGH/CRITICAL vault reveals),
 Google OAuth + **Microsoft Entra ID** SSO (env-gated), REST API,
 tests (unit + DB integration incl. cross-tenant & encryption-at-rest
 assertions) + **Playwright E2E suite**, Docker/Cloud Build/GitHub Actions CI.
 
-**NOT IMPLEMENTED** (declared per Section 72 — no fake UI exists for these):
-- Excel (.xlsx) import/export — CSV import/export is implemented instead
-- PDF report export — CSV + print-friendly pages provided instead
-- WebAuthn/Passkey MFA — TOTP authenticator-app MFA is implemented
+**Scope notes** (declared per Section 72):
+- Login-time MFA uses TOTP; passkeys cover vault step-up verification
+  (passkey-at-login can be added on the same WebAuthn tables)
+- PDF export truncates at 1,000 rows (use CSV/XLSX for full data — noted in
+  the file itself)
 
 ## License
 

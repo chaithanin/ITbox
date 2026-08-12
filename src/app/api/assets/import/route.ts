@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import type { Prisma } from "@prisma/client";
+import ExcelJS from "exceljs";
 import { apiHandler } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/session";
@@ -12,6 +13,8 @@ import { auditLog } from "@/lib/audit";
 const MAX_FILE_BYTES = 2 * 1024 * 1024; // 2 MB
 const MAX_DATA_ROWS = 2000;
 const MAX_ERRORS_RETURNED = 500;
+
+const XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
 const ASSET_CONDITIONS = ["NEW", "GOOD", "FAIR", "DAMAGED", "CRITICAL"] as const;
 const ASSET_STATUSES = [
@@ -121,6 +124,36 @@ function parseCsv(input: string): string[][] {
   return rows.filter((r) => r.some((v) => v.trim() !== ""));
 }
 
+// ------------------------------------------------------------------
+// XLSX parser — first worksheet, row 1 = headers. Produces the same
+// string[][] shape as parseCsv so both feed the same import pipeline.
+// Returns null when the file cannot be parsed as a workbook.
+// ------------------------------------------------------------------
+
+async function parseXlsx(buffer: ArrayBuffer): Promise<string[][] | null> {
+  const workbook = new ExcelJS.Workbook();
+  try {
+    await workbook.xlsx.load(buffer);
+  } catch {
+    return null;
+  }
+  const sheet = workbook.worksheets[0];
+  if (!sheet) return [];
+
+  const rows: string[][] = [];
+  const colCount = sheet.columnCount;
+  sheet.eachRow({ includeEmpty: false }, (row) => {
+    const values: string[] = [];
+    for (let c = 1; c <= colCount; c++) {
+      // cell.text normalizes dates/rich text/formula results to strings
+      values.push(row.getCell(c).text ?? "");
+    }
+    // Skip fully-empty rows (same as the CSV parser)
+    if (values.some((v) => v.trim() !== "")) rows.push(values);
+  });
+  return rows;
+}
+
 /** CSV-escape a value for output. */
 function esc(v: string): string {
   return `"${v.replaceAll('"', '""')}"`;
@@ -198,7 +231,10 @@ export const POST = apiHandler(async (req: Request) => {
   const file = form.get("file");
   if (!(file instanceof File)) {
     return NextResponse.json(
-      { error: "missing_file", message: "No CSV file uploaded / ไม่พบไฟล์ CSV" },
+      {
+        error: "missing_file",
+        message: "No CSV/Excel file uploaded / ไม่พบไฟล์ CSV หรือ Excel (.xlsx)",
+      },
       { status: 400 }
     );
   }
@@ -209,10 +245,31 @@ export const POST = apiHandler(async (req: Request) => {
     );
   }
 
-  const rows = parseCsv(await file.text());
+  // Detect input format, parse into a common string[][] shape, then run
+  // the SAME validation/creation pipeline below for both formats.
+  const isXlsx = file.name.toLowerCase().endsWith(".xlsx") || file.type === XLSX_MIME;
+  const sourceFormat = isXlsx ? "xlsx" : "csv";
+
+  let rows: string[][];
+  if (isXlsx) {
+    const parsed = await parseXlsx(await file.arrayBuffer());
+    if (parsed === null) {
+      return NextResponse.json(
+        {
+          error: "invalid_file",
+          message: "Could not read the .xlsx file / ไม่สามารถอ่านไฟล์ .xlsx ได้",
+        },
+        { status: 400 }
+      );
+    }
+    rows = parsed;
+  } else {
+    rows = parseCsv(await file.text());
+  }
+
   if (rows.length < 1) {
     return NextResponse.json(
-      { error: "empty_file", message: "CSV file is empty / ไฟล์ CSV ว่างเปล่า" },
+      { error: "empty_file", message: "File is empty / ไฟล์ว่างเปล่า" },
       { status: 400 }
     );
   }
@@ -408,7 +465,7 @@ export const POST = apiHandler(async (req: Request) => {
           organizationId: user.organizationId,
           assetId: a.id,
           action: "REGISTER",
-          detail: "CSV import",
+          detail: isXlsx ? "XLSX import" : "CSV import",
           actorId: user.id,
         })),
       });
@@ -418,7 +475,12 @@ export const POST = apiHandler(async (req: Request) => {
   await auditLog(user, {
     action: "IMPORT",
     entityType: "ASSET",
-    detail: { created: validRows.length, failed: errors.length, fileName: file.name },
+    detail: {
+      created: validRows.length,
+      failed: errors.length,
+      fileName: file.name,
+      format: sourceFormat,
+    },
   });
 
   return NextResponse.json({

@@ -1,4 +1,8 @@
+import fs from "node:fs";
+import path from "node:path";
 import { NextResponse } from "next/server";
+import ExcelJS from "exceljs";
+import PDFDocument from "pdfkit";
 import { apiHandler } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
 import { requirePermission, AuthError, type CurrentUser } from "@/lib/session";
@@ -7,26 +11,193 @@ import { auditLog } from "@/lib/audit";
 export const dynamic = "force-dynamic";
 
 const MAX_ROWS = 10_000;
+const MAX_PDF_ROWS = 1_000;
 
 type Cell = string | number | boolean | Date | null | undefined;
 
+/** Normalized cell value shared by all serializers. */
+type Value = string | number | null;
+
+interface ReportData {
+  title: string;
+  columns: string[];
+  rows: Value[][];
+}
+
+/** Normalize raw query cells once; every format serializes from this shape. */
+function normalizeCell(v: Cell): Value {
+  if (v === null || v === undefined) return null;
+  if (v instanceof Date) return v.toISOString();
+  if (typeof v === "number") return v;
+  return String(v);
+}
+
+// ------------------------------------------------------------------
+// CSV
+// ------------------------------------------------------------------
+
 /** Escape a CSV cell: quote-escape and neutralize spreadsheet formula injection. */
-function csvCell(v: Cell): string {
-  if (v === null || v === undefined) return "";
-  let s: string;
-  if (v instanceof Date) s = v.toISOString();
-  else s = String(v);
+function csvCell(v: Value): string {
+  if (v === null) return "";
+  let s = String(v);
   // CSV injection protection: prefix cells starting with =,+,-,@ with a single quote
   if (/^[=+\-@]/.test(s)) s = "'" + s;
   if (/[",\n\r]/.test(s)) s = '"' + s.replaceAll('"', '""') + '"';
   return s;
 }
 
-function toCsv(headers: string[], rows: Cell[][]): string {
-  const lines = [headers.map(csvCell).join(","), ...rows.map((r) => r.map(csvCell).join(","))];
+function toCsv(data: ReportData): string {
+  const lines = [
+    data.columns.map(csvCell).join(","),
+    ...data.rows.map((r) => r.map(csvCell).join(",")),
+  ];
   // BOM so Excel opens Thai text correctly
   return "\uFEFF" + lines.join("\r\n") + "\r\n";
 }
+
+// ------------------------------------------------------------------
+// XLSX
+// ------------------------------------------------------------------
+
+async function toXlsx(report: string, data: ReportData): Promise<ExcelJS.Buffer> {
+  const workbook = new ExcelJS.Workbook();
+  const worksheet = workbook.addWorksheet(report);
+
+  // Width auto-ish from header length (min 12, max 40)
+  worksheet.columns = data.columns.map((h) => ({
+    header: h,
+    width: Math.min(40, Math.max(12, h.length + 4)),
+  }));
+
+  // Assign cell values directly (never {formula}) — exceljs writes plain
+  // strings/numbers, so formula injection is not possible here.
+  for (const row of data.rows) {
+    worksheet.addRow(row);
+  }
+
+  const headerRow = worksheet.getRow(1);
+  headerRow.font = { bold: true };
+  headerRow.eachCell((c) => {
+    c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFE5E7EB" } };
+  });
+  worksheet.views = [{ state: "frozen", ySplit: 1 }];
+
+  return workbook.xlsx.writeBuffer();
+}
+
+// ------------------------------------------------------------------
+// PDF
+// ------------------------------------------------------------------
+
+function loadThaiFont(): Buffer | null {
+  // process.cwd()-relative read so the font is served from the app bundle.
+  try {
+    return fs.readFileSync(
+      path.join(process.cwd(), "src/assets/fonts/NotoSansThai-Regular.ttf")
+    );
+  } catch {
+    return null;
+  }
+}
+
+function truncateToWidth(doc: PDFKit.PDFDocument, text: string, maxWidth: number): string {
+  let s = text.length > 60 ? text.slice(0, 60) : text;
+  if (doc.widthOfString(s) <= maxWidth) return s;
+  while (s.length > 0 && doc.widthOfString(s + "…") > maxWidth) {
+    s = s.slice(0, -1);
+  }
+  return s + "…";
+}
+
+function toPdf(data: ReportData, fontData: Buffer): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const margin = 36;
+    // font: "" prevents pdfkit from initializing built-in Helvetica, whose
+    // .afm metric files are not traced into the Next standalone bundle.
+    const doc = new PDFDocument({ size: "A4", layout: "landscape", margin, font: "" });
+    const chunks: Buffer[] = [];
+    doc.on("data", (c: Buffer) => chunks.push(c));
+    doc.on("end", () => resolve(Buffer.concat(chunks)));
+    doc.on("error", reject);
+
+    // Thai-capable font used for ALL text
+    doc.registerFont("thai", fontData);
+    doc.font("thai");
+
+    const pageWidth = doc.page.width - margin * 2;
+    const bottom = doc.page.height - margin;
+    const colWidth = pageWidth / data.columns.length;
+    const headerHeight = 18;
+    const rowHeight = 14;
+
+    const drawTableHeader = (y: number): number => {
+      doc.rect(margin, y, pageWidth, headerHeight).fill("#e5e7eb");
+      doc.fillColor("#111827").fontSize(10);
+      data.columns.forEach((col, i) => {
+        doc.text(truncateToWidth(doc, col, colWidth - 6), margin + i * colWidth + 3, y + 4, {
+          width: colWidth - 6,
+          lineBreak: false,
+        });
+      });
+      return y + headerHeight + 2;
+    };
+
+    // Title + generated timestamp
+    doc.fillColor("#111827").fontSize(14);
+    doc.text(data.title, margin, margin, { width: pageWidth, lineBreak: false });
+    doc.fontSize(9).fillColor("#6b7280");
+    doc.text(`Generated ${new Date().toISOString()}`, margin, margin + 20, {
+      width: pageWidth,
+      lineBreak: false,
+    });
+
+    let y = drawTableHeader(margin + 38);
+    const rows = data.rows.slice(0, MAX_PDF_ROWS);
+
+    doc.fontSize(9);
+    for (const row of rows) {
+      if (y + rowHeight > bottom) {
+        doc.addPage();
+        y = drawTableHeader(margin);
+        doc.fontSize(9);
+      }
+      doc.fillColor("#111827");
+      row.forEach((cell, i) => {
+        const text = cell === null ? "" : String(cell);
+        if (!text) return;
+        doc.text(truncateToWidth(doc, text, colWidth - 6), margin + i * colWidth + 3, y, {
+          width: colWidth - 6,
+          lineBreak: false,
+        });
+      });
+      y += rowHeight;
+      doc
+        .moveTo(margin, y - 3)
+        .lineTo(margin + pageWidth, y - 3)
+        .lineWidth(0.5)
+        .strokeColor("#d1d5db")
+        .stroke();
+    }
+
+    if (data.rows.length > MAX_PDF_ROWS) {
+      if (y + rowHeight > bottom) {
+        doc.addPage();
+        y = margin;
+      }
+      doc.fillColor("#6b7280").fontSize(9);
+      doc.text("... (truncated, use CSV/XLSX for full data)", margin, y + 4, {
+        width: pageWidth,
+        lineBreak: false,
+      });
+    }
+
+    doc.end();
+  });
+}
+
+// ------------------------------------------------------------------
+// Report builders (queries unchanged)
+// ------------------------------------------------------------------
 
 const num = (v: unknown): number | null => (v === null || v === undefined ? null : Number(v));
 
@@ -36,6 +207,19 @@ interface ReportResult {
 }
 
 type ReportBuilder = (user: CurrentUser) => Promise<ReportResult>;
+
+const REPORT_TITLES: Record<string, string> = {
+  assets: "ทะเบียนทรัพย์สิน / Asset Inventory",
+  "assets-by-department": "ทรัพย์สินตามแผนก / Assets by Department",
+  assignments: "การเบิก-คืนทรัพย์สิน / Asset Assignments",
+  maintenance: "งานซ่อมบำรุง / Maintenance",
+  warranty: "การรับประกัน / Warranty",
+  licenses: "ไลเซนส์ซอฟต์แวร์ / Licenses",
+  subscriptions: "บริการสมาชิก / Subscriptions",
+  purchases: "การจัดซื้อ / Purchases",
+  audit: "บันทึกตรวจสอบ / Audit Log",
+  "vault-access": "การเข้าถึง Vault / Vault Access",
+};
 
 const REPORT_BUILDERS: Record<string, ReportBuilder> = {
   assets: async (user) => {
@@ -349,10 +533,22 @@ const REPORT_BUILDERS: Record<string, ReportBuilder> = {
   },
 };
 
+// ------------------------------------------------------------------
+// GET — ?format=csv|xlsx|pdf (default csv)
+// ------------------------------------------------------------------
+
+const FORMATS = ["csv", "xlsx", "pdf"] as const;
+type Format = (typeof FORMATS)[number];
+
 export const GET = apiHandler(
-  async (_req: Request, ctx: { params: Promise<{ report: string }> }) => {
+  async (req: Request, ctx: { params: Promise<{ report: string }> }) => {
     const user = await requirePermission("report:export");
     const { report } = await ctx.params;
+
+    const format = (new URL(req.url).searchParams.get("format") ?? "csv") as Format;
+    if (!FORMATS.includes(format)) {
+      return NextResponse.json({ error: "invalid_format" }, { status: 400 });
+    }
 
     const builder = REPORT_BUILDERS[report];
     if (!builder) {
@@ -365,20 +561,53 @@ export const GET = apiHandler(
     }
 
     const { headers, rows } = await builder(user);
+    const data: ReportData = {
+      title: REPORT_TITLES[report] ?? report,
+      columns: headers,
+      rows: rows.map((r) => r.map(normalizeCell)),
+    };
+
+    // For PDF, resolve the font before doing anything irreversible.
+    let fontData: Buffer | null = null;
+    if (format === "pdf") {
+      fontData = loadThaiFont();
+      if (!fontData) {
+        return NextResponse.json({ error: "pdf_font_missing" }, { status: 501 });
+      }
+    }
 
     await auditLog(user, {
       action: "EXPORT",
       entityType: "REPORT",
-      detail: { report, rowCount: rows.length },
+      detail: { report, format, rowCount: data.rows.length },
     });
 
-    const filename = `${report}-${new Date().toISOString().slice(0, 10)}.csv`;
-    return new NextResponse(toCsv(headers, rows), {
-      headers: {
-        "Content-Type": "text/csv; charset=utf-8",
-        "Content-Disposition": `attachment; filename="${filename}"`,
-        "Cache-Control": "no-store",
-      },
+    const filename = `${report}-${new Date().toISOString().slice(0, 10)}.${format}`;
+    const commonHeaders = {
+      "Content-Disposition": `attachment; filename="${filename}"`,
+      "Cache-Control": "no-store",
+    };
+
+    if (format === "xlsx") {
+      const buffer = await toXlsx(report, data);
+      return new NextResponse(buffer, {
+        headers: {
+          "Content-Type":
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          ...commonHeaders,
+        },
+      });
+    }
+
+    if (format === "pdf") {
+      const buffer = await toPdf(data, fontData as Buffer);
+      return new NextResponse(new Uint8Array(buffer), {
+        headers: { "Content-Type": "application/pdf", ...commonHeaders },
+      });
+    }
+
+    return new NextResponse(toCsv(data), {
+      headers: { "Content-Type": "text/csv; charset=utf-8", ...commonHeaders },
     });
   }
 );
