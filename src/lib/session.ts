@@ -2,6 +2,7 @@ import { cache } from "react";
 import { headers } from "next/headers";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { AuthError } from "@/lib/errors";
 import type { PermissionKey } from "@/lib/permissions";
 
 export interface CurrentUser {
@@ -18,13 +19,7 @@ export interface CurrentUser {
   userAgent: string | null;
 }
 
-export class AuthError extends Error {
-  status: number;
-  constructor(message: string, status = 401) {
-    super(message);
-    this.status = status;
-  }
-}
+export { AuthError } from "@/lib/errors";
 
 /**
  * Resolve and validate the current user for this request:

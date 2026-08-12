@@ -1,0 +1,37 @@
+# Local development stack (app + PostgreSQL).
+# Usage: docker compose up --build
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: itbox
+      POSTGRES_PASSWORD: itbox_dev_local
+      POSTGRES_DB: itbox
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U itbox"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  app:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://itbox:itbox_dev_local@db:5432/itbox
+      AUTH_URL: http://localhost:8080
+      AUTH_TRUST_HOST: "true"
+      # Dev-only values — override via .env / secrets in real deployments
+      AUTH_SECRET: ${AUTH_SECRET:?set AUTH_SECRET in .env}
+      KMS_PROVIDER: local
+      LOCAL_KMS_MASTER_KEY: ${LOCAL_KMS_MASTER_KEY:?set LOCAL_KMS_MASTER_KEY in .env}
+    ports:
+      - "8080:8080"
+
+volumes:
+  pgdata:

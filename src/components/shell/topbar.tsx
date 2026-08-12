@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { signOut } from "next-auth/react";
 import { Menu, Moon, Sun, Bell, Search, LogOut, User, Languages } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -102,8 +103,9 @@ export function Topbar({
             <DropdownMenuItem asChild>
               <Link href="/settings/profile"><User className="mr-2 h-4 w-4" />{labels.profile}</Link>
             </DropdownMenuItem>
-            <DropdownMenuItem asChild>
-              <a href="/api/auth/signout"><LogOut className="mr-2 h-4 w-4" />{labels.logout}</a>
+            <DropdownMenuItem onSelect={() => signOut({ callbackUrl: "/login" })}>
+              <LogOut className="mr-2 h-4 w-4" />
+              {labels.logout}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

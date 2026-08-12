@@ -171,7 +171,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           const jti = crypto.randomUUID();
           token.uid = dbUser.id;
           token.org = dbUser.organizationId;
-          token.jti = jti;
+          token.sid = jti;
           await prisma.userSession.create({
             data: {
               userId: dbUser.id,
@@ -187,7 +187,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       if (token.uid) {
         session.user.id = token.uid as string;
         session.user.orgId = token.org as string | undefined;
-        session.user.jti = token.jti as string | undefined;
+        session.user.jti = token.sid as string | undefined;
       }
       return session;
     },
@@ -195,9 +195,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   events: {
     async signOut(message) {
       const token = "token" in message ? message.token : null;
-      if (token?.jti && token?.uid) {
+      if (token?.sid && token?.uid) {
         await prisma.userSession.updateMany({
-          where: { tokenId: token.jti as string, revokedAt: null },
+          where: { tokenId: token.sid as string, revokedAt: null },
           data: { revokedAt: new Date() },
         });
         if (token.org) {

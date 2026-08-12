@@ -9,7 +9,8 @@
 import { prisma } from "@/lib/prisma";
 import { encryptSecret, decryptSecret } from "@/lib/crypto/envelope";
 import { auditLog } from "@/lib/audit";
-import { AuthError, type CurrentUser } from "@/lib/session";
+import { AuthError } from "@/lib/errors";
+import type { CurrentUser } from "@/lib/session";
 import { verifyTotp } from "@/lib/mfa";
 import type { Prisma, VaultItem, VaultPermissionLevel } from "@prisma/client";
 

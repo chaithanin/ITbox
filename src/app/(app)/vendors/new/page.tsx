@@ -1,0 +1,91 @@
+import Link from "next/link";
+import { getCurrentUser } from "@/lib/session";
+import { PageHeader } from "@/components/page-header";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import { createVendor } from "../actions";
+
+export default async function NewVendorPage() {
+  const user = await getCurrentUser();
+  if (!user || !user.permissions.has("vendor:manage")) {
+    return (
+      <div className="rounded-lg border bg-card p-6 text-sm text-muted-foreground">
+        ไม่มีสิทธิ์เข้าถึงหน้านี้ / You do not have access to this page.
+      </div>
+    );
+  }
+
+  return (
+    <div className="mx-auto max-w-2xl">
+      <PageHeader
+        title="เพิ่มผู้จำหน่าย / New Vendor"
+        description="ลงทะเบียนผู้จำหน่ายหรือผู้ให้บริการใหม่ / Register a new vendor"
+      />
+      <Card>
+        <CardContent className="p-5">
+          <form action={createVendor} className="grid gap-4 sm:grid-cols-2">
+            <div className="sm:col-span-2">
+              <Label htmlFor="name">ชื่อผู้จำหน่าย / Vendor name *</Label>
+              <Input id="name" name="name" required maxLength={200} className="mt-1" />
+            </div>
+            <div>
+              <Label htmlFor="contactName">ผู้ติดต่อ / Contact name</Label>
+              <Input id="contactName" name="contactName" maxLength={200} className="mt-1" />
+            </div>
+            <div>
+              <Label htmlFor="phone">โทรศัพท์ / Phone</Label>
+              <Input id="phone" name="phone" maxLength={50} className="mt-1" />
+            </div>
+            <div>
+              <Label htmlFor="email">อีเมล / Email</Label>
+              <Input id="email" name="email" type="email" maxLength={320} className="mt-1" />
+            </div>
+            <div>
+              <Label htmlFor="taxId">เลขผู้เสียภาษี / Tax ID</Label>
+              <Input id="taxId" name="taxId" maxLength={50} className="mt-1" />
+            </div>
+            <div className="sm:col-span-2">
+              <Label htmlFor="address">ที่อยู่ / Address</Label>
+              <Textarea id="address" name="address" rows={2} className="mt-1" />
+            </div>
+            <div>
+              <Label htmlFor="category">หมวดหมู่ / Category</Label>
+              <Input
+                id="category"
+                name="category"
+                maxLength={100}
+                placeholder="เช่น Hardware, Software, Service"
+                className="mt-1"
+              />
+            </div>
+            <div>
+              <Label htmlFor="rating">คะแนน / Rating</Label>
+              <Select id="rating" name="rating" className="mt-1" defaultValue="">
+                <option value="">— ไม่ระบุ / None —</option>
+                {[1, 2, 3, 4, 5].map((n) => (
+                  <option key={n} value={n}>
+                    {"★".repeat(n)} ({n})
+                  </option>
+                ))}
+              </Select>
+            </div>
+            <div className="sm:col-span-2">
+              <Label htmlFor="notes">หมายเหตุ / Notes</Label>
+              <Textarea id="notes" name="notes" rows={3} className="mt-1" />
+            </div>
+            <div className="flex gap-2 sm:col-span-2">
+              <Button type="submit">บันทึก / Save</Button>
+              <Button variant="outline" asChild>
+                <Link href="/vendors">ยกเลิก / Cancel</Link>
+              </Button>
+            </div>
+          </form>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
