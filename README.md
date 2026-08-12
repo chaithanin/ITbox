@@ -64,6 +64,7 @@ Demo users (passwords = seed env vars):
 ### Verify
 ```bash
 npm run lint && npm run typecheck && npm test && npm run build
+npm run test:e2e   # Playwright E2E (starts its own dev server on :3400)
 ```
 
 ## Docker
