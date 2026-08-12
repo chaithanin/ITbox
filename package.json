@@ -14,7 +14,8 @@
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
     "db:seed": "prisma db seed",
-    "db:studio": "prisma studio"
+    "db:studio": "prisma studio",
+    "test:e2e": "playwright test"
   },
   "prisma": {
     "seed": "node --experimental-strip-types prisma/seed.ts"
@@ -36,6 +37,7 @@
     "lucide-react": "^1.31.0",
     "next": "^15.5.23",
     "next-auth": "^5.0.0-beta.32",
+    "nodemailer": "^8.0.11",
     "otpauth": "^9.5.1",
     "qrcode": "^1.5.4",
     "react": "^19.2.8",
@@ -44,7 +46,9 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@playwright/test": "^1.62.1",
     "@types/node": "^26.2.0",
+    "@types/nodemailer": "^8.0.1",
     "@types/qrcode": "^1.5.6",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",

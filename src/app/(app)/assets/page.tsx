@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { Prisma } from "@prisma/client";
-import { Download, Plus } from "lucide-react";
+import { Download, Plus, Upload } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/session";
 import { cn, daysUntil, formatDate } from "@/lib/utils";
@@ -113,12 +113,20 @@ export default async function AssetsPage({
           </Button>
         )}
         {user.permissions.has("asset:create") && (
-          <Button asChild>
-            <Link href="/assets/new">
-              <Plus className="h-4 w-4" />
-              สร้างทรัพย์สิน / New Asset
-            </Link>
-          </Button>
+          <>
+            <Button variant="outline" asChild>
+              <Link href="/assets/import">
+                <Upload className="h-4 w-4" />
+                นำเข้า CSV / Import
+              </Link>
+            </Button>
+            <Button asChild>
+              <Link href="/assets/new">
+                <Plus className="h-4 w-4" />
+                สร้างทรัพย์สิน / New Asset
+              </Link>
+            </Button>
+          </>
         )}
       </PageHeader>
 

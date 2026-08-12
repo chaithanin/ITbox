@@ -46,6 +46,14 @@ result, IP, user agent. A sanitizer strips password/secret/token/key fields
 from audit detail payloads defensively. No API mutation path exists to modify
 or delete audit rows (immutable to normal users).
 
+## File uploads
+Asset documents/images go through an allow-list of content types (no SVG —
+XSS vector; no executables), a 10 MB cap, and server-generated object paths
+(`{orgId}/assets/{assetId}/{uuid}.{ext}`) so user input never becomes a path.
+Downloads are authenticated, org-scoped, served with `nosniff`, and
+non-image types are forced to `attachment`. Local dev storage refuses to run
+in production (`STORAGE_PROVIDER=gcs` required), mirroring the KMS guard.
+
 ## Secrets handling
 - `.env` files are gitignored; production secrets live in Google Secret
   Manager; KMS keys never leave Cloud KMS.

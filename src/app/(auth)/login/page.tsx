@@ -137,6 +137,21 @@ function LoginForm() {
           </svg>
           เข้าสู่ระบบด้วย Google
         </Button>
+        {process.env.NEXT_PUBLIC_AUTH_ENTRA === "1" && (
+          <Button
+            variant="outline"
+            className="mt-2 w-full"
+            onClick={() => signIn("microsoft-entra-id", { callbackUrl: "/dashboard" })}
+          >
+            <svg className="h-4 w-4" viewBox="0 0 23 23" aria-hidden>
+              <rect x="1" y="1" width="10" height="10" fill="#f25022" />
+              <rect x="12" y="1" width="10" height="10" fill="#7fba00" />
+              <rect x="1" y="12" width="10" height="10" fill="#00a4ef" />
+              <rect x="12" y="12" width="10" height="10" fill="#ffb900" />
+            </svg>
+            เข้าสู่ระบบด้วย Microsoft
+          </Button>
+        )}
       </CardContent>
     </Card>
   );

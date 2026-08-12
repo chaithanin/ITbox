@@ -1,6 +1,7 @@
 import NextAuth, { CredentialsSignin } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import Google from "next-auth/providers/google";
+import MicrosoftEntraID from "next-auth/providers/microsoft-entra-id";
 import { z } from "zod";
 import crypto from "node:crypto";
 import { prisma } from "@/lib/prisma";
@@ -136,11 +137,20 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           }),
         ]
       : []),
+    ...(process.env.AUTH_MICROSOFT_ENTRA_ID_ID
+      ? [
+          MicrosoftEntraID({
+            clientId: process.env.AUTH_MICROSOFT_ENTRA_ID_ID,
+            clientSecret: process.env.AUTH_MICROSOFT_ENTRA_ID_SECRET,
+            issuer: process.env.AUTH_MICROSOFT_ENTRA_ID_ISSUER,
+          }),
+        ]
+      : []),
   ],
   callbacks: {
     ...authConfig.callbacks,
     async signIn({ user, account, profile }) {
-      if (account?.provider === "google") {
+      if (account?.provider === "google" || account?.provider === "microsoft-entra-id") {
         // Enterprise policy: only pre-provisioned, active users may sign in.
         const email = (profile?.email ?? user.email)?.toLowerCase();
         if (!email || profile?.email_verified === false) return false;
@@ -148,9 +158,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           where: { email, deletedAt: null, status: "ACTIVE" },
         });
         if (!existing) return false;
-        // MFA policy note: Google SSO relies on the IdP's own 2SV.
+        // SSO providers rely on the IdP's own MFA/2SV policy.
         await audit(existing.organizationId, existing.id, "LOGIN", "SUCCESS", {
-          provider: "google",
+          provider: account.provider,
         });
         await prisma.user.update({
           where: { id: existing.id },

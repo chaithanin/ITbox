@@ -118,21 +118,18 @@ assets/lifecycle/assignment/QR, vault (encrypt/reveal/copy/share/rotate/
 emergency/favorites/classification/MFA), employees/departments/locations,
 licenses/subscriptions/vendors/maintenance/procurement+approvals,
 offboarding, dashboard/reports/audit/security center, notifications (in-app +
-LINE broadcast), users/roles/permissions/sessions/profile/MFA enrollment,
-REST API, tests (unit + DB integration incl. cross-tenant & encryption-at-rest
-assertions), Docker/Cloud Build/GitHub Actions CI.
+**Email/SMTP** + LINE broadcast), users/roles/permissions/sessions/profile/MFA
+enrollment, **file uploads** (asset documents & images → Cloud Storage in
+production, local disk in dev, org-scoped download route),
+**asset bulk CSV import** with template download + row-level error report,
+Google OAuth + **Microsoft Entra ID** SSO (env-gated), REST API,
+tests (unit + DB integration incl. cross-tenant & encryption-at-rest
+assertions) + **Playwright E2E suite**, Docker/Cloud Build/GitHub Actions CI.
 
 **NOT IMPLEMENTED** (declared per Section 72 — no fake UI exists for these):
-- Email/SMTP notification delivery (in-app + LINE are implemented; SMTP env
-  vars are reserved in `.env.example`)
-- File upload to Cloud Storage from the UI (schema + buckets + docs ready;
-  `asset_documents` lists records but there is no upload form yet)
-- Excel (.xlsx) import/export — CSV is implemented; PDF report export
-  (print-friendly pages + CSV provided instead)
-- WebAuthn/Passkey MFA (TOTP implemented); Microsoft Entra ID login
-  (architecture supports adding the Auth.js provider)
-- Asset bulk import from CSV/Excel with row-level error report
-- Playwright E2E suite (unit + integration tests provided)
+- Excel (.xlsx) import/export — CSV import/export is implemented instead
+- PDF report export — CSV + print-friendly pages provided instead
+- WebAuthn/Passkey MFA — TOTP authenticator-app MFA is implemented
 
 ## License
 

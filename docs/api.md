@@ -11,6 +11,8 @@ List endpoints paginate: `?page=1&pageSize=20` → `{ data, page, total }`.
 | `/api/assets/:id` | GET, PUT, DELETE | asset:read / update / delete |
 | `/api/assets/:id/qr` | GET (PNG) | authenticated |
 | `/api/assets/export` | GET (CSV) | asset:export |
+| `/api/assets/import` | GET (CSV template), POST (multipart CSV → row-validated bulk create) | asset:create |
+| `/api/documents/:id` | GET (file download, org-scoped) | asset:read |
 | `/api/employees`, `/api/employees/:id` | GET, POST / GET, PUT, DELETE | employee:* |
 | `/api/departments`, `/api/locations` | GET, POST | department/location:* |
 | `/api/licenses` | GET, POST | license:read / manage |

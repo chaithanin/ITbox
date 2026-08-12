@@ -36,7 +36,7 @@ steps:
       - --platform=managed
       - --add-cloudsql-instances=${_CLOUDSQL_INSTANCE}
       - --set-secrets=DATABASE_URL=itbox-database-url:latest,AUTH_SECRET=itbox-auth-secret:latest,GOOGLE_CLIENT_ID=itbox-google-client-id:latest,GOOGLE_CLIENT_SECRET=itbox-google-client-secret:latest
-      - --set-env-vars=KMS_PROVIDER=gcp,GCP_PROJECT_ID=$PROJECT_ID,KMS_LOCATION=${_REGION},KMS_KEY_RING=itbox-vault,KMS_CRYPTO_KEY=vault-dek-wrapper,AUTH_TRUST_HOST=true
+      - --set-env-vars=KMS_PROVIDER=gcp,GCP_PROJECT_ID=$PROJECT_ID,KMS_LOCATION=${_REGION},KMS_KEY_RING=itbox-vault,KMS_CRYPTO_KEY=vault-dek-wrapper,STORAGE_PROVIDER=gcs,GCS_BUCKET_DOCUMENTS=$PROJECT_ID-itbox-documents,AUTH_TRUST_HOST=true
       - --min-instances=1
       - --memory=1Gi
 

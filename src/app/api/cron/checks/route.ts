@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { pushLineMessage } from "@/lib/services/notify";
+import { sendEmail, emailEnabled } from "@/lib/services/email";
 
 export const dynamic = "force-dynamic";
 
@@ -40,8 +41,9 @@ export async function POST(req: Request) {
         organizationId: org.id, deletedAt: null, status: "ACTIVE",
         userRoles: { some: { role: { key: { in: ["SUPER_ADMIN", "ADMIN", "IT_MANAGER"] } } } },
       },
-      select: { id: true },
+      select: { id: true, email: true },
     });
+    const orgCreatedBefore = created;
     const notify = async (
       type: string, entityId: string, level: "INFO" | "WARNING" | "CRITICAL",
       title: string, body: string, link: string
@@ -141,6 +143,19 @@ export async function POST(req: Request) {
       },
       data: { revokedAt: now },
     });
+
+    // Email digest per organization (no secret values — counts only)
+    const orgCreated = created - orgCreatedBefore;
+    if (orgCreated > 0 && emailEnabled() && recipients.length > 0) {
+      await sendEmail({
+        to: recipients.map((r) => r.email),
+        subject: `ITBox: มีการแจ้งเตือนใหม่ ${orgCreated} รายการ / ${orgCreated} new alerts`,
+        text:
+          `ระบบ ITBox ตรวจพบรายการที่ต้องติดตาม ${orgCreated} รายการ ` +
+          `(ประกัน/ไลเซนส์/บริการใกล้หมดอายุ หรือถึงรอบเปลี่ยนรหัสผ่าน)\n\n` +
+          `เข้าสู่ระบบเพื่อดูรายละเอียด: ${process.env.AUTH_URL ?? ""}/notifications`,
+      });
+    }
   }
 
   if (created > 0) {

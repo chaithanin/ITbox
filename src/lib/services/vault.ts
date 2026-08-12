@@ -499,7 +499,7 @@ export async function requestEmergencyAccess(
         some: { role: { key: { in: ["IT_MANAGER", "SECURITY_ADMIN", "SUPER_ADMIN"] } } },
       },
     },
-    select: { id: true },
+    select: { id: true, email: true },
   });
   await prisma.notification.createMany({
     data: managers.map((m) => ({
@@ -512,6 +512,18 @@ export async function requestEmergencyAccess(
       link: "/vault/emergency",
     })),
   });
+  if (managers.length > 0) {
+    const { sendEmail, emailEnabled } = await import("@/lib/services/email");
+    if (emailEnabled()) {
+      await sendEmail({
+        to: managers.map((m) => m.email),
+        subject: "ITBox: คำขอเข้าถึงฉุกเฉิน / Emergency access request",
+        text:
+          `${user.name} ขอสิทธิ์เข้าถึงฉุกเฉินสำหรับ "${item.name}"\n` +
+          `เหตุผล: ${reason}\n\nอนุมัติ/ปฏิเสธได้ที่: ${process.env.AUTH_URL ?? ""}/vault/emergency`,
+      });
+    }
+  }
   return req;
 }
 
@@ -554,4 +566,21 @@ export async function decideEmergencyAccess(
       link: `/vault/${req.vaultItemId}`,
     },
   });
+  const requester = await prisma.user.findUnique({
+    where: { id: req.requesterId },
+    select: { email: true },
+  });
+  if (requester) {
+    const { sendEmail, emailEnabled } = await import("@/lib/services/email");
+    if (emailEnabled()) {
+      await sendEmail({
+        to: requester.email,
+        subject: `ITBox: คำขอเข้าถึงฉุกเฉิน${decision === "APPROVED" ? "ได้รับอนุมัติ" : "ถูกปฏิเสธ"} / Emergency access ${decision.toLowerCase()}`,
+        text:
+          `คำขอเข้าถึง "${req.vaultItem.name}" ของคุณ${decision === "APPROVED" ? "ได้รับอนุมัติ" : "ถูกปฏิเสธ"}\n` +
+          `${decision === "APPROVED" ? `ใช้ได้ถึง: ${validHours} ชั่วโมงจากนี้\n` : ""}` +
+          `\nดูรายละเอียด: ${process.env.AUTH_URL ?? ""}/vault/${req.vaultItemId}`,
+      });
+    }
+  }
 }

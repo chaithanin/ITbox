@@ -26,6 +26,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { retireAsset, disposeAsset, deleteAsset } from "../actions";
+import { AssetDocumentsCard } from "./documents-card";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -355,6 +356,12 @@ export default async function AssetDetailPage({
             )}
           </CardContent>
         </Card>
+
+        <AssetDocumentsCard
+          assetId={asset.id}
+          organizationId={user.organizationId}
+          canEdit={has("asset:update")}
+        />
       </div>
 
       {(has("asset:dispose") || has("asset:delete")) && (

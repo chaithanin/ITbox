@@ -48,3 +48,10 @@ next-env.d.ts
 # IDE
 .idea/
 .vscode/
+
+# local file storage (dev)
+.uploads/
+
+# playwright
+test-results/
+playwright-report/
