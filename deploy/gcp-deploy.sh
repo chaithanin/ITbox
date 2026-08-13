@@ -56,7 +56,8 @@ gcloud artifacts repositories describe "$REPO" --location="$REGION" >/dev/null 2
 say "Cloud SQL PostgreSQL instance (first run takes ~10 minutes)"
 if ! gcloud sql instances describe "$SQL_INSTANCE" >/dev/null 2>&1; then
   gcloud sql instances create "$SQL_INSTANCE" \
-    --database-version=POSTGRES_16 --tier="$SQL_TIER" --region="$REGION" \
+    --database-version=POSTGRES_16 --edition=enterprise \
+    --tier="$SQL_TIER" --region="$REGION" \
     --backup-start-time=19:00 --enable-point-in-time-recovery \
     --storage-auto-increase
 fi
