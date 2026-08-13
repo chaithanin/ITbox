@@ -12,31 +12,69 @@ import crypto from "node:crypto";
 
 const prisma = new PrismaClient();
 
-// --- Minimal copy of the local-KMS envelope (matches src/lib/crypto) ---
+// --- Envelope encryption for seed vault records (matches src/lib/crypto) ---
+// KMS_PROVIDER=local → wrap DEK with LOCAL_KMS_MASTER_KEY (dev)
+// KMS_PROVIDER=gcp   → wrap DEK with Cloud KMS via ADC metadata token
+//                      (works inside a Cloud Run job)
 function localMasterKey(): Buffer {
   const raw = process.env.LOCAL_KMS_MASTER_KEY;
   if (!raw) throw new Error("LOCAL_KMS_MASTER_KEY required for seeding vault demo data");
   return crypto.createHash("sha256").update(Buffer.from(raw, "utf8")).digest();
 }
 
-function encryptSecretLocal(plaintext: string) {
+async function wrapDekGcp(dek: Buffer): Promise<{ wrapped: string; keyVersion: string }> {
+  const project = process.env.GCP_PROJECT_ID;
+  const location = process.env.KMS_LOCATION || "global";
+  const ring = process.env.KMS_KEY_RING;
+  const key = process.env.KMS_CRYPTO_KEY;
+  if (!project || !ring || !key) {
+    throw new Error("GCP_PROJECT_ID, KMS_KEY_RING, KMS_CRYPTO_KEY required when KMS_PROVIDER=gcp");
+  }
+  const tokenRes = await fetch(
+    "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token",
+    { headers: { "Metadata-Flavor": "Google" } }
+  );
+  if (!tokenRes.ok) throw new Error("Cannot obtain ADC token for KMS (run inside GCP)");
+  const { access_token } = (await tokenRes.json()) as { access_token: string };
+  const keyName = `projects/${project}/locations/${location}/keyRings/${ring}/cryptoKeys/${key}`;
+  const res = await fetch(`https://cloudkms.googleapis.com/v1/${keyName}:encrypt`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${access_token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ plaintext: dek.toString("base64") }),
+  });
+  if (!res.ok) throw new Error(`Cloud KMS encrypt failed: ${res.status}`);
+  const data = (await res.json()) as { ciphertext: string; name?: string };
+  return { wrapped: data.ciphertext, keyVersion: data.name ?? keyName };
+}
+
+async function encryptSecretForSeed(plaintext: string) {
   const dek = crypto.randomBytes(32);
   const iv = crypto.randomBytes(12);
   const cipher = crypto.createCipheriv("aes-256-gcm", dek, iv);
   const ct = Buffer.concat([cipher.update(Buffer.from(plaintext, "utf8")), cipher.final()]);
   const tag = cipher.getAuthTag();
-  // wrap DEK
-  const wiv = crypto.randomBytes(12);
-  const wc = crypto.createCipheriv("aes-256-gcm", localMasterKey(), wiv);
-  const wct = Buffer.concat([wc.update(dek), wc.final()]);
-  const wtag = wc.getAuthTag();
+
+  let dekEnc: string;
+  let kmsKeyVersion: string;
+  if ((process.env.KMS_PROVIDER || "local") === "gcp") {
+    const wrapped = await wrapDekGcp(dek);
+    dekEnc = wrapped.wrapped;
+    kmsKeyVersion = wrapped.keyVersion;
+  } else {
+    const wiv = crypto.randomBytes(12);
+    const wc = crypto.createCipheriv("aes-256-gcm", localMasterKey(), wiv);
+    const wct = Buffer.concat([wc.update(dek), wc.final()]);
+    const wtag = wc.getAuthTag();
+    dekEnc = Buffer.concat([wiv, wtag, wct]).toString("base64");
+    kmsKeyVersion = "local-1";
+  }
   dek.fill(0);
   return {
     ciphertext: ct.toString("base64"),
     iv: iv.toString("base64"),
     authTag: tag.toString("base64"),
-    dekEnc: Buffer.concat([wiv, wtag, wct]).toString("base64"),
-    kmsKeyVersion: "local-1",
+    dekEnc,
+    kmsKeyVersion,
   };
 }
 
@@ -402,7 +440,7 @@ async function main() {
       where: { organizationId: org.id, assetTag: "IT-SRV-001" },
     });
     for (const v of vaultDefs) {
-      const enc = encryptSecretLocal(JSON.stringify(v.secret));
+      const enc = await encryptSecretForSeed(JSON.stringify(v.secret));
       const item = await prisma.vaultItem.create({
         data: {
           organizationId: org.id,
