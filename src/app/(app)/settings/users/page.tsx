@@ -17,8 +17,24 @@ import {
 
 export const dynamic = "force-dynamic";
 
-export default async function UsersPage() {
+const MESSAGES: Record<string, { text: string; error?: boolean }> = {
+  "user-created": { text: "สร้างผู้ใช้สำเร็จ / User created" },
+  "password-reset": { text: "รีเซ็ตรหัสผ่านสำเร็จ (Session ถูกยกเลิกทั้งหมด) / Password reset" },
+  "weak-password": { text: "รหัสผ่านต้องยาวอย่างน้อย 12 ตัวอักษร และไม่อ่อนเกินไป / Password must be ≥12 characters and not weak", error: true },
+  "invalid-input": { text: "ข้อมูลไม่ถูกต้อง — ตรวจอีเมลและรหัสผ่าน (≥12 ตัวอักษร) / Invalid input", error: true },
+  "email-exists": { text: "อีเมลนี้มีผู้ใช้อยู่แล้ว / Email already exists", error: true },
+  "role-not-found": { text: "ไม่พบบทบาทที่เลือก / Role not found", error: true },
+  "user-not-found": { text: "ไม่พบผู้ใช้ / User not found", error: true },
+};
+
+export default async function UsersPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | undefined>>;
+}) {
   const admin = await requirePermission("user:manage");
+  const sp = await searchParams;
+  const msg = MESSAGES[sp.ok ?? sp.error ?? ""];
   const [users, roles] = await Promise.all([
     prisma.user.findMany({
       where: { organizationId: admin.organizationId, deletedAt: null },
@@ -35,6 +51,12 @@ export default async function UsersPage() {
   return (
     <div>
       <PageHeader title="ผู้ใช้งาน / Users" description="สร้างบัญชี กำหนดบทบาท และควบคุมการเข้าถึง" />
+
+      {msg && (
+        <p className={`mb-4 rounded-md px-3 py-2 text-sm ${msg.error ? "bg-destructive/10 text-destructive" : "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"}`}>
+          {msg.text}
+        </p>
+      )}
 
       <Card className="mb-4">
         <CardHeader><CardTitle>สร้างผู้ใช้ใหม่ / Create User</CardTitle></CardHeader>

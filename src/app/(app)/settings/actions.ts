@@ -21,14 +21,24 @@ const createUserSchema = z.object({
 
 export async function createUserAction(formData: FormData) {
   const admin = await requirePermission("user:manage");
-  const input = createUserSchema.parse(Object.fromEntries(formData));
+  // Validate gracefully: a short/invalid password must show a message, not
+  // crash the page with an uncaught ZodError.
+  const parsed = createUserSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) {
+    redirect("/settings/users?error=invalid-input");
+  }
+  const input = parsed.data;
   if (passwordStrength(input.password).label === "WEAK") {
-    throw new AuthError("PASSWORD_TOO_WEAK", 400);
+    redirect("/settings/users?error=weak-password");
   }
   const role = await prisma.role.findFirst({
     where: { id: input.roleId, organizationId: admin.organizationId },
   });
-  if (!role) throw new AuthError("NOT_FOUND", 404);
+  if (!role) redirect("/settings/users?error=role-not-found");
+  const existing = await prisma.user.findUnique({ where: { email: input.email } });
+  if (existing) {
+    redirect("/settings/users?error=email-exists");
+  }
   const user = await prisma.user.create({
     data: {
       organizationId: admin.organizationId,
@@ -43,7 +53,7 @@ export async function createUserAction(formData: FormData) {
     detail: { email: input.email, role: role.key },
   });
   revalidatePath("/settings/users");
-  redirect("/settings/users");
+  redirect("/settings/users?ok=user-created");
 }
 
 export async function setUserStatusAction(userId: string, formData: FormData) {
@@ -95,11 +105,15 @@ export async function setUserRolesAction(userId: string, formData: FormData) {
 
 export async function adminResetPasswordAction(userId: string, formData: FormData) {
   const admin = await requirePermission("user:manage");
-  const password = z.string().min(12).max(256).parse(formData.get("password"));
+  const parsed = z.string().min(12).max(256).safeParse(formData.get("password"));
+  if (!parsed.success) {
+    redirect("/settings/users?error=weak-password");
+  }
+  const password = parsed.data;
   const target = await prisma.user.findFirst({
     where: { id: userId, organizationId: admin.organizationId, deletedAt: null },
   });
-  if (!target) throw new AuthError("NOT_FOUND", 404);
+  if (!target) redirect("/settings/users?error=user-not-found");
   await prisma.user.update({
     where: { id: target.id },
     data: { passwordHash: await hashPassword(password), failedLoginCount: 0, lockedUntil: null },
@@ -114,6 +128,7 @@ export async function adminResetPasswordAction(userId: string, formData: FormDat
     detail: { event: "PASSWORD_RESET_BY_ADMIN" },
   });
   revalidatePath("/settings/users");
+  redirect("/settings/users?ok=password-reset");
 }
 
 // ---------------- Role permissions ----------------
