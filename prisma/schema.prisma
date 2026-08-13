@@ -44,6 +44,12 @@ model Organization {
   systemSettings    SystemSetting[]
   maintenanceTickets MaintenanceTicket[]
   offboardings      Offboarding[]
+  supportCases      SupportCase[]
+  caseTypes         CaseType[]
+  caseCategories    CaseCategory[]
+  slaPolicies       SlaPolicy[]
+  supportTeams      SupportTeam[]
+  holidays          Holiday[]
 
   @@map("organizations")
 }
@@ -100,6 +106,11 @@ model User {
   notifications      Notification[]
   approvalsAssigned  Approval[]      @relation("Approver")
   emergencyRequests  VaultEmergencyRequest[] @relation("EmergencyRequester")
+  casesRequested     SupportCase[]   @relation("CaseRequester")
+  casesCreated       SupportCase[]   @relation("CaseCreatedBy")
+  casesAssigned      SupportCase[]   @relation("CaseAssignee")
+  caseComments       CaseComment[]
+  supportTeamMemberships SupportTeamMember[]
 
   @@index([organizationId])
   @@map("users")
@@ -275,6 +286,7 @@ model Employee {
   assetAssignments   AssetAssignment[]
   licenseAssignments LicenseAssignment[]
   offboardings       Offboarding[]
+  supportCases       SupportCase[]  @relation("CaseRequesterEmployee")
 
   @@unique([organizationId, employeeCode])
   @@index([organizationId, departmentId])
@@ -300,6 +312,7 @@ model Department {
   vaultItems   VaultItem[]
   vaultShares  VaultShare[] @relation("SharedWithDepartment")
   purchaseRequests PurchaseRequest[]
+  supportCases SupportCase[] @relation("CaseDepartment")
 
   @@unique([organizationId, code])
   @@map("departments")
@@ -322,6 +335,7 @@ model Location {
   organization Organization @relation(fields: [organizationId], references: [id])
   employees    Employee[]
   assets       Asset[]
+  supportCases SupportCase[] @relation("CaseLocation")
 
   @@unique([organizationId, code])
   @@map("locations")
@@ -422,6 +436,8 @@ model Asset {
   vaultLinks  AssetVaultLink[]
 
   @@unique([organizationId, assetTag])
+  supportCases SupportCase[]  @relation("CaseAsset")
+
   @@index([organizationId, status])
   @@index([organizationId, categoryId])
   @@index([organizationId, departmentId])
@@ -1124,4 +1140,313 @@ model SystemSetting {
 
   @@unique([organizationId, key])
   @@map("system_settings")
+}
+
+// ============================================================
+// IT Support / ITSM Case Management
+// Reuses existing Asset / Employee / Department / Location / User /
+// Notification / AuditLog / Storage. No duplicate entities.
+// ============================================================
+
+enum CasePriority {
+  P1 // Critical
+  P2 // High
+  P3 // Normal
+  P4 // Low
+}
+
+// User-facing impact; combined with category to compute Priority.
+enum CaseImpact {
+  UNUSABLE // ใช้งานไม่ได้เลย
+  MAJOR    // งานสำคัญได้รับผลกระทบ
+  PARTIAL  // ใช้งานได้บางส่วน
+  GENERAL  // ขอความช่วยเหลือทั่วไป
+}
+
+enum CaseStatus {
+  NEW
+  TRIAGE
+  ASSIGNED
+  IN_PROGRESS
+  WAITING_USER
+  WAITING_VENDOR
+  RESOLVED
+  CLOSED
+  REOPENED
+  CANCELLED
+  DUPLICATE
+}
+
+enum CaseSource {
+  WEB
+  EMAIL
+  LINE
+  MOBILE
+  MONITORING
+  MANUAL
+}
+
+enum AssignmentStrategy {
+  MANUAL
+  ROUND_ROBIN
+  LEAST_WORKLOAD
+  BY_CATEGORY
+  BY_LOCATION
+  BY_DEPARTMENT
+  BY_PRIORITY
+}
+
+model CaseType {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @db.Uuid
+  key            String // INCIDENT, SERVICE_REQUEST, ACCESS, HARDWARE, ...
+  name           String
+  nameTh         String?
+  prefix         String // INC, REQ, ACC, SEC, ...
+  description    String?
+  icon           String?
+  active         Boolean  @default(true)
+  isSystem       Boolean  @default(false)
+  sortOrder      Int      @default(0)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  organization Organization  @relation(fields: [organizationId], references: [id])
+  cases        SupportCase[]
+
+  @@unique([organizationId, key])
+  @@map("case_types")
+}
+
+model CaseCategory {
+  id             String        @id @default(uuid()) @db.Uuid
+  organizationId String        @db.Uuid
+  name           String
+  nameTh         String?
+  parentId       String?       @db.Uuid
+  assignTeamId   String?       @db.Uuid
+  defaultPriority CasePriority?
+  active         Boolean       @default(true)
+  sortOrder      Int           @default(0)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  organization Organization   @relation(fields: [organizationId], references: [id])
+  parent       CaseCategory?  @relation("CaseCategoryTree", fields: [parentId], references: [id])
+  children     CaseCategory[] @relation("CaseCategoryTree")
+  assignTeam   SupportTeam?   @relation(fields: [assignTeamId], references: [id])
+  casesAsCategory    SupportCase[] @relation("CaseCategory")
+  casesAsSubcategory SupportCase[] @relation("CaseSubcategory")
+
+  @@index([organizationId, parentId])
+  @@map("case_categories")
+}
+
+model SlaPolicy {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @db.Uuid
+  priority       CasePriority
+  firstResponseMins Int
+  resolutionMins    Int
+  warnBeforeMins    Int      @default(15)
+  pauseOnWaitingUser   Boolean @default(true)
+  pauseOnWaitingVendor Boolean @default(true)
+  businessHoursOnly    Boolean @default(false)
+  escalateToRoleKey    String? // role key to escalate to on breach/warning
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@unique([organizationId, priority])
+  @@map("sla_policies")
+}
+
+model Holiday {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @db.Uuid
+  date           DateTime @db.Date
+  name           String
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@unique([organizationId, date])
+  @@map("holidays")
+}
+
+model SupportTeam {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @db.Uuid
+  name           String
+  nameTh         String?
+  description    String?
+  active         Boolean  @default(true)
+  // Round-robin cursor
+  lastAssignedIndex Int   @default(0)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  organization Organization        @relation(fields: [organizationId], references: [id])
+  members      SupportTeamMember[]
+  cases        SupportCase[]
+  categories   CaseCategory[]
+
+  @@map("support_teams")
+}
+
+model SupportTeamMember {
+  teamId String @db.Uuid
+  userId String @db.Uuid
+
+  team SupportTeam @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([teamId, userId])
+  @@map("support_team_members")
+}
+
+model SupportCase {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @db.Uuid
+  caseNumber     String
+  subject        String
+  description    String
+
+  typeId        String? @db.Uuid
+  categoryId    String? @db.Uuid
+  subcategoryId String? @db.Uuid
+
+  priority           CasePriority @default(P3)
+  priorityOverridden Boolean      @default(false)
+  impact             CaseImpact?
+  status             CaseStatus   @default(NEW)
+  source             CaseSource   @default(WEB)
+
+  // Requester = the person the case is FOR (may differ from creator)
+  requesterId         String? @db.Uuid
+  requesterEmployeeId String? @db.Uuid
+  onBehalf            Boolean @default(false)
+  createdById         String? @db.Uuid
+
+  departmentId String? @db.Uuid
+  locationId   String? @db.Uuid
+  assetId      String? @db.Uuid
+
+  assignedTeamId String? @db.Uuid
+  assignedUserId String? @db.Uuid
+
+  // SLA tracking
+  firstResponseDueAt   DateTime?
+  resolutionDueAt      DateTime?
+  firstRespondedAt     DateTime?
+  resolvedAt           DateTime?
+  closedAt             DateTime?
+  slaPausedAt          DateTime?
+  slaPausedMs          BigInt    @default(0)
+  firstResponseBreached Boolean  @default(false)
+  resolutionBreached    Boolean  @default(false)
+
+  resolutionNote String?
+  reopenCount    Int     @default(0)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  organization Organization  @relation(fields: [organizationId], references: [id])
+  type         CaseType?     @relation(fields: [typeId], references: [id])
+  category     CaseCategory? @relation("CaseCategory", fields: [categoryId], references: [id])
+  subcategory  CaseCategory? @relation("CaseSubcategory", fields: [subcategoryId], references: [id])
+  requester    User?         @relation("CaseRequester", fields: [requesterId], references: [id])
+  requesterEmployee Employee? @relation("CaseRequesterEmployee", fields: [requesterEmployeeId], references: [id])
+  createdBy    User?         @relation("CaseCreatedBy", fields: [createdById], references: [id])
+  department   Department?   @relation("CaseDepartment", fields: [departmentId], references: [id])
+  location     Location?     @relation("CaseLocation", fields: [locationId], references: [id])
+  asset        Asset?        @relation("CaseAsset", fields: [assetId], references: [id])
+  assignedTeam SupportTeam?  @relation(fields: [assignedTeamId], references: [id])
+  assignedUser User?         @relation("CaseAssignee", fields: [assignedUserId], references: [id])
+
+  comments     CaseComment[]
+  attachments  CaseAttachment[]
+  events       CaseEvent[]
+  satisfaction CaseSatisfaction?
+
+  @@unique([organizationId, caseNumber])
+  @@index([organizationId, status])
+  @@index([organizationId, assignedUserId, status])
+  @@index([organizationId, requesterId, status])
+  @@index([organizationId, priority, status])
+  @@index([organizationId, resolutionDueAt])
+  @@map("support_cases")
+}
+
+model CaseComment {
+  id        String   @id @default(uuid()) @db.Uuid
+  caseId    String   @db.Uuid
+  authorId  String?  @db.Uuid
+  body      String
+  // Internal work log (agents only) vs user-visible conversation
+  isInternal Boolean @default(false)
+  createdAt DateTime @default(now())
+
+  case        SupportCase      @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  author      User?            @relation(fields: [authorId], references: [id])
+  attachments CaseAttachment[]
+
+  @@index([caseId, createdAt])
+  @@map("case_comments")
+}
+
+model CaseAttachment {
+  id           String   @id @default(uuid()) @db.Uuid
+  caseId       String   @db.Uuid
+  commentId    String?  @db.Uuid
+  name         String
+  storagePath  String
+  contentType  String?
+  sizeBytes    Int?
+  uploadedById String?  @db.Uuid
+  createdAt    DateTime @default(now())
+
+  case    SupportCase  @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  comment CaseComment? @relation(fields: [commentId], references: [id], onDelete: Cascade)
+
+  @@index([caseId])
+  @@map("case_attachments")
+}
+
+// Immutable case timeline (status changes, assignment, SLA events, ...)
+model CaseEvent {
+  id         String     @id @default(uuid()) @db.Uuid
+  caseId     String     @db.Uuid
+  actorId    String?    @db.Uuid
+  action     String // CREATED, TRIAGE, ASSIGNED, STATUS_CHANGE, PRIORITY_CHANGE, SLA_WARNING, SLA_BREACH, ESCALATED, RESOLVED, REOPENED, CLOSED, COMMENT
+  fromStatus CaseStatus?
+  toStatus   CaseStatus?
+  detail     Json?
+  createdAt  DateTime   @default(now())
+
+  case SupportCase @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@index([caseId, createdAt])
+  @@map("case_events")
+}
+
+model CaseSatisfaction {
+  id        String   @id @default(uuid()) @db.Uuid
+  caseId    String   @unique @db.Uuid
+  rating    Int // 1-5
+  comment   String?
+  createdAt DateTime @default(now())
+
+  case SupportCase @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@map("case_satisfactions")
 }

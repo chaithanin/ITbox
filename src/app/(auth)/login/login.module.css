@@ -1,0 +1,233 @@
+/* Login card — glassmorphic neon design adapted from a Uiverse.io design by KhelVers.
+   Floating glass card over a dark cyan/violet glow. The float pauses on hover /
+   focus-within so fields stay clickable, and travel is reduced for usability. */
+
+.page {
+  position: relative;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  padding: 1.5rem;
+  background:
+    radial-gradient(1200px 600px at 50% -10%, rgba(21, 239, 255, 0.25), transparent 60%),
+    radial-gradient(900px 500px at 80% 110%, rgba(156, 17, 255, 0.28), transparent 55%),
+    linear-gradient(160deg, #0a1230 0%, #0c1b3a 45%, #071026 100%);
+}
+
+/* Soft animated glow behind the card */
+.rays {
+  position: absolute;
+  top: 12%;
+  width: 520px;
+  height: 520px;
+  max-width: 90vw;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(130, 225, 255, 0.35), transparent 65%);
+  filter: blur(20px);
+  animation: rays 2.6s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.form {
+  position: relative;
+  z-index: 3;
+  width: 100%;
+  max-width: 380px;
+  padding: 28px 26px;
+  display: flex;
+  flex-direction: column;
+  gap: 1em;
+  border-radius: 0.75rem;
+  border: 4px solid #fff;
+  background: rgba(0, 255, 240, 0.4);
+  box-shadow: 0px 0px 64px 0px #82e1ff inset, 0px 0px 16px #a8fffaa6;
+  backdrop-filter: blur(3.5px);
+  animation: float 3.4s ease-in-out infinite;
+}
+
+/* Keep fields clickable: stop bobbing while the user interacts */
+.form:hover,
+.form:focus-within {
+  animation-play-state: paused;
+}
+
+.brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.logo {
+  width: 52px;
+  height: 52px;
+  display: grid;
+  place-content: center;
+  border-radius: 14px;
+  color: #06283d;
+  background: rgba(255, 255, 255, 0.85);
+  box-shadow: 0 0 18px rgba(130, 225, 255, 0.8);
+}
+
+.heading {
+  text-align: center;
+  color: white;
+  font-size: 2rem;
+  font-weight: 700;
+  letter-spacing: 8px;
+  text-shadow: 0px 0px 16px rgb(243, 243, 243);
+}
+
+.subheading {
+  text-align: center;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.85);
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.4);
+  letter-spacing: 0.5px;
+}
+
+.input {
+  height: 3em;
+  padding: 1px 14px;
+  color: white;
+  letter-spacing: 1px;
+  font-weight: bold;
+  border-radius: 6px;
+  border: 2px solid #fff;
+  background: rgba(139, 255, 247, 0.42);
+  box-shadow: 0px 0px 1px 3px #9ee5e3 inset, 0px 4px 4px 0px #181a6040;
+  text-shadow: 0px 1px 4px rgb(243, 243, 243);
+}
+
+.input::placeholder {
+  font-weight: 300;
+  color: white;
+  letter-spacing: 0.1rem;
+  text-shadow: 0px 1px 5px rgb(66, 66, 66);
+}
+
+.input:focus-visible {
+  outline: none;
+  background: rgba(139, 189, 255, 0.59);
+  box-shadow: 0px 0px 1px 4px #9ee5e3;
+}
+
+.input:hover {
+  background: rgba(139, 189, 255, 0.55);
+}
+
+.mfaLabel {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: -2px 2px -6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #fff;
+  text-shadow: 0 1px 5px rgba(0, 0, 0, 0.4);
+}
+
+.error {
+  margin: 0;
+  padding: 9px 13px;
+  border-radius: 8px;
+  background: rgba(255, 70, 70, 0.22);
+  border: 1px solid rgba(255, 120, 120, 0.6);
+  color: #fff;
+  font-size: 12px;
+  line-height: 1.4;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+}
+
+.loginButton {
+  cursor: pointer;
+  height: 3.4rem;
+  color: white;
+  font-size: 1.15em;
+  font-weight: 600;
+  letter-spacing: 0.2rem;
+  border-radius: 6px;
+  border: 2px solid white;
+  background: linear-gradient(144deg, #9c11ffce, #2000eeb6 50%, #15efffbb);
+  transition: box-shadow 0.15s ease, transform 0.15s ease;
+}
+
+.loginButton:hover:not(:disabled) {
+  transform: translateY(-3px);
+  background: linear-gradient(144deg, #9c11ff, #2000ee 50%, #15fff3);
+  box-shadow: 0px 0px 2px 2px #ffffff;
+}
+
+.loginButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.socialContainer {
+  margin-top: 4px;
+}
+
+.socialTitle {
+  display: block;
+  text-align: center;
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.8);
+  text-shadow: 0 1px 5px rgba(0, 0, 0, 0.4);
+}
+
+.socialButtons {
+  display: flex;
+  justify-content: center;
+  gap: 14px;
+  margin-top: 8px;
+}
+
+.socialButton {
+  width: 46px;
+  height: 46px;
+  display: grid;
+  place-content: center;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 0 14px rgba(130, 225, 255, 0.7);
+  cursor: pointer;
+  transition: transform 0.2s ease;
+}
+
+.socialButton:hover {
+  transform: scale(1.12);
+}
+
+.socialButton:active {
+  transform: scale(0.92);
+}
+
+.agreement {
+  display: block;
+  text-align: center;
+  margin-top: 2px;
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.75);
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+  line-height: 1.5;
+}
+
+@keyframes float {
+  0% { transform: translateY(0); }
+  50% { transform: translateY(-14px); }
+  100% { transform: translateY(0); }
+}
+
+@keyframes rays {
+  0% { opacity: 0.55; }
+  50% { opacity: 1; }
+  100% { opacity: 0.55; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .form, .rays { animation: none; }
+}

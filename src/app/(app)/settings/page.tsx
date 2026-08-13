@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Users, ShieldCheck, UserCog, Building2 } from "lucide-react";
+import { Users, ShieldCheck, UserCog, Building2, LifeBuoy } from "lucide-react";
 import { requireUser } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import { PageHeader } from "@/components/page-header";
@@ -32,6 +32,13 @@ export default async function SettingsPage() {
       title: "บทบาทและสิทธิ์ / Roles & Permissions",
       desc: "กำหนดสิทธิ์การเข้าถึงของแต่ละบทบาท (RBAC)",
       show: user.permissions.has("role:manage"),
+    },
+    {
+      href: "/settings/support",
+      icon: LifeBuoy,
+      title: "ตั้งค่า IT Support / Case Settings",
+      desc: "ประเภทเคส, หมวดหมู่, Priority & SLA, ทีม, เวลาทำการ, การแจ้งเตือน",
+      show: user.permissions.has("support:settings"),
     },
   ];
 

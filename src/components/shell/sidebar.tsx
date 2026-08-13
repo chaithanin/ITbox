@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import {
   LayoutDashboard, Monitor, Users, Building2, MapPin, KeyRound, AppWindow,
   RefreshCcw, Wrench, ShoppingCart, Store, BarChart3, Bell, ScrollText,
-  ShieldAlert, Settings, UserMinus, Boxes,
+  ShieldAlert, Settings, UserMinus, Boxes, LifeBuoy,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -35,6 +35,7 @@ const ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   security: ShieldAlert,
   settings: Settings,
   offboarding: UserMinus,
+  support: LifeBuoy,
   default: Boxes,
 };
 

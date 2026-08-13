@@ -89,6 +89,7 @@ const PERMISSIONS = [
   "vendor:read","vendor:manage","maintenance:read","maintenance:manage",
   "procurement:read","procurement:create","procurement:approve",
   "report:read","report:export","audit:read","security:read",
+  "support:create","support:read","support:work","support:manage","support:settings",
   "user:manage","role:manage","settings:manage","offboarding:read","offboarding:manage",
 ];
 
@@ -108,6 +109,7 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
     "vendor:read","vendor:manage","maintenance:read","maintenance:manage",
     "procurement:read","procurement:create","procurement:approve",
     "report:read","report:export","audit:read","security:read","offboarding:read","offboarding:manage",
+    "support:create","support:read","support:work","support:manage","support:settings",
   ],
   IT_STAFF: [
     "asset:read","asset:create","asset:update","asset:assign","asset:return","asset:transfer",
@@ -115,19 +117,21 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
     "vault:read","vault:create","vault:update","vault:reveal","vault:copy",
     "license:read","subscription:read","vendor:read","maintenance:read","maintenance:manage",
     "procurement:read","procurement:create","report:read","offboarding:read",
+    "support:create","support:read","support:work",
   ],
   SECURITY_ADMIN: [
     "asset:read","employee:read","department:read","location:read",
     "vault:read","vault:reveal","vault:manage","vault:emergency","vault:audit",
     "audit:read","security:read","report:read","report:export","user:manage","role:manage",
+    "support:read","support:work",
   ],
   HR: [
     "employee:read","employee:create","employee:update","employee:delete",
-    "department:read","location:read","asset:read","offboarding:read","offboarding:manage","report:read",
+    "department:read","location:read","asset:read","offboarding:read","offboarding:manage","report:read","support:create",
   ],
-  FINANCE: [...READ_ONLY, "procurement:approve", "report:export"],
-  MANAGER: [...READ_ONLY, "procurement:create", "procurement:approve"],
-  EMPLOYEE: ["asset:read","vault:read","procurement:read","procurement:create"],
+  FINANCE: [...READ_ONLY, "procurement:approve", "report:export", "support:create"],
+  MANAGER: [...READ_ONLY, "procurement:create", "procurement:approve", "support:create", "support:read"],
+  EMPLOYEE: ["asset:read","vault:read","procurement:read","procurement:create","support:create"],
   AUDITOR: [...READ_ONLY, "audit:read","vault:audit","security:read","report:export"],
   VIEWER: READ_ONLY,
 };
@@ -519,6 +523,134 @@ async function main() {
           reportedById: userByEmail.get("employee@example.com"),
           vendorId: vendorIds[0],
           startedAt: new Date(),
+        },
+      });
+    }
+  }
+
+  // --- IT Support (ITSM) defaults ---
+  // Case types
+  const caseTypeDefs = [
+    { key: "INCIDENT", name: "Incident", nameTh: "เหตุขัดข้อง", prefix: "INC", sortOrder: 1 },
+    { key: "SERVICE_REQUEST", name: "Service Request", nameTh: "คำขอบริการ", prefix: "REQ", sortOrder: 2 },
+    { key: "ACCESS", name: "Access Request", nameTh: "ขอสิทธิ์เข้าถึง", prefix: "ACC", sortOrder: 3 },
+    { key: "HARDWARE", name: "Hardware", nameTh: "ฮาร์ดแวร์", prefix: "HW", sortOrder: 4 },
+    { key: "SOFTWARE", name: "Software", nameTh: "ซอฟต์แวร์", prefix: "SW", sortOrder: 5 },
+    { key: "ACCOUNT", name: "Account", nameTh: "บัญชี/รหัสผ่าน", prefix: "ACT", sortOrder: 6 },
+    { key: "NETWORK", name: "Network", nameTh: "เครือข่าย", prefix: "NET", sortOrder: 7 },
+    { key: "SECURITY", name: "Security", nameTh: "ความปลอดภัย", prefix: "SEC", sortOrder: 8 },
+    { key: "CHANGE", name: "Change Request", nameTh: "ขอเปลี่ยนแปลง", prefix: "CHG", sortOrder: 9 },
+    { key: "OTHER", name: "Other", nameTh: "อื่น ๆ", prefix: "OTH", sortOrder: 10 },
+  ];
+  for (const t of caseTypeDefs) {
+    await prisma.caseType.upsert({
+      where: { organizationId_key: { organizationId: org.id, key: t.key } },
+      update: {},
+      create: { organizationId: org.id, isSystem: true, ...t },
+    });
+  }
+
+  // Support team (IT Support) with the IT staff members
+  let itTeam = await prisma.supportTeam.findFirst({
+    where: { organizationId: org.id, name: "IT Support" },
+  });
+  if (!itTeam) {
+    itTeam = await prisma.supportTeam.create({
+      data: { organizationId: org.id, name: "IT Support", nameTh: "ฝ่ายสนับสนุนไอที" },
+    });
+    const itMemberEmails = ["itmanager@example.com", "itstaff@example.com", "security@example.com"];
+    for (const email of itMemberEmails) {
+      const uid = userByEmail.get(email);
+      if (uid) {
+        await prisma.supportTeamMember.upsert({
+          where: { teamId_userId: { teamId: itTeam.id, userId: uid } },
+          update: {},
+          create: { teamId: itTeam.id, userId: uid },
+        });
+      }
+    }
+  }
+
+  // Category tree (parent → children), Security/Network auto-assign to IT team
+  if ((await prisma.caseCategory.count({ where: { organizationId: org.id } })) === 0) {
+    const catTree: Record<string, string[]> = {
+      Hardware: ["Notebook", "Desktop", "Monitor", "Printer", "Scanner", "Keyboard/Mouse"],
+      Network: ["Internet", "Wi-Fi", "LAN", "VPN", "Firewall", "Switch"],
+      "Microsoft 365": ["Outlook", "Email", "Teams", "OneDrive", "SharePoint", "Office"],
+      Security: ["Antivirus", "Malware", "Phishing", "Suspicious Email", "Account Compromise"],
+      Application: ["ERP", "CRM", "PMS", "POS", "HR", "Finance"],
+      Account: ["Password Reset", "New Account", "Permission"],
+    };
+    let order = 0;
+    for (const [parent, children] of Object.entries(catTree)) {
+      const p = await prisma.caseCategory.create({
+        data: {
+          organizationId: org.id, name: parent, sortOrder: order++,
+          assignTeamId: itTeam.id,
+          defaultPriority: parent === "Security" ? "P1" : parent === "Network" ? "P2" : null,
+        },
+      });
+      let childOrder = 0;
+      for (const child of children) {
+        await prisma.caseCategory.create({
+          data: { organizationId: org.id, name: child, parentId: p.id, sortOrder: childOrder++, assignTeamId: itTeam.id },
+        });
+      }
+    }
+  }
+
+  // SLA policies (P1–P4) per the spec
+  const slaDefs = [
+    { priority: "P1" as const, firstResponseMins: 15, resolutionMins: 4 * 60, warnBeforeMins: 5, escalateToRoleKey: "IT_MANAGER" },
+    { priority: "P2" as const, firstResponseMins: 30, resolutionMins: 8 * 60, warnBeforeMins: 10, escalateToRoleKey: "IT_MANAGER" },
+    { priority: "P3" as const, firstResponseMins: 4 * 60, resolutionMins: 2 * 24 * 60, warnBeforeMins: 30, businessHoursOnly: true },
+    { priority: "P4" as const, firstResponseMins: 8 * 60, resolutionMins: 5 * 24 * 60, warnBeforeMins: 60, businessHoursOnly: true },
+  ];
+  for (const s of slaDefs) {
+    await prisma.slaPolicy.upsert({
+      where: { organizationId_priority: { organizationId: org.id, priority: s.priority } },
+      update: {},
+      create: { organizationId: org.id, ...s },
+    });
+  }
+
+  // Business hours (Mon–Fri 08:30–17:30, Asia/Bangkok)
+  await prisma.systemSetting.upsert({
+    where: { organizationId_key: { organizationId: org.id, key: "support.businessHours" } },
+    update: {},
+    create: {
+      organizationId: org.id,
+      key: "support.businessHours",
+      value: {
+        days: [null, [510, 1050], [510, 1050], [510, 1050], [510, 1050], [510, 1050], null],
+        timezoneOffsetMinutes: 420,
+      },
+    },
+  });
+
+  // A couple of demo cases
+  if ((await prisma.supportCase.count({ where: { organizationId: org.id } })) === 0) {
+    const emp = userByEmail.get("employee@example.com");
+    const incType = await prisma.caseType.findFirst({ where: { organizationId: org.id, key: "INCIDENT" } });
+    const netCat = await prisma.caseCategory.findFirst({ where: { organizationId: org.id, name: "Network", parentId: null } });
+    if (emp && incType && netCat && itTeam) {
+      await prisma.supportCase.create({
+        data: {
+          organizationId: org.id,
+          caseNumber: "IT-INC-2026-000001",
+          subject: "Wi-Fi ใช้งานไม่ได้ที่ชั้น 3",
+          description: "เชื่อมต่อ Wi-Fi ไม่ได้ตั้งแต่เช้า มีผลกับทั้งแผนก",
+          typeId: incType.id,
+          categoryId: netCat.id,
+          impact: "MAJOR",
+          priority: "P2",
+          status: "IN_PROGRESS",
+          source: "WEB",
+          requesterId: emp,
+          assignedTeamId: itTeam.id,
+          assignedUserId: userByEmail.get("itstaff@example.com"),
+          firstResponseDueAt: new Date(Date.now() + 30 * 60_000),
+          resolutionDueAt: new Date(Date.now() + 8 * 3_600_000),
         },
       });
     }

@@ -75,6 +75,8 @@ export default async function DashboardPage({
     departments,
     locations,
     categories,
+    supportOpen,
+    supportSlaBreached,
   ] = await Promise.all([
     prisma.asset.groupBy({ by: ["status"], _count: true, where: assetWhere }),
     prisma.asset.groupBy({ by: ["categoryId"], _count: true, where: assetWhere }),
@@ -153,6 +155,21 @@ export default async function DashboardPage({
       where: { organizationId: orgId, deletedAt: null },
       select: { id: true, name: true },
       orderBy: { name: "asc" },
+    }),
+    prisma.supportCase.count({
+      where: {
+        organizationId: orgId,
+        deletedAt: null,
+        status: { notIn: ["RESOLVED", "CLOSED", "CANCELLED", "DUPLICATE"] },
+      },
+    }),
+    prisma.supportCase.count({
+      where: {
+        organizationId: orgId,
+        deletedAt: null,
+        resolutionBreached: true,
+        status: { notIn: ["RESOLVED", "CLOSED", "CANCELLED", "DUPLICATE"] },
+      },
     }),
   ]);
 
@@ -337,6 +354,18 @@ export default async function DashboardPage({
           value={pendingApprovals}
           tone={pendingApprovals > 0 ? "warning" : "default"}
           href="/procurement"
+        />
+        <StatCard
+          label="เคส IT ค้าง / IT Cases Open"
+          value={supportOpen}
+          tone={supportOpen > 0 ? "warning" : "default"}
+          href="/support/queue"
+        />
+        <StatCard
+          label="เคสเกิน SLA / SLA Breached"
+          value={supportSlaBreached}
+          tone={supportSlaBreached > 0 ? "danger" : "default"}
+          href="/support/queue"
         />
       </div>
 

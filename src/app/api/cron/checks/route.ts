@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { pushLineMessage } from "@/lib/services/notify";
 import { sendEmail, emailEnabled } from "@/lib/services/email";
+import { runSlaSweep } from "@/lib/services/support";
 
 export const dynamic = "force-dynamic";
 
@@ -158,11 +159,19 @@ export async function POST(req: Request) {
     }
   }
 
+  // IT Support SLA warnings/breaches + escalation
+  let slaAlerts = 0;
+  try {
+    slaAlerts = await runSlaSweep();
+  } catch (e) {
+    console.error("sla sweep failed", (e as Error).message);
+  }
+
   if (created > 0) {
     await pushLineMessage(
       `ITBox: มีการแจ้งเตือนใหม่ ${created} รายการ (ประกัน/ไลเซนส์/รอบเปลี่ยนรหัสผ่าน) — เข้าสู่ระบบเพื่อตรวจสอบ`
     );
   }
 
-  return NextResponse.json({ ok: true, notificationsCreated: created });
+  return NextResponse.json({ ok: true, notificationsCreated: created, slaAlerts });
 }

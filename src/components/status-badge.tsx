@@ -49,6 +49,17 @@ const STATUS_VARIANT: Record<string, "default" | "secondary" | "success" | "warn
   SUCCESS: "success",
   DENIED: "destructive",
   FAILED: "destructive",
+  // Support case statuses
+  NEW: "warning",
+  TRIAGE: "warning",
+  WAITING_USER: "warning",
+  REOPENED: "warning",
+  DUPLICATE: "secondary",
+  // Case priorities
+  P1: "destructive",
+  P2: "warning",
+  P3: "default",
+  P4: "secondary",
 };
 
 export function StatusBadge({ status, label }: { status: string; label?: string }) {

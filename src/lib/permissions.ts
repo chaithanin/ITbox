@@ -26,6 +26,9 @@ export const PERMISSIONS = [
   "report:read", "report:export",
   "audit:read",
   "security:read",
+  // IT Support / ITSM
+  "support:create", "support:read", "support:work",
+  "support:manage", "support:settings",
   // Admin
   "user:manage", "role:manage", "settings:manage",
   "offboarding:read", "offboarding:manage",
@@ -56,6 +59,7 @@ export const ROLE_PERMISSIONS: Record<string, PermissionKey[]> = {
     "vendor:read", "vendor:manage", "maintenance:read", "maintenance:manage",
     "procurement:read", "procurement:create", "procurement:approve",
     "report:read", "report:export", "audit:read", "security:read",
+    "support:create", "support:read", "support:work", "support:manage", "support:settings",
     "offboarding:read", "offboarding:manage",
   ],
   IT_STAFF: [
@@ -66,27 +70,29 @@ export const ROLE_PERMISSIONS: Record<string, PermissionKey[]> = {
     "license:read", "subscription:read",
     "vendor:read", "maintenance:read", "maintenance:manage",
     "procurement:read", "procurement:create",
+    "support:create", "support:read", "support:work",
     "report:read", "offboarding:read",
   ],
   SECURITY_ADMIN: [
     "asset:read", "employee:read", "department:read", "location:read",
     "vault:read", "vault:reveal", "vault:manage", "vault:emergency", "vault:audit",
     "audit:read", "security:read", "report:read", "report:export",
+    "support:read", "support:work",
     "user:manage", "role:manage",
   ],
   HR: [
     "employee:read", "employee:create", "employee:update", "employee:delete",
     "department:read", "location:read", "asset:read",
-    "offboarding:read", "offboarding:manage", "report:read",
+    "offboarding:read", "offboarding:manage", "report:read", "support:create",
   ],
   FINANCE: [
-    ...READ_ONLY, "procurement:approve", "report:export",
+    ...READ_ONLY, "procurement:approve", "report:export", "support:create",
   ],
   MANAGER: [
-    ...READ_ONLY, "procurement:create", "procurement:approve",
+    ...READ_ONLY, "procurement:create", "procurement:approve", "support:create", "support:read",
   ],
   EMPLOYEE: [
-    "asset:read", "vault:read", "procurement:read", "procurement:create",
+    "asset:read", "vault:read", "procurement:read", "procurement:create", "support:create",
   ],
   AUDITOR: [
     ...READ_ONLY, "audit:read", "vault:audit", "security:read", "report:export",

@@ -36,6 +36,21 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       : []),
     ...(has("license:read") ? [{ href: "/licenses", label: t("licenses"), icon: "licenses" }] : []),
     ...(has("subscription:read") ? [{ href: "/subscriptions", label: t("subscriptions"), icon: "subscriptions" }] : []),
+    ...(has("support:create")
+      ? [{
+          href: "/support", label: t("itSupport"), icon: "support",
+          children: [
+            { href: "/support", label: t("myCases") },
+            { href: "/support/new", label: t("newCase") },
+            ...(has("support:read")
+              ? [
+                  { href: "/support/queue", label: t("supportQueue") },
+                  { href: "/support/metrics", label: "รายงาน / Metrics" },
+                ]
+              : []),
+          ],
+        }]
+      : []),
     ...(has("maintenance:read") ? [{ href: "/maintenance", label: t("maintenance"), icon: "maintenance" }] : []),
     ...(has("procurement:read") ? [{ href: "/procurement", label: t("procurement"), icon: "procurement" }] : []),
     ...(has("vendor:read") ? [{ href: "/vendors", label: t("vendors"), icon: "vendors" }] : []),
