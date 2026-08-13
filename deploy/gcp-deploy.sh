@@ -117,6 +117,18 @@ gcloud secrets describe itbox-cron-secret >/dev/null 2>&1 ||
   openssl rand -base64 24 | tr -d '\n' | gcloud secrets create itbox-cron-secret --data-file=-
 
 # ------------------------------ Build image -------------------------------
+say "Granting Cloud Build permissions to the default compute service account"
+# New GCP projects no longer grant the compute default SA (used by Cloud
+# Build) access to the build bucket / Artifact Registry — grant explicitly.
+PROJECT_NUMBER="$(gcloud projects describe "$PROJECT_ID" --format='value(projectNumber)')"
+COMPUTE_SA="${PROJECT_NUMBER}-compute@developer.gserviceaccount.com"
+gcloud projects add-iam-policy-binding "$PROJECT_ID" \
+  --member="serviceAccount:$COMPUTE_SA" --role=roles/cloudbuild.builds.builder --condition=None >/dev/null
+gcloud projects add-iam-policy-binding "$PROJECT_ID" \
+  --member="serviceAccount:$COMPUTE_SA" --role=roles/artifactregistry.writer --condition=None >/dev/null
+echo "Waiting 30s for IAM propagation..."
+sleep 30
+
 say "Building container image with Cloud Build (a few minutes)"
 gcloud builds submit --tag "$IMAGE" .
 
