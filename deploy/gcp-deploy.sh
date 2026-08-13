@@ -25,7 +25,9 @@ REGION="${REGION:-asia-southeast1}"
 SERVICE="${SERVICE:-itbox}"
 REPO="${REPO:-itbox}"
 SQL_INSTANCE="${SQL_INSTANCE:-itbox-pg}"
-SQL_TIER="${SQL_TIER:-db-custom-1-3840}"
+# db-f1-micro (~$9/mo) suits small teams; scale up anytime with
+# `gcloud sql instances patch itbox-pg --tier=db-custom-1-3840`
+SQL_TIER="${SQL_TIER:-db-f1-micro}"
 DB_NAME="itbox"
 DB_USER="itbox"
 KMS_RING="itbox-vault"
