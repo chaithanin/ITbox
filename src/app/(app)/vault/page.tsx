@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Plus } from "lucide-react";
+import { Plus, Upload } from "lucide-react";
 import { requirePermission } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import { vaultVisibilityWhere } from "@/lib/services/vault";
@@ -79,6 +79,13 @@ export default async function VaultPage({
         title="ตู้เซฟรหัสผ่าน / Password Vault"
         description="ข้อมูลลับถูกเข้ารหัสแบบ AES-256-GCM + Cloud KMS ทุกการเข้าถึงถูกบันทึก"
       >
+        {user.permissions.has("vault:manage") && (
+          <Button variant="outline" asChild>
+            <Link href="/vault/import">
+              <Upload className="h-4 w-4" /> นำเข้า / Import
+            </Link>
+          </Button>
+        )}
         {user.permissions.has("vault:create") && (
           <Button asChild>
             <Link href="/vault/new">
