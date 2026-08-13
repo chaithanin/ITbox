@@ -66,7 +66,8 @@ gcloud sql databases describe "$DB_NAME" --instance="$SQL_INSTANCE" >/dev/null 2
 
 # DB password lives only in Secret Manager
 if ! gcloud secrets describe itbox-database-url >/dev/null 2>&1; then
-  DB_PASSWORD="$(tr -dc 'A-Za-z0-9' </dev/urandom | head -c 28)"
+  # openssl-based generation: SIGPIPE-safe under `set -o pipefail`
+  DB_PASSWORD="$(openssl rand -base64 48 | tr -dc 'A-Za-z0-9' | cut -c1-28)"
   gcloud sql users create "$DB_USER" --instance="$SQL_INSTANCE" --password="$DB_PASSWORD" 2>/dev/null ||
     gcloud sql users set-password "$DB_USER" --instance="$SQL_INSTANCE" --password="$DB_PASSWORD"
   CONN_NAME="$(gcloud sql instances describe "$SQL_INSTANCE" --format='value(connectionName)')"
@@ -148,8 +149,8 @@ gcloud run services update "$SERVICE" --region="$REGION" \
 # ------------------------------ Demo seed ---------------------------------
 if [ "$SEED_DEMO_DATA" = "yes" ]; then
   say "Seeding demo data (Cloud Run job)"
-  SEED_ADMIN_PASSWORD="${SEED_ADMIN_PASSWORD:-$(tr -dc 'A-Za-z0-9' </dev/urandom | head -c 10)!Aa1}"
-  SEED_USER_PASSWORD="${SEED_USER_PASSWORD:-$(tr -dc 'A-Za-z0-9' </dev/urandom | head -c 10)!Aa1}"
+  SEED_ADMIN_PASSWORD="${SEED_ADMIN_PASSWORD:-$(openssl rand -base64 24 | tr -dc 'A-Za-z0-9' | cut -c1-10)!Aa1}"
+  SEED_USER_PASSWORD="${SEED_USER_PASSWORD:-$(openssl rand -base64 24 | tr -dc 'A-Za-z0-9' | cut -c1-10)!Aa1}"
   gcloud run jobs deploy itbox-seed "${RUN_FLAGS[@]}" \
     --command=node --args=--experimental-strip-types,prisma/seed.ts \
     --update-env-vars="SEED_ADMIN_PASSWORD=$SEED_ADMIN_PASSWORD,SEED_USER_PASSWORD=$SEED_USER_PASSWORD" \
