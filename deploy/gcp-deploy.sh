@@ -132,19 +132,25 @@ sleep 30
 say "Building container image with Cloud Build (a few minutes)"
 gcloud builds submit --tag "$IMAGE" .
 
-RUN_FLAGS=(
+ENV_VARS="KMS_PROVIDER=gcp,GCP_PROJECT_ID=$PROJECT_ID,KMS_LOCATION=$REGION,KMS_KEY_RING=$KMS_RING,KMS_CRYPTO_KEY=$KMS_KEY,STORAGE_PROVIDER=gcs,GCS_BUCKET_DOCUMENTS=$BUCKET_DOCS,AUTH_TRUST_HOST=true"
+COMMON_FLAGS=(
   --image="$IMAGE"
   --region="$REGION"
   --service-account="$SA"
   --set-cloudsql-instances="$CONN_NAME"
   --set-secrets="DATABASE_URL=itbox-database-url:latest,AUTH_SECRET=itbox-auth-secret:latest,CRON_SECRET=itbox-cron-secret:latest"
-  --set-env-vars="KMS_PROVIDER=gcp,GCP_PROJECT_ID=$PROJECT_ID,KMS_LOCATION=$REGION,KMS_KEY_RING=$KMS_RING,KMS_CRYPTO_KEY=$KMS_KEY,STORAGE_PROVIDER=gcs,GCS_BUCKET_DOCUMENTS=$BUCKET_DOCS,AUTH_TRUST_HOST=true"
 )
+RUN_FLAGS=("${COMMON_FLAGS[@]}" --set-env-vars="$ENV_VARS")
+# Jobs run as the non-root user with no home dir — give tooling a writable HOME
+JOB_FLAGS=("${COMMON_FLAGS[@]}" --set-env-vars="$ENV_VARS,HOME=/tmp")
 
 # ------------------------------ Migration ---------------------------------
 say "Running database migration (Cloud Run job)"
-gcloud run jobs deploy itbox-migrate "${RUN_FLAGS[@]}" \
-  --command=npx --args=prisma,migrate,deploy --max-retries=1 --quiet
+# Invoke the bundled prisma CLI directly with node — npx is unreliable in the
+# minimal runtime image (no node_modules/.bin, no npm cache).
+gcloud run jobs deploy itbox-migrate "${JOB_FLAGS[@]}" \
+  --command=node --args=node_modules/prisma/build/index.js,migrate,deploy \
+  --max-retries=1 --quiet
 gcloud run jobs execute itbox-migrate --region="$REGION" --wait
 
 # ------------------------------- Service ----------------------------------
@@ -163,9 +169,9 @@ if [ "$SEED_DEMO_DATA" = "yes" ]; then
   say "Seeding demo data (Cloud Run job)"
   SEED_ADMIN_PASSWORD="${SEED_ADMIN_PASSWORD:-$(openssl rand -base64 24 | tr -dc 'A-Za-z0-9' | cut -c1-10)!Aa1}"
   SEED_USER_PASSWORD="${SEED_USER_PASSWORD:-$(openssl rand -base64 24 | tr -dc 'A-Za-z0-9' | cut -c1-10)!Aa1}"
-  gcloud run jobs deploy itbox-seed "${RUN_FLAGS[@]}" \
+  gcloud run jobs deploy itbox-seed "${COMMON_FLAGS[@]}" \
+    --set-env-vars="$ENV_VARS,HOME=/tmp,SEED_ADMIN_PASSWORD=$SEED_ADMIN_PASSWORD,SEED_USER_PASSWORD=$SEED_USER_PASSWORD" \
     --command=node --args=--experimental-strip-types,prisma/seed.ts \
-    --update-env-vars="SEED_ADMIN_PASSWORD=$SEED_ADMIN_PASSWORD,SEED_USER_PASSWORD=$SEED_USER_PASSWORD" \
     --max-retries=0 --quiet
   gcloud run jobs execute itbox-seed --region="$REGION" --wait
 fi
