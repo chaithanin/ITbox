@@ -31,10 +31,30 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 COPY --from=builder --chown=nextjs:nodejs /app/public ./public
 # Thai font for PDF report export (read at runtime relative to cwd)
 COPY --from=builder --chown=nextjs:nodejs /app/src/assets ./src/assets
-# Prisma engine + migrations for `prisma migrate deploy` (run as a job/step)
+# Prisma CLI + engines + migrations for `prisma migrate deploy` (Cloud Run job:
+# node node_modules/prisma/build/index.js migrate deploy).
+# The CLI needs these transitive deps at runtime (verified by running the CLI
+# against a tree containing only this set):
 COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
 COPY --from=builder --chown=nextjs:nodejs /app/node_modules/prisma ./node_modules/prisma
 COPY --from=builder --chown=nextjs:nodejs /app/node_modules/@prisma ./node_modules/@prisma
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules/@standard-schema ./node_modules/@standard-schema
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules/c12 ./node_modules/c12
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules/confbox ./node_modules/confbox
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules/deepmerge-ts ./node_modules/deepmerge-ts
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules/defu ./node_modules/defu
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules/destr ./node_modules/destr
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules/dotenv ./node_modules/dotenv
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules/effect ./node_modules/effect
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules/empathic ./node_modules/empathic
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules/exsolve ./node_modules/exsolve
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules/fast-check ./node_modules/fast-check
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules/jiti ./node_modules/jiti
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules/pathe ./node_modules/pathe
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules/perfect-debounce ./node_modules/perfect-debounce
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules/pkg-types ./node_modules/pkg-types
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules/pure-rand ./node_modules/pure-rand
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules/rc9 ./node_modules/rc9
 
 USER nextjs
 EXPOSE 8080
