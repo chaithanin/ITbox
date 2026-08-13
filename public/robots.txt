@@ -1,0 +1,3 @@
+# ITBox is an internal enterprise system — do not index.
+User-agent: *
+Disallow: /
