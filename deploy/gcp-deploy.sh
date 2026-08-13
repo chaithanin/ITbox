@@ -136,7 +136,7 @@ RUN_FLAGS=(
   --image="$IMAGE"
   --region="$REGION"
   --service-account="$SA"
-  --add-cloudsql-instances="$CONN_NAME"
+  --set-cloudsql-instances="$CONN_NAME"
   --set-secrets="DATABASE_URL=itbox-database-url:latest,AUTH_SECRET=itbox-auth-secret:latest,CRON_SECRET=itbox-cron-secret:latest"
   --set-env-vars="KMS_PROVIDER=gcp,GCP_PROJECT_ID=$PROJECT_ID,KMS_LOCATION=$REGION,KMS_KEY_RING=$KMS_RING,KMS_CRYPTO_KEY=$KMS_KEY,STORAGE_PROVIDER=gcs,GCS_BUCKET_DOCUMENTS=$BUCKET_DOCS,AUTH_TRUST_HOST=true"
 )
