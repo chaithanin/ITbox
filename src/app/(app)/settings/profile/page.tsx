@@ -23,9 +23,13 @@ const MESSAGES: Record<string, { text: string; error?: boolean }> = {
   "mfa-enabled": { text: "เปิดใช้ MFA แล้ว / MFA enabled" },
   "mfa-disabled": { text: "ปิด MFA แล้ว / MFA disabled" },
   "wrong-password": { text: "รหัสผ่านปัจจุบันไม่ถูกต้อง / Wrong current password", error: true },
-  "weak-password": { text: "รหัสผ่านใหม่อ่อนเกินไป / New password too weak", error: true },
+  "weak-password": { text: "รหัสผ่าน 8–12 ตัว มีพิมพ์ใหญ่ พิมพ์เล็ก และตัวเลข อย่างน้อยอย่างละ 1 ห้ามเว้นวรรค / Must be 8–12 chars with upper, lower & number", error: true },
+  "password-mismatch": { text: "รหัสผ่านใหม่และการยืนยันไม่ตรงกัน / New password and confirmation do not match", error: true },
   "mfa-invalid": { text: "รหัส MFA ไม่ถูกต้อง / Invalid MFA code", error: true },
 };
+
+const PW_RULE_PROFILE = "รหัสผ่าน 8–12 ตัว มีพิมพ์ใหญ่ พิมพ์เล็ก และตัวเลข อย่างน้อยอย่างละ 1 (แนะนำมีอักขระพิเศษ) ห้ามเว้นวรรค";
+const PW_PATTERN_PROFILE = "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)\\S{8,12}$";
 
 export default async function ProfilePage({
   searchParams,
@@ -89,9 +93,21 @@ export default async function ProfilePage({
                 <Input id="current" name="current" type="password" required autoComplete="current-password" />
               </div>
               <div className="space-y-1">
-                <Label htmlFor="next">รหัสผ่านใหม่ (≥12 ตัวอักษร) / New password</Label>
-                <Input id="next" name="next" type="password" minLength={12} required autoComplete="new-password" />
+                <Label htmlFor="next">รหัสผ่านใหม่ / New password</Label>
+                <Input
+                  id="next" name="next" type="password" required
+                  minLength={8} maxLength={12} pattern={PW_PATTERN_PROFILE} title={PW_RULE_PROFILE}
+                  autoComplete="new-password"
+                />
               </div>
+              <div className="space-y-1">
+                <Label htmlFor="confirm">ยืนยันรหัสผ่านใหม่ / Confirm new password</Label>
+                <Input
+                  id="confirm" name="confirm" type="password" required
+                  minLength={8} maxLength={12} autoComplete="new-password"
+                />
+              </div>
+              <p className="text-xs text-muted-foreground">{PW_RULE_PROFILE}</p>
               <Button type="submit">เปลี่ยนรหัสผ่าน / Change</Button>
             </form>
           </CardContent>

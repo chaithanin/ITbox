@@ -112,6 +112,16 @@ function LoginForm() {
 
         {error && <p className={styles.error}>{error}</p>}
 
+        {!needMfa && (
+          <button
+            type="button"
+            className={styles.mfaToggle}
+            onClick={() => setNeedMfa(true)}
+          >
+            มีรหัส MFA? / Have an MFA code?
+          </button>
+        )}
+
         <button className={styles.loginButton} type="submit" disabled={loading}>
           {loading ? "กำลังเข้าสู่ระบบ..." : "เข้าสู่ระบบ / SIGN IN"}
         </button>

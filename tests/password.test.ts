@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   hashPassword, verifyPassword, generatePassword, passwordStrength,
-  GENERATOR_PRESETS,
+  GENERATOR_PRESETS, validatePasswordPolicy,
 } from "@/lib/password";
 
 describe("Argon2id login-password hashing", () => {
@@ -39,6 +39,30 @@ describe("password generator", () => {
     const a = generatePassword(GENERATOR_PRESETS.strong);
     const b = generatePassword(GENERATOR_PRESETS.strong);
     expect(a).not.toBe(b);
+  });
+});
+
+describe("user login password policy (8–12, upper+lower+digit, no space)", () => {
+  it("accepts the specified passing examples", () => {
+    for (const pw of ["Abcd1234", "Admin@123", "Test#2026"]) {
+      expect(validatePasswordPolicy(pw).ok, pw).toBe(true);
+    }
+  });
+  it("rejects the specified failing examples", () => {
+    expect(validatePasswordPolicy("12345678").ok).toBe(false); // no letters
+    expect(validatePasswordPolicy("abcdefgh").ok).toBe(false); // no upper/digit
+    expect(validatePasswordPolicy("Abc123").ok).toBe(false);   // too short (<8)
+    expect(validatePasswordPolicy("Admin@1234567").ok).toBe(false); // too long (>12)
+  });
+  it("rejects passwords containing spaces", () => {
+    const r = validatePasswordPolicy("Abc 1234");
+    expect(r.ok).toBe(false);
+    expect(r.errors).toContain("space");
+  });
+  it("reports precise error codes", () => {
+    expect(validatePasswordPolicy("abcdefg1").errors).toContain("upper");
+    expect(validatePasswordPolicy("ABCDEFG1").errors).toContain("lower");
+    expect(validatePasswordPolicy("Abcdefgh").errors).toContain("digit");
   });
 });
 

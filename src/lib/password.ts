@@ -77,6 +77,41 @@ export function generatePassword(opts: GeneratorOptions): string {
   return chars.slice(0, length).join("");
 }
 
+// ---------- User login password policy ----------
+//
+// Organization policy for USER LOGIN passwords (NOT vault secrets):
+//   length 8–12, ≥1 uppercase, ≥1 lowercase, ≥1 digit, no spaces.
+//   Special characters (@ # $ % ! …) are recommended but not required.
+// Vault secrets use their own generator/strength and are unaffected.
+
+export const PASSWORD_MIN = 8;
+export const PASSWORD_MAX = 12;
+
+// Client-side hint pattern (upper + lower + digit, 8–12, no whitespace).
+export const PASSWORD_PATTERN = "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)\\S{8,12}$";
+
+export const PASSWORD_POLICY_TH =
+  "รหัสผ่าน 8–12 ตัวอักษร ต้องมีตัวพิมพ์ใหญ่ พิมพ์เล็ก และตัวเลข อย่างน้อยอย่างละ 1 ตัว (แนะนำมีอักขระพิเศษ) ห้ามมีช่องว่าง";
+export const PASSWORD_POLICY_EN =
+  "Password must be 8–12 characters with at least one uppercase, one lowercase and one number (special char recommended), no spaces.";
+
+export interface PasswordPolicyResult {
+  ok: boolean;
+  errors: string[]; // machine codes: min | max | upper | lower | digit | space
+}
+
+/** Validate a user login password against the org policy. */
+export function validatePasswordPolicy(pw: string): PasswordPolicyResult {
+  const errors: string[] = [];
+  if (pw.length < PASSWORD_MIN) errors.push("min");
+  if (pw.length > PASSWORD_MAX) errors.push("max");
+  if (!/[A-Z]/.test(pw)) errors.push("upper");
+  if (!/[a-z]/.test(pw)) errors.push("lower");
+  if (!/[0-9]/.test(pw)) errors.push("digit");
+  if (/\s/.test(pw)) errors.push("space");
+  return { ok: errors.length === 0, errors };
+}
+
 // ---------- Password strength (local analysis only — never sent anywhere) ----------
 
 export type Strength = "WEAK" | "FAIR" | "STRONG" | "VERY_STRONG";

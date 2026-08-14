@@ -6,7 +6,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requirePermission, requireUser, AuthError } from "@/lib/session";
 import { auditLog } from "@/lib/audit";
-import { hashPassword, verifyPassword, passwordStrength } from "@/lib/password";
+import { hashPassword, verifyPassword, validatePasswordPolicy } from "@/lib/password";
 import { generateTotpSecret, storeTotpSecret, verifyTotp, verifyTotpCode } from "@/lib/mfa";
 import { decryptSecret } from "@/lib/crypto/envelope";
 
@@ -15,7 +15,8 @@ import { decryptSecret } from "@/lib/crypto/envelope";
 const createUserSchema = z.object({
   email: z.string().email().toLowerCase(),
   name: z.string().min(1).max(200),
-  password: z.string().min(12).max(256),
+  password: z.string().min(1).max(256),
+  confirmPassword: z.string().min(1).max(256),
   roleId: z.string().uuid(),
 });
 
@@ -28,7 +29,10 @@ export async function createUserAction(formData: FormData) {
     redirect("/settings/users?error=invalid-input");
   }
   const input = parsed.data;
-  if (passwordStrength(input.password).label === "WEAK") {
+  if (input.password !== input.confirmPassword) {
+    redirect("/settings/users?error=password-mismatch");
+  }
+  if (!validatePasswordPolicy(input.password).ok) {
     redirect("/settings/users?error=weak-password");
   }
   const role = await prisma.role.findFirst({
@@ -54,6 +58,34 @@ export async function createUserAction(formData: FormData) {
   });
   revalidatePath("/settings/users");
   redirect("/settings/users?ok=user-created");
+}
+
+/**
+ * Admin MFA control. Admins can DISABLE/RESET a user's MFA (recovery when a
+ * user loses their authenticator) — this clears the enrolled TOTP secret and
+ * revokes sessions. Admins cannot ENABLE MFA for someone else, because TOTP
+ * enrollment requires the user to scan the QR themselves (Settings → Profile).
+ */
+export async function disableUserMfaAction(userId: string) {
+  const admin = await requirePermission("user:manage");
+  const target = await prisma.user.findFirst({
+    where: { id: userId, organizationId: admin.organizationId, deletedAt: null },
+  });
+  if (!target) redirect("/settings/users?error=user-not-found");
+  await prisma.user.update({
+    where: { id: target!.id },
+    data: { mfaEnabled: false, totpSecretEnc: null, totpSecretDekEnc: null },
+  });
+  await prisma.userSession.updateMany({
+    where: { userId: target!.id, revokedAt: null },
+    data: { revokedAt: new Date() },
+  });
+  await auditLog(admin, {
+    action: "UPDATE", entityType: "USER", entityId: target!.id,
+    detail: { event: "MFA_DISABLED_BY_ADMIN" },
+  });
+  revalidatePath("/settings/users");
+  redirect("/settings/users?ok=mfa-disabled");
 }
 
 export async function setUserStatusAction(userId: string, formData: FormData) {
@@ -105,11 +137,14 @@ export async function setUserRolesAction(userId: string, formData: FormData) {
 
 export async function adminResetPasswordAction(userId: string, formData: FormData) {
   const admin = await requirePermission("user:manage");
-  const parsed = z.string().min(12).max(256).safeParse(formData.get("password"));
-  if (!parsed.success) {
+  const password = String(formData.get("password") ?? "");
+  const confirm = String(formData.get("confirmPassword") ?? "");
+  if (password !== confirm) {
+    redirect("/settings/users?error=password-mismatch");
+  }
+  if (!validatePasswordPolicy(password).ok) {
     redirect("/settings/users?error=weak-password");
   }
-  const password = parsed.data;
   const target = await prisma.user.findFirst({
     where: { id: userId, organizationId: admin.organizationId, deletedAt: null },
   });
@@ -170,7 +205,8 @@ export async function updateProfileAction(formData: FormData) {
 export async function changePasswordAction(formData: FormData) {
   const user = await requireUser();
   const current = z.string().min(1).parse(formData.get("current"));
-  const next = z.string().min(12).max(256).parse(formData.get("next"));
+  const next = String(formData.get("next") ?? "");
+  const confirm = String(formData.get("confirm") ?? "");
   const dbUser = await prisma.user.findUniqueOrThrow({ where: { id: user.id } });
   if (!dbUser.passwordHash || !(await verifyPassword(dbUser.passwordHash, current))) {
     await auditLog(user, {
@@ -179,7 +215,10 @@ export async function changePasswordAction(formData: FormData) {
     });
     redirect("/settings/profile?error=wrong-password");
   }
-  if (passwordStrength(next).label === "WEAK") {
+  if (next !== confirm) {
+    redirect("/settings/profile?error=password-mismatch");
+  }
+  if (!validatePasswordPolicy(next).ok) {
     redirect("/settings/profile?error=weak-password");
   }
   await prisma.user.update({
