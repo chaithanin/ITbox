@@ -84,6 +84,18 @@ gcloud iam service-accounts add-iam-policy-binding "$RUN_SA" \
   --role=roles/iam.serviceAccountUser >/dev/null 2>&1 ||
   echo "  (note: runtime SA $RUN_SA not found yet — run deploy/gcp-deploy.sh first, then re-run this)"
 
+# `gcloud builds submit` runs the build AS the Cloud Build runtime SA (the
+# compute default SA on current projects, or the legacy cloudbuild SA), so the
+# deployer also needs actAs on whichever exists.
+COMPUTE_SA="${PROJECT_NUMBER}-compute@developer.gserviceaccount.com"
+CLOUDBUILD_SA="${PROJECT_NUMBER}@cloudbuild.gserviceaccount.com"
+for BUILD_SA in "$COMPUTE_SA" "$CLOUDBUILD_SA"; do
+  gcloud iam service-accounts add-iam-policy-binding "$BUILD_SA" \
+    --member="serviceAccount:$DEPLOY_SA" \
+    --role=roles/iam.serviceAccountUser >/dev/null 2>&1 ||
+    echo "  (note: build SA $BUILD_SA not present — skipped)"
+done
+
 # ------------- Let the GitHub repo impersonate the deployer SA -------------
 say "Binding repository ${REPO_FULL} → ${DEPLOY_SA}"
 gcloud iam service-accounts add-iam-policy-binding "$DEPLOY_SA" \
