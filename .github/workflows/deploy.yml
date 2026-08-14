@@ -1,0 +1,82 @@
+name: Deploy to Cloud Run
+
+# Auto-deploy ITBox to Cloud Run whenever code lands on the tracked branch.
+# Infrastructure (Cloud SQL, KMS, Secret Manager, service account, bucket,
+# Artifact Registry) is provisioned once by deploy/gcp-deploy.sh — this
+# pipeline only builds a new image, applies pending DB migrations, and rolls
+# the Cloud Run service forward (image only; all env/secret/SQL wiring on the
+# service and jobs is kept as-is).
+#
+# Auth is keyless via Workload Identity Federation. One-time setup:
+#   bash deploy/setup-github-oidc.sh
+# then add the printed values as GitHub repo secrets:
+#   GCP_WIF_PROVIDER, GCP_DEPLOY_SA
+
+on:
+  push:
+    branches:
+      - main
+      - claude/enterprise-it-management-system-pz0u9s
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
+  workflow_dispatch: {} # allow manual "Run workflow" from the Actions tab
+
+# One deploy at a time; a newer push cancels an in-flight run.
+concurrency:
+  group: deploy-cloud-run
+  cancel-in-progress: false
+
+env:
+  PROJECT_ID: itbox-505402
+  REGION: asia-southeast1
+  SERVICE: itbox
+  REPO: itbox
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # required for Workload Identity Federation
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud (Workload Identity Federation)
+        id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          project_id: ${{ env.PROJECT_ID }}
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_DEPLOY_SA }}
+
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Compute image tag
+        id: img
+        run: echo "image=${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPO}/${SERVICE}:${GITHUB_SHA::7}" >>"$GITHUB_OUTPUT"
+
+      - name: Build container image (Cloud Build)
+        run: gcloud builds submit --tag "${{ steps.img.outputs.image }}" .
+
+      - name: Apply database migrations (Cloud Run job)
+        # Update only the image on the existing job, then run it. Keeps the
+        # job's env/secrets/Cloud SQL wiring from the initial provisioning.
+        run: |
+          gcloud run jobs update itbox-migrate \
+            --image="${{ steps.img.outputs.image }}" --region="$REGION" --quiet
+          gcloud run jobs execute itbox-migrate --region="$REGION" --wait
+
+      - name: Deploy Cloud Run service (image only)
+        run: |
+          gcloud run deploy "$SERVICE" \
+            --image="${{ steps.img.outputs.image }}" \
+            --region="$REGION" --quiet
+
+      - name: Show service URL
+        run: |
+          URL="$(gcloud run services describe "$SERVICE" --region="$REGION" --format='value(status.url)')"
+          echo "✅ Deployed: $URL"
+          echo "### ✅ Deployed to $URL" >>"$GITHUB_STEP_SUMMARY"
