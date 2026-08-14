@@ -18,13 +18,13 @@ import {
 
 export const dynamic = "force-dynamic";
 
-const PW_RULE = "รหัสผ่าน 8–12 ตัว มีพิมพ์ใหญ่ พิมพ์เล็ก และตัวเลข อย่างน้อยอย่างละ 1 (แนะนำมีอักขระพิเศษ) ห้ามเว้นวรรค";
+const PW_RULE = "รหัสผ่าน 8–12 ตัว มีพิมพ์ใหญ่ พิมพ์เล็ก ตัวเลข และอักขระพิเศษ อย่างน้อยอย่างละ 1 ห้ามเว้นวรรค";
 
 const MESSAGES: Record<string, { text: string; error?: boolean }> = {
   "user-created": { text: "สร้างผู้ใช้สำเร็จ / User created" },
   "password-reset": { text: "รีเซ็ตรหัสผ่านสำเร็จ (Session ถูกยกเลิกทั้งหมด) / Password reset" },
   "mfa-disabled": { text: "ปิด/รีเซ็ต MFA ของผู้ใช้แล้ว (Session ถูกยกเลิก) / User MFA reset", error: false },
-  "weak-password": { text: `${PW_RULE} / Password must be 8–12 chars with upper, lower & number`, error: true },
+  "weak-password": { text: `${PW_RULE} / Password must be 8–12 chars with upper, lower, number & special char`, error: true },
   "password-mismatch": { text: "รหัสผ่านและการยืนยันไม่ตรงกัน / Password and confirmation do not match", error: true },
   "invalid-input": { text: "ข้อมูลไม่ถูกต้อง — ตรวจอีเมลและรหัสผ่าน / Invalid input", error: true },
   "email-exists": { text: "อีเมลนี้มีผู้ใช้อยู่แล้ว / Email already exists", error: true },
@@ -32,7 +32,7 @@ const MESSAGES: Record<string, { text: string; error?: boolean }> = {
   "user-not-found": { text: "ไม่พบผู้ใช้ / User not found", error: true },
 };
 
-const PW_PATTERN = "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)\\S{8,12}$";
+const PW_PATTERN = "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[^A-Za-z0-9\\s])\\S{8,12}$";
 
 export default async function UsersPage({
   searchParams,

@@ -23,13 +23,13 @@ const MESSAGES: Record<string, { text: string; error?: boolean }> = {
   "mfa-enabled": { text: "เปิดใช้ MFA แล้ว / MFA enabled" },
   "mfa-disabled": { text: "ปิด MFA แล้ว / MFA disabled" },
   "wrong-password": { text: "รหัสผ่านปัจจุบันไม่ถูกต้อง / Wrong current password", error: true },
-  "weak-password": { text: "รหัสผ่าน 8–12 ตัว มีพิมพ์ใหญ่ พิมพ์เล็ก และตัวเลข อย่างน้อยอย่างละ 1 ห้ามเว้นวรรค / Must be 8–12 chars with upper, lower & number", error: true },
+  "weak-password": { text: "รหัสผ่าน 8–12 ตัว มีพิมพ์ใหญ่ พิมพ์เล็ก ตัวเลข และอักขระพิเศษ อย่างน้อยอย่างละ 1 ห้ามเว้นวรรค / 8–12 chars, upper+lower+number+special", error: true },
   "password-mismatch": { text: "รหัสผ่านใหม่และการยืนยันไม่ตรงกัน / New password and confirmation do not match", error: true },
   "mfa-invalid": { text: "รหัส MFA ไม่ถูกต้อง / Invalid MFA code", error: true },
 };
 
-const PW_RULE_PROFILE = "รหัสผ่าน 8–12 ตัว มีพิมพ์ใหญ่ พิมพ์เล็ก และตัวเลข อย่างน้อยอย่างละ 1 (แนะนำมีอักขระพิเศษ) ห้ามเว้นวรรค";
-const PW_PATTERN_PROFILE = "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)\\S{8,12}$";
+const PW_RULE_PROFILE = "รหัสผ่าน 8–12 ตัว มีพิมพ์ใหญ่ พิมพ์เล็ก ตัวเลข และอักขระพิเศษ อย่างน้อยอย่างละ 1 ห้ามเว้นวรรค";
+const PW_PATTERN_PROFILE = "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[^A-Za-z0-9\\s])\\S{8,12}$";
 
 export default async function ProfilePage({
   searchParams,
