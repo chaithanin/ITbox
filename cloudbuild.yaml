@@ -1,57 +1,20 @@
-# Cloud Build pipeline: build → push to Artifact Registry → migrate → deploy to Cloud Run
-# Substitutions expected: _REGION, _REPO, _SERVICE, _CLOUDSQL_INSTANCE (project:region:instance)
+# Cloud Build config for CI (GitHub Actions).
+#
+# Uses CLOUD_LOGGING_ONLY so the build does NOT write to the default GCS logs
+# bucket. When `gcloud builds submit` is invoked by a service-account identity
+# (Workload Identity Federation), it cannot stream logs from the default bucket
+# and errors out with "This tool can only stream logs if you are Viewer/Owner"
+# even though the build itself succeeds. Routing logs to Cloud Logging avoids
+# that entirely and lets gcloud poll build status normally.
+#
+# Invoked as:
+#   gcloud builds submit --config cloudbuild.yaml --substitutions=_IMAGE=<image> .
 steps:
-  - id: build
-    name: gcr.io/cloud-builders/docker
-    args:
-      - build
-      - -t
-      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:$SHORT_SHA
-      - -t
-      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:latest
-      - .
-
-  - id: push
-    name: gcr.io/cloud-builders/docker
-    args: [push, --all-tags, "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}"]
-
-  # Run prisma migrate deploy against Cloud SQL via the auth proxy sidecar image
-  - id: migrate
-    name: ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:$SHORT_SHA
-    entrypoint: sh
-    args:
-      - -c
-      - npx prisma migrate deploy
-    secretEnv: [DATABASE_URL]
-
-  - id: deploy
-    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
-    entrypoint: gcloud
-    args:
-      - run
-      - deploy
-      - ${_SERVICE}
-      - --image=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:$SHORT_SHA
-      - --region=${_REGION}
-      - --platform=managed
-      - --add-cloudsql-instances=${_CLOUDSQL_INSTANCE}
-      - --set-secrets=DATABASE_URL=itbox-database-url:latest,AUTH_SECRET=itbox-auth-secret:latest,GOOGLE_CLIENT_ID=itbox-google-client-id:latest,GOOGLE_CLIENT_SECRET=itbox-google-client-secret:latest
-      - --set-env-vars=KMS_PROVIDER=gcp,GCP_PROJECT_ID=$PROJECT_ID,KMS_LOCATION=${_REGION},KMS_KEY_RING=itbox-vault,KMS_CRYPTO_KEY=vault-dek-wrapper,STORAGE_PROVIDER=gcs,GCS_BUCKET_DOCUMENTS=$PROJECT_ID-itbox-documents,AUTH_TRUST_HOST=true
-      - --min-instances=1
-      - --memory=1Gi
-
-availableSecrets:
-  secretManager:
-    - versionName: projects/$PROJECT_ID/secrets/itbox-database-url/versions/latest
-      env: DATABASE_URL
-
+  - name: gcr.io/cloud-builders/docker
+    args: ["build", "-t", "${_IMAGE}", "."]
 images:
-  - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:$SHORT_SHA
-
-substitutions:
-  _REGION: asia-southeast1
-  _REPO: itbox
-  _SERVICE: itbox
-
+  - "${_IMAGE}"
 options:
   logging: CLOUD_LOGGING_ONLY
+substitutions:
+  _IMAGE: "" # provided at submit time

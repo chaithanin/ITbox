@@ -59,7 +59,13 @@ jobs:
         run: echo "image=${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPO}/${SERVICE}:${GITHUB_SHA::7}" >>"$GITHUB_OUTPUT"
 
       - name: Build container image (Cloud Build)
-        run: gcloud builds submit --tag "${{ steps.img.outputs.image }}" .
+        # Use cloudbuild.yaml (logging: CLOUD_LOGGING_ONLY) so a service-account
+        # submitter can poll build status without streaming the default GCS log
+        # bucket — otherwise gcloud exits 1 despite a successful build.
+        run: |
+          gcloud builds submit \
+            --config cloudbuild.yaml \
+            --substitutions=_IMAGE="${{ steps.img.outputs.image }}" .
 
       - name: Apply database migrations (Cloud Run job)
         # Update only the image on the existing job, then run it. Keeps the
