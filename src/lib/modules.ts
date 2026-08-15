@@ -42,6 +42,9 @@ export const MODULES: ModuleDef[] = [
     descEn: "Analytics & KPIs",
     icon: "overview",
     route: "/dashboard/overview",
+    // Org-wide analytics incl. security/audit aggregates — gated behind the
+    // reporting permission (page enforces the same via requirePermission).
+    permission: "report:read",
     sortOrder: 10,
   },
   {

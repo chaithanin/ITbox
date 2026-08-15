@@ -19,6 +19,7 @@
 set -euo pipefail
 
 PROJECT_ID="${PROJECT_ID:-itbox-505402}"
+REGION="${REGION:-asia-southeast1}"
 # GitHub repo in exact OWNER/REPO case as it appears on github.com.
 REPO_FULL="${REPO_FULL:-chaithanin/ITbox}"
 
@@ -67,16 +68,29 @@ gcloud iam service-accounts describe "$DEPLOY_SA" >/dev/null 2>&1 ||
   gcloud iam service-accounts create "$DEPLOY_SA_NAME" \
     --display-name="ITBox GitHub deployer"
 
-# Permissions the pipeline needs: submit Cloud Build, push images, deploy the
-# Cloud Run service + jobs.
+# Project-level permissions the pipeline needs: submit Cloud Build, push
+# images, deploy the Cloud Run service + jobs. Storage is deliberately NOT
+# granted project-wide — see the bucket-scoped grant below.
 for ROLE in \
   roles/run.admin \
   roles/cloudbuild.builds.editor \
-  roles/artifactregistry.writer \
-  roles/storage.admin; do
+  roles/artifactregistry.writer; do
   gcloud projects add-iam-policy-binding "$PROJECT_ID" \
     --member="serviceAccount:$DEPLOY_SA" --role="$ROLE" --condition=None >/dev/null
 done
+
+# `gcloud builds submit` uploads the source tarball to the Cloud Build staging
+# bucket. Grant objectAdmin scoped to THAT bucket only, instead of project-wide
+# storage.admin. The bucket is auto-created on the first build; create it now so
+# the binding has a target.
+STAGING_BUCKET="gs://${PROJECT_ID}_cloudbuild"
+gcloud storage buckets describe "$STAGING_BUCKET" >/dev/null 2>&1 ||
+  gcloud storage buckets create "$STAGING_BUCKET" --location="$REGION" >/dev/null 2>&1 ||
+  echo "  (note: could not pre-create $STAGING_BUCKET — it will be made on first build; re-run to bind)"
+gcloud storage buckets add-iam-policy-binding "$STAGING_BUCKET" \
+  --member="serviceAccount:$DEPLOY_SA" \
+  --role=roles/storage.objectAdmin >/dev/null 2>&1 ||
+  echo "  (note: staging bucket $STAGING_BUCKET not present yet — run one build, then re-run this to scope storage)"
 
 # Deploying a service/job that RUNS AS itbox-run requires actAs on that SA.
 gcloud iam service-accounts add-iam-policy-binding "$RUN_SA" \

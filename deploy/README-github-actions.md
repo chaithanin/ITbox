@@ -49,6 +49,10 @@ Seeding is intentionally **not** part of CI — demo data is a one-time step in
 
 ## Deployer permissions
 
-`itbox-deployer` is granted: `run.admin`, `cloudbuild.builds.editor`,
-`artifactregistry.writer`, `storage.admin`, and `iam.serviceAccountUser` on
-`itbox-run` (required to deploy resources that run as that runtime SA).
+`itbox-deployer` is granted at project level: `run.admin`,
+`cloudbuild.builds.editor`, `artifactregistry.writer`, and
+`iam.serviceAccountUser` on both `itbox-run` (to deploy resources that run as
+that runtime SA) and the Cloud Build runtime SA (so `gcloud builds submit` can
+act as it). Storage is **not** granted project-wide — instead
+`storage.objectAdmin` is scoped to just the Cloud Build staging bucket
+(`gs://<project>_cloudbuild`), which is all the source upload needs.

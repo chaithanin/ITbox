@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { ArrowLeft, Filter } from "lucide-react";
 import { prisma } from "@/lib/prisma";
-import { requireUser } from "@/lib/session";
+import { requirePermission } from "@/lib/session";
 import { formatDateTime } from "@/lib/utils";
 import { PageHeader } from "@/components/page-header";
 import { StatCard } from "@/components/stat-card";
@@ -34,7 +34,7 @@ export default async function OverviewPage({
 }: {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
-  const user = await requireUser();
+  const user = await requirePermission("report:read");
   const sp = await searchParams;
   const departmentId = str(sp.departmentId);
   const locationId = str(sp.locationId);
