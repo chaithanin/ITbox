@@ -64,7 +64,7 @@ jobs:
         # bucket — otherwise gcloud exits 1 despite a successful build.
         run: |
           gcloud builds submit \
-            --config cloudbuild.yaml \
+            --config deploy/cloudbuild-ci.yaml \
             --substitutions=_IMAGE="${{ steps.img.outputs.image }}" .
 
       - name: Apply database migrations (Cloud Run job)

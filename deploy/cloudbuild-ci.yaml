@@ -1,0 +1,25 @@
+# Cloud Build config for the GitHub Actions CI pipeline (build-only).
+#
+# The GitHub Actions workflow (.github/workflows/deploy.yml) does migrate +
+# deploy as separate steps, so this config only builds and pushes the image.
+# The full one-shot build→push→migrate→deploy pipeline lives in the repo-root
+# cloudbuild.yaml (used by docs/gcp-deployment.md); do not confuse the two.
+#
+# logging: CLOUD_LOGGING_ONLY is required here: when `gcloud builds submit` is
+# invoked by a service-account identity (Workload Identity Federation), it
+# cannot stream logs from the default GCS logs bucket and errors out with
+# "This tool can only stream logs if you are Viewer/Owner" even though the
+# build itself succeeds. Routing logs to Cloud Logging avoids that entirely.
+#
+# Invoked as:
+#   gcloud builds submit --config deploy/cloudbuild-ci.yaml \
+#     --substitutions=_IMAGE=<image> .
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args: ["build", "-t", "${_IMAGE}", "."]
+images:
+  - "${_IMAGE}"
+options:
+  logging: CLOUD_LOGGING_ONLY
+substitutions:
+  _IMAGE: "" # provided at submit time
