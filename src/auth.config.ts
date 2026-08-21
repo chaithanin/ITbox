@@ -17,6 +17,7 @@ export const authConfig = {
         pathname === "/login" ||
         pathname.startsWith("/api/auth") ||
         pathname.startsWith("/scan") ||
+        pathname.startsWith("/report") || // public web-intake case form
         pathname.startsWith("/_next") ||
         pathname === "/favicon.ico";
       if (isPublic) return true;

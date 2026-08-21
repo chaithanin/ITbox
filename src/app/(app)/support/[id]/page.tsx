@@ -288,7 +288,33 @@ export default async function CaseDetailPage({
                     : "-"
                 }
               />
-              <InfoRow label="ผู้แจ้ง / Requester" value={c.requester?.name ?? "-"} />
+              <InfoRow
+                label="ผู้แจ้ง / Requester"
+                value={
+                  c.requester?.name ??
+                  (c.reporterName ? `${c.reporterName} (ภายนอก / external)` : "-")
+                }
+              />
+              {c.reporterEmail && (
+                <InfoRow
+                  label="อีเมลผู้แจ้ง / Reporter email"
+                  value={
+                    <a href={`mailto:${c.reporterEmail}`} className="text-primary hover:underline">
+                      {c.reporterEmail}
+                    </a>
+                  }
+                />
+              )}
+              {c.reporterPhone && (
+                <InfoRow
+                  label="เบอร์ผู้แจ้ง / Reporter phone"
+                  value={
+                    <a href={`tel:${c.reporterPhone}`} className="text-primary hover:underline">
+                      {c.reporterPhone}
+                    </a>
+                  }
+                />
+              )}
               <InfoRow label="แผนก / Department" value={c.department?.name ?? "-"} />
               <InfoRow label="สถานที่ / Location" value={c.location?.name ?? "-"} />
               <InfoRow

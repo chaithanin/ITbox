@@ -451,6 +451,119 @@ export async function createCase(user: CurrentUser, input: CreateCaseInput) {
   return created;
 }
 
+// ---------------- Public (anonymous web) intake ----------------
+
+export interface PublicCaseInput {
+  reporterName: string;
+  reporterEmail: string;
+  reporterPhone?: string | null;
+  subject: string;
+  description: string;
+  typeId?: string | null;
+  impact?: CaseImpact | null;
+}
+
+/**
+ * Open a case from the public web-intake form (/report/<org-slug>). No user
+ * account is involved: the reporter is captured as free-text contact fields and
+ * the case is created with requester/creator = null, source = WEB. It still
+ * flows through the same priority/SLA/numbering/auto-assign/notify engine so
+ * agents pick it up exactly like any other case.
+ *
+ * Callers MUST rate-limit and validate input first (see the route action).
+ */
+export async function createPublicCase(
+  organizationId: string,
+  input: PublicCaseInput
+) {
+  // Type: caller-chosen (validated to this org) or the org's INCIDENT default.
+  const type = input.typeId
+    ? await prisma.caseType.findFirst({
+        where: { id: input.typeId, organizationId, active: true, deletedAt: null },
+      })
+    : await prisma.caseType.findFirst({
+        where: { organizationId, key: "INCIDENT" },
+      });
+
+  const priority = computePriority(input.impact, { categoryName: null, categoryDefault: null });
+
+  const sla = await loadSlaContext(organizationId);
+  const policy = sla.byPriority.get(priority);
+  const now = new Date();
+  const firstResponseDueAt = policy
+    ? addSlaMinutes(now, policy.firstResponseMins, policy.businessHoursOnly, sla.bh, sla.holidaySet)
+    : null;
+  const resolutionDueAt = policy
+    ? addSlaMinutes(now, policy.resolutionMins, policy.businessHoursOnly, sla.bh, sla.holidaySet)
+    : null;
+
+  const prefix = type?.prefix ?? "INC";
+  const caseNumber = await nextCaseNumber(organizationId, prefix, now.getUTCFullYear());
+
+  // Auto-assign to the default team (public cases carry no category routing).
+  const defaultTeam = await prisma.supportTeam.findFirst({
+    where: { organizationId, active: true, deletedAt: null },
+    orderBy: { createdAt: "asc" },
+  });
+  const assignedTeamId = defaultTeam?.id ?? null;
+  const assignedUserId = assignedTeamId ? await pickAssignee(assignedTeamId, "LEAST_WORKLOAD") : null;
+
+  const created = await prisma.supportCase.create({
+    data: {
+      organizationId,
+      caseNumber,
+      subject: input.subject,
+      description: input.description,
+      typeId: type?.id ?? null,
+      impact: input.impact ?? null,
+      priority,
+      status: assignedUserId ? "ASSIGNED" : "NEW",
+      source: "WEB",
+      requesterId: null,
+      createdById: null,
+      onBehalf: false,
+      reporterName: input.reporterName,
+      reporterEmail: input.reporterEmail,
+      reporterPhone: input.reporterPhone ?? null,
+      assignedTeamId,
+      assignedUserId,
+      firstResponseDueAt,
+      resolutionDueAt,
+    },
+  });
+
+  await recordEvent(created.id, null, "CREATED", {
+    toStatus: created.status,
+    detail: { priority, caseNumber, via: "public-web", reporter: input.reporterEmail },
+  });
+  if (assignedUserId) {
+    await recordEvent(created.id, null, "ASSIGNED", { detail: { assignedUserId, assignedTeamId } });
+  }
+
+  await auditLog(null, {
+    organizationId,
+    action: "CREATE",
+    entityType: "SUPPORT_CASE",
+    entityId: created.id,
+    detail: { caseNumber, priority, source: "WEB", reporterEmail: input.reporterEmail },
+  });
+
+  // Notify the queue/assignee (there is no internal requester to notify).
+  const queueIds = assignedUserId ? [assignedUserId] : await teamMemberIds(assignedTeamId);
+  await notifyUsers(organizationId, queueIds, {
+    type: "CASE_ASSIGNED",
+    level: priority === "P1" ? "CRITICAL" : "INFO",
+    title: `เคสใหม่จากเว็บ ${caseNumber} (${priority})`,
+    body: `${input.subject} — ผู้แจ้ง ${input.reporterName} <${input.reporterEmail}>`,
+    link: `/support/${created.id}`,
+  });
+  if (priority === "P1") {
+    await pushLineMessage(`ITBox: เคสวิกฤต (เว็บ) ${caseNumber} — ${input.subject}`);
+  }
+
+  return created;
+}
+
 // ---------------- Access ----------------
 
 /** Whether the caller may view a case (requester, assignee, or agent). */

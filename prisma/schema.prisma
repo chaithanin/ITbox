@@ -1335,6 +1335,12 @@ model SupportCase {
   onBehalf            Boolean @default(false)
   createdById         String? @db.Uuid
 
+  // External/anonymous reporter (public web-intake form; no user account).
+  // Populated when the case is opened via /report/<org-slug>.
+  reporterName        String?
+  reporterEmail       String?
+  reporterPhone       String?
+
   departmentId String? @db.Uuid
   locationId   String? @db.Uuid
   assetId      String? @db.Uuid
