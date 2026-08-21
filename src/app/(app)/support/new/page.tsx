@@ -1,19 +1,46 @@
 import Link from "next/link";
+import { LifeBuoy, User2, CircleHelp, Paperclip, ArrowLeft } from "lucide-react";
 import { requireUser } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
-import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { IMPACT_LABEL } from "@/lib/services/support";
+import { IMPACT_LABEL, PRIORITY_LABEL } from "@/lib/services/support";
 import type { CaseImpact } from "@prisma/client";
 import { createCaseAction } from "../actions";
 import { CategoryPicker, type CategoryOption } from "./category-picker";
 
 const IMPACT_ORDER: CaseImpact[] = ["UNUSABLE", "MAJOR", "PARTIAL", "GENERAL"];
+
+// Impact → resulting priority + how the option should read/colour on the card.
+const IMPACT_META: Record<
+  CaseImpact,
+  { priority: "P1" | "P2" | "P3" | "P4"; descTh: string; accent: string; dot: string }
+> = {
+  UNUSABLE: { priority: "P1", descTh: "ทำงานต่อไม่ได้เลย ต้องแก้ด่วน", accent: "text-red-600 dark:text-red-400", dot: "bg-red-500" },
+  MAJOR: { priority: "P2", descTh: "กระทบงานสำคัญอย่างมาก", accent: "text-orange-600 dark:text-orange-400", dot: "bg-orange-500" },
+  PARTIAL: { priority: "P3", descTh: "ยังพอทำงานได้บางส่วน", accent: "text-amber-600 dark:text-amber-400", dot: "bg-amber-500" },
+  GENERAL: { priority: "P4", descTh: "สอบถาม/ขอทั่วไป ไม่เร่งด่วน", accent: "text-emerald-600 dark:text-emerald-400", dot: "bg-emerald-500" },
+};
+
+function initials(name: string): string {
+  const parts = name.trim().split(/\s+/);
+  return ((parts[0]?.[0] ?? "") + (parts[1]?.[0] ?? "")).toUpperCase() || "U";
+}
+
+function SectionTitle({ step, children }: { step: number; children: React.ReactNode }) {
+  return (
+    <div className="mb-3 flex items-center gap-2.5">
+      <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">
+        {step}
+      </span>
+      <h3 className="text-sm font-semibold">{children}</h3>
+    </div>
+  );
+}
 
 export default async function NewCasePage({
   searchParams,
@@ -75,158 +102,225 @@ export default async function NewCasePage({
   const devices = assignments.filter((a) => a.asset !== null);
 
   return (
-    <div className="mx-auto max-w-2xl">
-      <PageHeader
-        title="เปิดเคส IT Support / New Case"
-        description="แจ้งปัญหาหรือขอความช่วยเหลือจากทีม IT / Report a problem or request IT help"
-      >
-        <Button variant="outline" asChild>
-          <Link href="/support">ยกเลิก / Cancel</Link>
-        </Button>
-      </PageHeader>
+    <div className="mx-auto max-w-2xl pb-24 sm:pb-8">
+      {/* Header */}
+      <div className="mb-5">
+        <Link
+          href="/support"
+          className="mb-3 inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          กลับไปที่เคสของฉัน / Back to my cases
+        </Link>
+        <div className="flex items-start gap-3">
+          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+            <LifeBuoy className="h-6 w-6" />
+          </span>
+          <div>
+            <h1 className="text-xl font-bold tracking-tight sm:text-2xl">
+              เปิดเคส IT Support
+            </h1>
+            <p className="text-sm text-muted-foreground">
+              แจ้งปัญหาหรือขอความช่วยเหลือจากทีม IT — ทีมงานจะได้รับแจ้งทันที และคุณติดตามสถานะได้ที่ “เคสของฉัน”
+            </p>
+          </div>
+        </div>
+      </div>
 
       {sp.error === "invalid" && (
         <div className="mb-4 rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
           กรอกข้อมูลไม่ครบหรือไม่ถูกต้อง กรุณาตรวจสอบอีกครั้ง / Some fields are missing or invalid.
-          Please check and try again.
         </div>
       )}
 
-      <Card className="mb-4">
-        <CardHeader>
-          <CardTitle>ผู้แจ้ง / Requester</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <dl className="grid gap-3 text-sm sm:grid-cols-2">
-            <div className="flex justify-between gap-3 sm:block">
-              <dt className="text-muted-foreground">ชื่อ / Name</dt>
-              <dd className="font-medium">{user.name}</dd>
-            </div>
-            <div className="flex justify-between gap-3 sm:block">
-              <dt className="text-muted-foreground">รหัสพนักงาน / Employee code</dt>
-              <dd className="font-medium">{employee?.employeeCode ?? "-"}</dd>
-            </div>
-            <div className="flex justify-between gap-3 sm:block">
-              <dt className="text-muted-foreground">แผนก / Department</dt>
-              <dd className="font-medium">{employee?.department?.name ?? "-"}</dd>
-            </div>
-            <div className="flex justify-between gap-3 sm:block">
-              <dt className="text-muted-foreground">อีเมล / Email</dt>
-              <dd className="font-medium">{user.email}</dd>
-            </div>
-          </dl>
-        </CardContent>
-      </Card>
+      {/* Requester summary */}
+      <div className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border bg-muted/40 p-4">
+        <span className="flex h-10 w-10 items-center justify-center rounded-full bg-primary text-sm font-bold text-primary-foreground">
+          {initials(user.name)}
+        </span>
+        <div className="min-w-0">
+          <p className="flex items-center gap-1.5 font-medium">
+            <User2 className="h-3.5 w-3.5 text-muted-foreground" />
+            {user.name}
+          </p>
+          <p className="truncate text-xs text-muted-foreground">{user.email}</p>
+        </div>
+        <div className="ml-auto flex flex-wrap gap-2 text-xs">
+          {employee?.employeeCode && (
+            <span className="rounded-full border bg-card px-2.5 py-1 text-muted-foreground">
+              รหัส: <span className="font-medium text-foreground">{employee.employeeCode}</span>
+            </span>
+          )}
+          {employee?.department?.name && (
+            <span className="rounded-full border bg-card px-2.5 py-1 text-muted-foreground">
+              แผนก: <span className="font-medium text-foreground">{employee.department.name}</span>
+            </span>
+          )}
+        </div>
+      </div>
 
       <Card>
-        <CardContent className="p-5">
-          <form action={createCaseAction} className="grid gap-4">
-            <div>
-              <Label htmlFor="subject">เรื่อง / Subject *</Label>
-              <Input
-                id="subject"
-                name="subject"
-                required
-                minLength={3}
-                maxLength={300}
-                className="mt-1"
-                placeholder="สรุปปัญหาสั้นๆ / Short summary of the problem"
-              />
-            </div>
-
-            <div>
-              <Label htmlFor="typeId">ต้องการความช่วยเหลือเรื่อง / Type *</Label>
-              <Select id="typeId" name="typeId" required className="mt-1" defaultValue="">
-                <option value="" disabled>
-                  — เลือกประเภท / Select type —
-                </option>
-                {types.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.nameTh ?? t.name}
-                  </option>
-                ))}
-              </Select>
-            </div>
-
-            <div className="grid gap-4 sm:grid-cols-2">
-              <CategoryPicker categories={categoryOptions} />
-            </div>
-
-            <div>
-              <Label htmlFor="description">รายละเอียด / Description *</Label>
-              <Textarea
-                id="description"
-                name="description"
-                required
-                rows={5}
-                maxLength={5000}
-                className="mt-1"
-                placeholder="อธิบายปัญหาที่พบ ขั้นตอนที่ทำ และสิ่งที่คาดหวัง / Describe the issue, what you did, and what you expected"
-              />
-            </div>
-
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div>
-                <Label htmlFor="locationId">สถานที่ / Location</Label>
-                <Select id="locationId" name="locationId" className="mt-1" defaultValue="">
-                  <option value="">— ไม่ระบุ / None —</option>
-                  {locations.map((l) => (
-                    <option key={l.id} value={l.id}>
-                      {l.name}
+        <CardContent className="p-5 sm:p-6">
+          <form action={createCaseAction} className="space-y-7">
+            {/* Section 1 — the problem */}
+            <section>
+              <SectionTitle step={1}>เรื่องที่ต้องการแจ้ง / What’s the problem</SectionTitle>
+              <div className="space-y-4">
+                <div>
+                  <Label htmlFor="subject">
+                    เรื่อง / Subject <span className="text-destructive">*</span>
+                  </Label>
+                  <Input
+                    id="subject"
+                    name="subject"
+                    required
+                    minLength={3}
+                    maxLength={300}
+                    className="mt-1"
+                    placeholder="สรุปปัญหาสั้น ๆ เช่น “เปิดอีเมลไม่ได้”"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="typeId">
+                    ประเภทความช่วยเหลือ / Type <span className="text-destructive">*</span>
+                  </Label>
+                  <Select id="typeId" name="typeId" required className="mt-1" defaultValue="">
+                    <option value="" disabled>
+                      — เลือกประเภท / Select type —
                     </option>
-                  ))}
-                </Select>
-              </div>
-              <div>
-                <Label htmlFor="assetId">อุปกรณ์ของฉัน / My Device</Label>
-                {devices.length > 0 ? (
-                  <Select id="assetId" name="assetId" className="mt-1" defaultValue="">
-                    <option value="">— ไม่ระบุ / None —</option>
-                    {devices.map((a) => (
-                      <option key={a.asset.id} value={a.asset.id}>
-                        {a.asset.assetTag} — {a.asset.name}
+                    {types.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.nameTh ?? t.name}
                       </option>
                     ))}
                   </Select>
-                ) : (
-                  <p className="mt-2 text-sm text-muted-foreground">
-                    ไม่มีอุปกรณ์ที่ผูกกับคุณ / No devices assigned to you
-                  </p>
-                )}
+                </div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <CategoryPicker categories={categoryOptions} />
+                </div>
               </div>
-            </div>
+            </section>
 
-            <div>
-              <Label htmlFor="impact">ระดับผลกระทบ / Impact</Label>
-              <Select id="impact" name="impact" className="mt-1" defaultValue="GENERAL">
-                {IMPACT_ORDER.map((k) => (
-                  <option key={k} value={k}>
-                    {IMPACT_LABEL[k].icon} {IMPACT_LABEL[k].th} / {IMPACT_LABEL[k].en}
-                  </option>
-                ))}
-              </Select>
-              <p className="mt-1 text-xs text-muted-foreground">
-                ระบบจะกำหนดความเร่งด่วน (Priority) ให้อัตโนมัติ / Priority is set automatically
+            <hr className="border-border" />
+
+            {/* Section 2 — details */}
+            <section>
+              <SectionTitle step={2}>รายละเอียด / Details</SectionTitle>
+              <div className="space-y-4">
+                <div>
+                  <Label htmlFor="description">
+                    อธิบายปัญหา / Description <span className="text-destructive">*</span>
+                  </Label>
+                  <Textarea
+                    id="description"
+                    name="description"
+                    required
+                    rows={5}
+                    maxLength={5000}
+                    className="mt-1"
+                    placeholder="อธิบายสิ่งที่เกิดขึ้น ขั้นตอนที่ทำ และสิ่งที่คาดหวัง ยิ่งละเอียดยิ่งช่วยให้แก้ได้เร็ว"
+                  />
+                </div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div>
+                    <Label htmlFor="locationId">สถานที่ / Location</Label>
+                    <Select id="locationId" name="locationId" className="mt-1" defaultValue="">
+                      <option value="">— ไม่ระบุ / None —</option>
+                      {locations.map((l) => (
+                        <option key={l.id} value={l.id}>
+                          {l.name}
+                        </option>
+                      ))}
+                    </Select>
+                  </div>
+                  <div>
+                    <Label htmlFor="assetId">อุปกรณ์ของฉัน / My Device</Label>
+                    {devices.length > 0 ? (
+                      <Select id="assetId" name="assetId" className="mt-1" defaultValue="">
+                        <option value="">— ไม่ระบุ / None —</option>
+                        {devices.map((a) => (
+                          <option key={a.asset.id} value={a.asset.id}>
+                            {a.asset.assetTag} — {a.asset.name}
+                          </option>
+                        ))}
+                      </Select>
+                    ) : (
+                      <p className="mt-2.5 text-sm text-muted-foreground">
+                        ไม่มีอุปกรณ์ที่ผูกกับคุณ / No devices assigned
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <hr className="border-border" />
+
+            {/* Section 3 — impact + attachment */}
+            <section>
+              <SectionTitle step={3}>ความเร่งด่วน & ไฟล์แนบ / Impact & attachment</SectionTitle>
+
+              <div className="mb-1 flex items-center gap-1.5">
+                <Label>ปัญหานี้กระทบงานของคุณแค่ไหน?</Label>
+                <CircleHelp className="h-3.5 w-3.5 text-muted-foreground" />
+              </div>
+              <p className="mb-3 text-xs text-muted-foreground">
+                เลือกระดับผลกระทบ — ระบบจะกำหนดความเร่งด่วน (Priority) ให้อัตโนมัติ
               </p>
-            </div>
 
-            <div>
-              <Label htmlFor="file">แนบไฟล์ / Attachment</Label>
-              <Input
-                id="file"
-                name="file"
-                type="file"
-                accept="image/*,application/pdf"
-                className="mt-1"
-              />
-              <p className="mt-1 text-xs text-muted-foreground">
-                รูปภาพหรือ PDF / Images or PDF
-              </p>
-            </div>
+              <div className="grid gap-2.5 sm:grid-cols-2">
+                {IMPACT_ORDER.map((k) => {
+                  const m = IMPACT_META[k];
+                  return (
+                    <label key={k} className="cursor-pointer">
+                      <input
+                        type="radio"
+                        name="impact"
+                        value={k}
+                        defaultChecked={k === "GENERAL"}
+                        className="peer sr-only"
+                      />
+                      <div className="flex h-full items-start gap-3 rounded-xl border bg-card p-3 transition-colors hover:border-primary/50 peer-checked:border-primary peer-checked:bg-primary/5 peer-checked:ring-2 peer-checked:ring-primary/30 peer-focus-visible:ring-2 peer-focus-visible:ring-primary/40">
+                        <span className={`mt-0.5 h-2.5 w-2.5 shrink-0 rounded-full ${m.dot}`} aria-hidden />
+                        <div className="min-w-0">
+                          <p className="flex items-center gap-1.5 text-sm font-medium">
+                            {IMPACT_LABEL[k].th}
+                            <span className={`text-[10px] font-bold ${m.accent}`}>
+                              {m.priority} · {PRIORITY_LABEL[m.priority].th}
+                            </span>
+                          </p>
+                          <p className="text-xs text-muted-foreground">{m.descTh}</p>
+                        </div>
+                      </div>
+                    </label>
+                  );
+                })}
+              </div>
 
-            <div className="flex gap-2">
-              <Button type="submit">ส่งเคส / Submit Case</Button>
-              <Button variant="outline" asChild>
+              <div className="mt-4">
+                <Label htmlFor="file" className="flex items-center gap-1.5">
+                  <Paperclip className="h-3.5 w-3.5" />
+                  แนบไฟล์ / Attachment
+                </Label>
+                <Input
+                  id="file"
+                  name="file"
+                  type="file"
+                  accept="image/*,application/pdf"
+                  className="mt-1"
+                />
+                <p className="mt-1 text-xs text-muted-foreground">
+                  แนบภาพหน้าจอหรือ PDF จะช่วยให้ทีมเข้าใจปัญหาได้เร็วขึ้น
+                </p>
+              </div>
+            </section>
+
+            {/* Actions — sticky on mobile */}
+            <div className="fixed inset-x-0 bottom-0 z-10 flex gap-2 border-t bg-background/95 p-4 backdrop-blur sm:static sm:z-auto sm:border-0 sm:bg-transparent sm:p-0 sm:pt-1">
+              <Button type="submit" className="flex-1 sm:flex-none">
+                ส่งเคส / Submit Case
+              </Button>
+              <Button variant="outline" asChild className="flex-1 sm:flex-none">
                 <Link href="/support">ยกเลิก / Cancel</Link>
               </Button>
             </div>
