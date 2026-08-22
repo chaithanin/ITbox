@@ -272,7 +272,7 @@ export function SignatureEditor({
                   )}
                 </div>
                 {dirOpen && (dirResults.length > 0 || (dirQuery.trim().length >= 2 && !dirLoading)) && (
-                  <div className="absolute z-20 mt-1 max-h-72 w-full overflow-auto rounded-md border bg-popover shadow-md">
+                  <div className="absolute z-30 mt-1 max-h-72 w-full overflow-auto rounded-md border bg-card shadow-lg">
                     {dirResults.length === 0 ? (
                       <p className="px-3 py-2 text-sm text-muted-foreground">ไม่พบพนักงาน / No matches</p>
                     ) : (

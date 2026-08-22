@@ -112,7 +112,7 @@ export function ReporterFields({
           )}
         </div>
         {open && (results.length > 0 || (query.trim().length >= 2 && !loading)) && (
-          <div className="absolute z-20 mt-1 max-h-72 w-full overflow-auto rounded-md border bg-popover shadow-md">
+          <div className="absolute z-30 mt-1 max-h-72 w-full overflow-auto rounded-md border bg-card shadow-lg">
             {results.length === 0 ? (
               <p className="px-3 py-2 text-sm text-muted-foreground">ไม่พบพนักงาน / No matches</p>
             ) : (
