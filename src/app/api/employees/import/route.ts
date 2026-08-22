@@ -13,7 +13,7 @@ const XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.s
 // Accepted header names → canonical column. Case/space-insensitive.
 const COLUMNS = [
   "employeeCode", "firstName", "lastName", "email", "phone",
-  "position", "department", "location", "status", "startDate",
+  "position", "department", "location", "status", "startDate", "endDate",
 ] as const;
 type ColumnName = (typeof COLUMNS)[number];
 
@@ -237,6 +237,7 @@ export const POST = apiHandler(async (req: Request) => {
         position: cell(r, "position") || null,
         departmentId, locationId, status,
         startDate: parseDate(cell(r, "startDate")),
+        endDate: parseDate(cell(r, "endDate")),
       };
       const existing = await prisma.employee.findFirst({
         where: { organizationId: orgId, employeeCode, deletedAt: null },

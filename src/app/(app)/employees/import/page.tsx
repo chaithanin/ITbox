@@ -18,6 +18,7 @@ const COLUMN_DOCS = [
   { name: "location", required: false, description: "ชื่อสถานที่ — สร้างให้อัตโนมัติถ้ายังไม่มี / Location name (auto-created if missing)" },
   { name: "status", required: false, description: "ACTIVE, ON_LEAVE, OFFBOARDING, RESIGNED (ค่าเริ่มต้น ACTIVE)" },
   { name: "startDate", required: false, description: "วันเริ่มงาน YYYY-MM-DD / Start date" },
+  { name: "endDate", required: false, description: "วันสิ้นสุด/ลาออก YYYY-MM-DD / End (resignation) date" },
 ];
 
 export default async function EmployeeImportPage() {
