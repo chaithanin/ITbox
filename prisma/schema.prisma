@@ -50,6 +50,7 @@ model Organization {
   slaPolicies       SlaPolicy[]
   supportTeams      SupportTeam[]
   holidays          Holiday[]
+  kpiConfigs        KpiConfig[]
 
   @@map("organizations")
 }
@@ -86,6 +87,8 @@ model User {
 
   // Language / theme preferences
   locale String @default("th")
+  // How the post-login KPI popup behaves for this user: DAILY | EVERY_LOGIN | OFF
+  kpiPopupMode String @default("DAILY")
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -1455,4 +1458,34 @@ model CaseSatisfaction {
   case SupportCase @relation(fields: [caseId], references: [id], onDelete: Cascade)
 
   @@map("case_satisfactions")
+}
+
+// ---------------- IT Support KPI / Performance ----------------
+
+enum KpiMetric {
+  CLOSED_TICKETS       // higher is better (count in period)
+  SLA_COMPLIANCE       // higher is better (% not breached)
+  AVG_RESOLUTION_HOURS // lower is better (hours)
+  CSAT                 // higher is better (1-5 avg)
+  BACKLOG              // lower is better (open tickets, point-in-time)
+}
+
+/// Per-org KPI target + weight for the IT Support performance scorecard.
+/// Direction (higher/lower better) is derived from the metric in code.
+model KpiConfig {
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String    @db.Uuid
+  metric         KpiMetric
+  target         Float
+  weight         Int       @default(0) // percent; active weights should sum to 100
+  active         Boolean   @default(true)
+  sortOrder      Int       @default(0)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, metric])
+  @@index([organizationId])
+  @@map("kpi_configs")
 }
