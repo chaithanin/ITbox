@@ -161,7 +161,22 @@ export async function startOffboarding(formData: FormData) {
     select: { id: true, status: true, employeeCode: true, firstName: true, lastName: true },
   });
   if (!employee) throw new Error("Employee not found");
-  if (employee.status !== "ACTIVE") throw new Error("Employee is not ACTIVE");
+  // Allow ACTIVE staff and already-RESIGNED staff (e.g. imported leavers who
+  // still need assets/licenses/accounts reclaimed). Block only if already in an
+  // offboarding, or if one is already open.
+  if (employee.status === "OFFBOARDING") throw new Error("Employee is already being offboarded");
+  if (employee.status !== "ACTIVE" && employee.status !== "RESIGNED") {
+    throw new Error("Employee cannot be offboarded from this status");
+  }
+  const existingOpen = await prisma.offboarding.findFirst({
+    where: {
+      organizationId: user.organizationId,
+      employeeId: employee.id,
+      status: { in: ["OPEN", "IN_PROGRESS"] },
+    },
+    select: { id: true },
+  });
+  if (existingOpen) redirect(`/offboarding/${existingOpen.id}`);
 
   const offboarding = await prisma.offboarding.create({
     data: {
@@ -171,7 +186,11 @@ export async function startOffboarding(formData: FormData) {
       status: "OPEN",
     },
   });
-  await prisma.employee.update({ where: { id: employee.id }, data: { status: "OFFBOARDING" } });
+  // Move ACTIVE staff into OFFBOARDING; leave RESIGNED staff as-is (the
+  // checklist is driven by the offboarding status, not the employee status).
+  if (employee.status === "ACTIVE") {
+    await prisma.employee.update({ where: { id: employee.id }, data: { status: "OFFBOARDING" } });
+  }
 
   await auditLog(user, {
     action: "CREATE",

@@ -115,18 +115,20 @@ export default async function EmployeeDetailPage({
             </Link>
           </Button>
         )}
-        {employee.status === "ACTIVE" && user.permissions.has("offboarding:manage") && (
-          <form action={startOffboarding}>
-            <input type="hidden" name="employeeId" value={employee.id} />
-            <ConfirmButton
-              variant="destructive"
-              confirmText="เริ่มกระบวนการ Offboarding สำหรับพนักงานคนนี้? / Start offboarding for this employee?"
-            >
-              <UserX className="h-4 w-4" />
-              เริ่ม Offboarding / Start Offboarding
-            </ConfirmButton>
-          </form>
-        )}
+        {(employee.status === "ACTIVE" || employee.status === "RESIGNED") &&
+          !offboardings.some((o) => o.status === "OPEN" || o.status === "IN_PROGRESS") &&
+          user.permissions.has("offboarding:manage") && (
+            <form action={startOffboarding}>
+              <input type="hidden" name="employeeId" value={employee.id} />
+              <ConfirmButton
+                variant="destructive"
+                confirmText="เริ่มกระบวนการ Offboarding สำหรับพนักงานคนนี้? / Start offboarding for this employee?"
+              >
+                <UserX className="h-4 w-4" />
+                เริ่ม Offboarding / Start Offboarding
+              </ConfirmButton>
+            </form>
+          )}
         {user.permissions.has("employee:delete") && (
           <form action={softDeleteEmployee}>
             <input type="hidden" name="id" value={employee.id} />

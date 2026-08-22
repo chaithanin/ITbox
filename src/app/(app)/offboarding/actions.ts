@@ -245,6 +245,13 @@ export async function completeOffboarding(formData: FormData) {
     (offboarding.accountDisabled || activeUser === 0);
   if (!ready) throw new Error("Checklist is not complete");
 
+  // Keep a real resignation date if the employee already had one (e.g. imported
+  // leavers); only stamp today when it was unset.
+  const emp = await prisma.employee.findUnique({
+    where: { id: offboarding.employeeId },
+    select: { endDate: true },
+  });
+
   await prisma.$transaction([
     prisma.offboarding.update({
       where: { id: offboarding.id },
@@ -252,7 +259,7 @@ export async function completeOffboarding(formData: FormData) {
     }),
     prisma.employee.update({
       where: { id: offboarding.employeeId },
-      data: { status: "RESIGNED", endDate: now },
+      data: { status: "RESIGNED", endDate: emp?.endDate ?? now },
     }),
   ]);
 
