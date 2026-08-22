@@ -9,7 +9,7 @@ import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
-  renderSignatureHtml, safeUrl,
+  renderSignatureHtml, safeUrl, DEFAULT_WEBSITE, DEFAULT_ADDRESS,
   type SignatureData, type TemplateConfig, type CompanyLink,
 } from "@/lib/signature";
 import { saveSignatureAction, resetSignatureAction } from "./actions";
@@ -108,7 +108,8 @@ export function SignatureEditor({
       department: e.department,
       officePhone: e.officePhone,
       email: e.email,
-      website: f.website?.trim() ? f.website : "https://chaithanin.com/",
+      website: f.website?.trim() ? f.website : DEFAULT_WEBSITE,
+      address: f.address?.trim() ? f.address : DEFAULT_ADDRESS,
     }));
     setDirQuery("");
     setDirResults([]);

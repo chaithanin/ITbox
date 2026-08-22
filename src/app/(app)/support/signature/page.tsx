@@ -1,7 +1,7 @@
 import { requireUser } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import { PageHeader } from "@/components/page-header";
-import { DEFAULT_TEMPLATE, DEFAULT_COMPANY_LINKS, type CompanyLink, type TemplateConfig, type SignatureData } from "@/lib/signature";
+import { DEFAULT_TEMPLATE, DEFAULT_COMPANY_LINKS, DEFAULT_WEBSITE, DEFAULT_ADDRESS, type CompanyLink, type TemplateConfig, type SignatureData } from "@/lib/signature";
 import { SignatureEditor, type TemplateOption } from "./editor";
 
 export const dynamic = "force-dynamic";
@@ -62,8 +62,8 @@ export default async function SignaturePage() {
         officePhone: profile.officePhone ?? "",
         extension: profile.extension ?? "",
         email: profile.email ?? "",
-        website: profile.website ?? "",
-        address: profile.address ?? "",
+        website: profile.website || DEFAULT_WEBSITE,
+        address: profile.address || DEFAULT_ADDRESS,
         logoUrl: profile.logoUrl ?? "",
         companyLinks:
           Array.isArray(profile.companyLinks) && profile.companyLinks.length > 0
@@ -79,8 +79,8 @@ export default async function SignaturePage() {
         officePhone: "",
         extension: "",
         email: employee?.email ?? user.email,
-        website: activeTemplate?.companyName ? "" : "",
-        address: "",
+        website: DEFAULT_WEBSITE,
+        address: DEFAULT_ADDRESS,
         logoUrl: "",
         companyLinks:
           Array.isArray(activeTemplate?.defaultLinks) && activeTemplate!.defaultLinks.length > 0

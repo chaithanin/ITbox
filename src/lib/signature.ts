@@ -41,6 +41,11 @@ export interface TemplateConfig {
   dividerColor?: string | null; // hairline under the name
 }
 
+/** Corporate defaults prefilled on every new signature. */
+export const DEFAULT_WEBSITE = "https://chaithanin.com/";
+export const DEFAULT_ADDRESS =
+  "193, 442 M.10 Nongprue, Pattaya City, Bang Lamung District, Chon Buri 20150";
+
 /** Corporate subsidiary buttons shown by default when a user has none of their own. */
 export const DEFAULT_COMPANY_LINKS: CompanyLink[] = [
   { name: "Marina Golden Bay Victoria Co.,Ltd.", url: "https://chaithanin.com/properties/marina-golden-bay/" },
