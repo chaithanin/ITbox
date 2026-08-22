@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Plus } from "lucide-react";
+import { Plus, Upload } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/session";
 import { PageHeader } from "@/components/page-header";
@@ -80,12 +80,20 @@ export default async function EmployeesPage({
         description={`ทั้งหมด ${total} คน / ${total} employees`}
       >
         {user.permissions.has("employee:create") && (
-          <Button asChild>
-            <Link href="/employees/new">
-              <Plus className="h-4 w-4" />
-              เพิ่มพนักงาน / New
-            </Link>
-          </Button>
+          <>
+            <Button variant="outline" asChild>
+              <Link href="/employees/import">
+                <Upload className="h-4 w-4" />
+                นำเข้า / Import
+              </Link>
+            </Button>
+            <Button asChild>
+              <Link href="/employees/new">
+                <Plus className="h-4 w-4" />
+                เพิ่มพนักงาน / New
+              </Link>
+            </Button>
+          </>
         )}
       </PageHeader>
 
