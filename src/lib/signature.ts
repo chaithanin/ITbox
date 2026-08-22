@@ -41,6 +41,14 @@ export interface TemplateConfig {
   dividerColor?: string | null; // hairline under the name
 }
 
+/** Corporate subsidiary buttons shown by default when a user has none of their own. */
+export const DEFAULT_COMPANY_LINKS: CompanyLink[] = [
+  { name: "Marina Golden Bay Victoria Co.,Ltd.", url: "https://chaithanin.com/properties/marina-golden-bay/" },
+  { name: "Marina Golden Bay Elya Co., Ltd.", url: "https://chaithanin.com/properties/marina-golden-bay/" },
+  { name: "Harmonia City Garden Co.,Ltd.", url: "https://chaithanin.com/properties/harmonia-city-garden/" },
+  { name: "Global Top Group Co.,Ltd.", url: "https://chaithanin.com/" },
+];
+
 export const DEFAULT_TEMPLATE: TemplateConfig = {
   companyName: "Chaithanin Co.,Ltd.",
   logoUrl: "",

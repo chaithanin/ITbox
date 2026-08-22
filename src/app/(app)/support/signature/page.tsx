@@ -1,7 +1,7 @@
 import { requireUser } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import { PageHeader } from "@/components/page-header";
-import { DEFAULT_TEMPLATE, type CompanyLink, type TemplateConfig, type SignatureData } from "@/lib/signature";
+import { DEFAULT_TEMPLATE, DEFAULT_COMPANY_LINKS, type CompanyLink, type TemplateConfig, type SignatureData } from "@/lib/signature";
 import { SignatureEditor, type TemplateOption } from "./editor";
 
 export const dynamic = "force-dynamic";
@@ -65,7 +65,10 @@ export default async function SignaturePage() {
         website: profile.website ?? "",
         address: profile.address ?? "",
         logoUrl: profile.logoUrl ?? "",
-        companyLinks: Array.isArray(profile.companyLinks) ? (profile.companyLinks as unknown as CompanyLink[]) : [],
+        companyLinks:
+          Array.isArray(profile.companyLinks) && profile.companyLinks.length > 0
+            ? (profile.companyLinks as unknown as CompanyLink[])
+            : DEFAULT_COMPANY_LINKS,
       }
     : {
         templateId: defaultTemplate?.id ?? null,
@@ -79,9 +82,10 @@ export default async function SignaturePage() {
         website: activeTemplate?.companyName ? "" : "",
         address: "",
         logoUrl: "",
-        companyLinks: Array.isArray(activeTemplate?.defaultLinks)
-          ? (activeTemplate!.defaultLinks as unknown as CompanyLink[])
-          : [],
+        companyLinks:
+          Array.isArray(activeTemplate?.defaultLinks) && activeTemplate!.defaultLinks.length > 0
+            ? (activeTemplate!.defaultLinks as unknown as CompanyLink[])
+            : DEFAULT_COMPANY_LINKS,
       };
 
   const templateOptions: TemplateOption[] = templates.map((t) => ({

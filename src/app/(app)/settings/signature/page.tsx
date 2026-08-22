@@ -91,7 +91,7 @@ export default async function SignatureAdminPage({
             </div>
             <div className="sm:col-span-2 lg:col-span-3">
               <Label htmlFor="defaultLinks">ลิงก์บริษัทเริ่มต้น / Default links (บรรทัดละ 1: ชื่อ|URL)</Label>
-              <Textarea id="defaultLinks" name="defaultLinks" rows={4} className="mt-1 font-mono text-xs" defaultValue={editing ? linksToText(editing.defaultLinks) : "Marina Golden Bay Victoria Co.,Ltd.\nMarina Golden Bay Elya Co., Ltd.\nHarmonia City Garden Co.,Ltd.\nGlobal Top Group Co.,Ltd."} placeholder={"Global Top Group Co.,Ltd.|https://example.com (URL ไม่บังคับ)"} />
+              <Textarea id="defaultLinks" name="defaultLinks" rows={4} className="mt-1 font-mono text-xs" defaultValue={editing ? linksToText(editing.defaultLinks) : "Marina Golden Bay Victoria Co.,Ltd.|https://chaithanin.com/properties/marina-golden-bay/\nMarina Golden Bay Elya Co., Ltd.|https://chaithanin.com/properties/marina-golden-bay/\nHarmonia City Garden Co.,Ltd.|https://chaithanin.com/properties/harmonia-city-garden/\nGlobal Top Group Co.,Ltd.|https://chaithanin.com/"} placeholder={"Global Top Group Co.,Ltd.|https://example.com (URL ไม่บังคับ)"} />
             </div>
             <div className="flex items-end gap-2 sm:col-span-2 lg:col-span-3">
               <Button type="submit">{editing ? "บันทึกการแก้ไข / Save" : "สร้างเทมเพลต / Create"}</Button>
