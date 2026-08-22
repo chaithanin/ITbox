@@ -13,6 +13,7 @@ import type { CaseImpact } from "@prisma/client";
 import { createCaseAction } from "../actions";
 import { CategoryPicker, type CategoryOption } from "./category-picker";
 import { ReporterFields } from "./reporter-fields";
+import { DevicePicker } from "./device-picker";
 
 const IMPACT_ORDER: CaseImpact[] = ["UNUSABLE", "MAJOR", "PARTIAL", "GENERAL"];
 
@@ -238,23 +239,13 @@ export default async function NewCasePage({
                       ))}
                     </Select>
                   </div>
-                  <div>
-                    <Label htmlFor="assetId">อุปกรณ์ของฉัน / My Device</Label>
-                    {devices.length > 0 ? (
-                      <Select id="assetId" name="assetId" className="mt-1" defaultValue="">
-                        <option value="">— ไม่ระบุ / None —</option>
-                        {devices.map((a) => (
-                          <option key={a.asset.id} value={a.asset.id}>
-                            {a.asset.assetTag} — {a.asset.name}
-                          </option>
-                        ))}
-                      </Select>
-                    ) : (
-                      <p className="mt-2.5 text-sm text-muted-foreground">
-                        ไม่มีอุปกรณ์ที่ผูกกับคุณ / No devices assigned
-                      </p>
-                    )}
-                  </div>
+                  <DevicePicker
+                    initialDevices={devices.map((a) => ({
+                      id: a.asset.id,
+                      assetTag: a.asset.assetTag,
+                      name: a.asset.name,
+                    }))}
+                  />
                 </div>
               </div>
             </section>

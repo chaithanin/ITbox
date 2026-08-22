@@ -82,6 +82,14 @@ export function ReporterFields({
         sel.value = e.locationId;
       }
     }
+    // Tell the device picker to load this employee's held assets.
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(
+        new CustomEvent("reporter-employee", {
+          detail: { employeeId: e.id, employeeName: e.fullName },
+        })
+      );
+    }
   }
 
   return (
