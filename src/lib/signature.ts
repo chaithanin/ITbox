@@ -209,20 +209,26 @@ export function renderSignatureHtml(data: SignatureData, cfg: TemplateConfig): s
 
   const buttonCell = (l: { name: string; url: string | null }, i: number, n: number) => {
     const shade = BUTTON_SHADES[i % BUTTON_SHADES.length];
-    const w = Math.round(100 / n);
+    const w = Math.floor((100 - (n - 1)) / n); // leave ~1% per gap for the spacer cells
     const label = escapeHtml(shortLabel(l.name));
     const style = `display:block;padding:8px 5px;color:#ffffff;font-family:${serif};font-size:10px;line-height:13px;font-weight:bold;text-decoration:none;text-align:center;`;
     const inner = l.url
       ? `<a href="${escapeHtml(l.url)}" style="${style}">${label}</a>`
       : `<span style="${style}">${label}</span>`;
-    return `<td width="${w}%" valign="middle" style="background-color:${shade};border-radius:5px;text-align:center;">${inner}</td>`;
+    return `<td width="${w}%" valign="middle" style="width:${w}%;background-color:${shade};border-radius:5px;text-align:center;">${inner}</td>`;
   };
+
+  // Gaps via real spacer cells (Outlook/Word ignore CSS border-spacing).
+  const spacer = `<td width="6" style="width:6px;font-size:0;line-height:0;">&nbsp;</td>`;
+  const buttonCells = links
+    .map((l, i) => buttonCell(l, i, links.length))
+    .join(spacer);
 
   const buttonsRow = links.length
     ? `<tr><td colspan="2" style="padding-top:21px;">` +
       `<div style="font-family:${font};font-size:10px;font-weight:bold;line-height:14px;letter-spacing:1.5px;color:${titleColor};text-align:center;text-transform:uppercase;">Our Project</div>` +
-      `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-top:9px;border-collapse:separate;border-spacing:4px 0;"><tr>` +
-      links.map((l, i) => buttonCell(l, i, links.length)).join("") +
+      `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-top:9px;border-collapse:collapse;"><tr>` +
+      buttonCells +
       `</tr></table></td></tr>`
     : "";
 
