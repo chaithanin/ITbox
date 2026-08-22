@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
-import { Copy, Download, Save, RotateCcw, Plus, Trash2, ArrowUp, ArrowDown, Code, Check } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { Copy, Download, Save, RotateCcw, Plus, Trash2, ArrowUp, ArrowDown, Code, Check, Search, Loader2, UserRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -48,6 +48,73 @@ export function SignatureEditor({
 
   const links = form.companyLinks ?? [];
   const setLinks = (next: CompanyLink[]) => set("companyLinks", next);
+
+  // ----- employee directory search (auto-fill from a staff record) -----
+  interface DirEntry {
+    id: string;
+    employeeCode: string;
+    fullName: string;
+    position: string;
+    department: string;
+    officePhone: string;
+    email: string;
+  }
+  const [dirQuery, setDirQuery] = useState("");
+  const [dirResults, setDirResults] = useState<DirEntry[]>([]);
+  const [dirLoading, setDirLoading] = useState(false);
+  const [dirOpen, setDirOpen] = useState(false);
+  const dirBoxRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const q = dirQuery.trim();
+    if (q.length < 2) {
+      setDirResults([]);
+      setDirLoading(false);
+      return;
+    }
+    setDirLoading(true);
+    const ctrl = new AbortController();
+    const t = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/employees/directory?q=${encodeURIComponent(q)}`, { signal: ctrl.signal });
+        const body = (await res.json().catch(() => null)) as { data?: DirEntry[] } | null;
+        setDirResults(res.ok && body?.data ? body.data : []);
+        setDirOpen(true);
+      } catch {
+        /* aborted or network error — ignore */
+      } finally {
+        setDirLoading(false);
+      }
+    }, 250);
+    return () => {
+      ctrl.abort();
+      clearTimeout(t);
+    };
+  }, [dirQuery]);
+
+  useEffect(() => {
+    const onClick = (e: MouseEvent) => {
+      if (dirBoxRef.current && !dirBoxRef.current.contains(e.target as Node)) setDirOpen(false);
+    };
+    document.addEventListener("mousedown", onClick);
+    return () => document.removeEventListener("mousedown", onClick);
+  }, []);
+
+  function pickEmployee(e: DirEntry) {
+    setForm((f) => ({
+      ...f,
+      fullName: e.fullName || f.fullName,
+      position: e.position,
+      department: e.department,
+      officePhone: e.officePhone,
+      email: e.email,
+      website: f.website?.trim() ? f.website : "https://chaithanin.com/",
+    }));
+    setDirQuery("");
+    setDirResults([]);
+    setDirOpen(false);
+    setMsg({ text: `ดึงข้อมูลของ ${e.fullName} แล้ว / Filled from ${e.fullName}` });
+  }
   const addLink = () => setLinks([...links, { name: "", url: "" }]);
   const updateLink = (i: number, patch: Partial<CompanyLink>) =>
     setLinks(links.map((l, idx) => (idx === i ? { ...l, ...patch } : l)));
@@ -185,6 +252,55 @@ export function SignatureEditor({
               </CardContent>
             </Card>
           )}
+
+          <Card>
+            <CardHeader className="pb-3"><CardTitle className="text-sm">ค้นหาพนักงาน / Find employee</CardTitle></CardHeader>
+            <CardContent>
+              <div ref={dirBoxRef} className="relative">
+                <div className="relative">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    value={dirQuery}
+                    onChange={(e) => setDirQuery(e.target.value)}
+                    onFocus={() => dirResults.length > 0 && setDirOpen(true)}
+                    placeholder="พิมพ์ชื่อ / รหัส / ตำแหน่ง เพื่อดึงข้อมูลอัตโนมัติ…"
+                    className="pl-9 pr-9"
+                  />
+                  {dirLoading && (
+                    <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-muted-foreground" />
+                  )}
+                </div>
+                {dirOpen && (dirResults.length > 0 || (dirQuery.trim().length >= 2 && !dirLoading)) && (
+                  <div className="absolute z-20 mt-1 max-h-72 w-full overflow-auto rounded-md border bg-popover shadow-md">
+                    {dirResults.length === 0 ? (
+                      <p className="px-3 py-2 text-sm text-muted-foreground">ไม่พบพนักงาน / No matches</p>
+                    ) : (
+                      dirResults.map((e) => (
+                        <button
+                          key={e.id}
+                          type="button"
+                          onClick={() => pickEmployee(e)}
+                          className="flex w-full items-start gap-2 border-b px-3 py-2 text-left last:border-b-0 hover:bg-accent"
+                        >
+                          <UserRound className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                          <span className="min-w-0">
+                            <span className="block truncate text-sm font-medium">{e.fullName}</span>
+                            <span className="block truncate text-xs text-muted-foreground">
+                              {[e.position, e.department].filter(Boolean).join(" · ") || e.employeeCode}
+                            </span>
+                          </span>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                )}
+              </div>
+              <p className="mt-2 text-xs text-muted-foreground">
+                เลือกพนักงานเพื่อเติม ชื่อ ตำแหน่ง แผนก โทรออฟฟิศ อีเมล และเว็บไซต์ให้อัตโนมัติ /
+                Pick a staff record to auto-fill name, position, department, office phone, email and website.
+              </p>
+            </CardContent>
+          </Card>
 
           <Card>
             <CardHeader className="pb-3"><CardTitle className="text-sm">ข้อมูลส่วนตัว / Personal</CardTitle></CardHeader>
