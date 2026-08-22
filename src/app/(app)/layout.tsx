@@ -4,17 +4,25 @@ import { getT } from "@/lib/i18n";
 import { prisma } from "@/lib/prisma";
 import { AppShell } from "@/components/shell/app-shell";
 import type { NavItem } from "@/components/shell/sidebar";
+import { KpiPopup } from "@/components/kpi-popup";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
   const { t, locale } = await getT();
 
-  const unreadCount = await prisma.notification.count({
-    where: { organizationId: user.organizationId, userId: user.id, readAt: null },
-  });
-
   const has = (p: string) => user.permissions.has(p);
+  const isAgent = has("support:work") || has("support:read");
+
+  const [unreadCount, dbUser] = await Promise.all([
+    prisma.notification.count({
+      where: { organizationId: user.organizationId, userId: user.id, readAt: null },
+    }),
+    isAgent
+      ? prisma.user.findUnique({ where: { id: user.id }, select: { kpiPopupMode: true } })
+      : Promise.resolve(null),
+  ]);
+  const kpiPopupMode = dbUser?.kpiPopupMode ?? "DAILY";
   const nav: NavItem[] = [
     { href: "/dashboard", label: t("dashboard"), icon: "dashboard" },
     ...(has("asset:read") ? [{ href: "/assets", label: t("assets"), icon: "assets" }] : []),
@@ -43,6 +51,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             { href: "/support", label: t("myCases") },
             { href: "/support/new", label: t("newCase") },
             { href: "/support/signature", label: "Email Signature" },
+            ...(has("support:work") || has("support:read")
+              ? [{ href: "/support/performance", label: "ผลงานของฉัน / My Performance" }]
+              : []),
             ...(has("support:read")
               ? [
                   { href: "/support/queue", label: t("supportQueue") },
@@ -50,7 +61,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
                 ]
               : []),
             ...(has("support:settings")
-              ? [{ href: "/settings/signature", label: "จัดการลายเซ็น / Signatures" }]
+              ? [
+                  { href: "/settings/kpi", label: "ตั้งค่า KPI / KPI Config" },
+                  { href: "/settings/signature", label: "จัดการลายเซ็น / Signatures" },
+                ]
               : []),
           ],
         }]
@@ -79,6 +93,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       labels={{ search: t("search"), logout: t("logout"), profile: t("profile") }}
     >
       {children}
+      {isAgent && <KpiPopup mode={kpiPopupMode} />}
     </AppShell>
   );
 }
