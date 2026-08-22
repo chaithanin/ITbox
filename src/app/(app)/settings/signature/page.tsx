@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { requirePermission } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import { PageHeader } from "@/components/page-header";
@@ -10,18 +11,29 @@ import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { ConfirmButton } from "@/components/confirm-button";
-import { createTemplateAction, setDefaultTemplateAction, deleteTemplateAction } from "./actions";
+import type { CompanyLink } from "@/lib/signature";
+import {
+  createTemplateAction, updateTemplateAction, duplicateTemplateAction,
+  setDefaultTemplateAction, deleteTemplateAction,
+} from "./actions";
 
 export const dynamic = "force-dynamic";
 
 const MESSAGES: Record<string, { text: string; error?: boolean }> = {
   created: { text: "สร้างเทมเพลตแล้ว / Template created" },
+  updated: { text: "บันทึกการแก้ไขแล้ว / Template updated" },
+  duplicated: { text: "ทำสำเนาแล้ว / Template duplicated" },
   default: { text: "ตั้งเป็นค่าเริ่มต้นแล้ว / Default set" },
   deleted: { text: "ลบเทมเพลตแล้ว / Template deleted" },
   invalid: { text: "ข้อมูลไม่ถูกต้อง / Invalid input", error: true },
   logo: { text: "Logo URL ไม่ถูกต้อง / Invalid logo URL", error: true },
   notfound: { text: "ไม่พบเทมเพลต / Not found", error: true },
 };
+
+function linksToText(links: unknown): string {
+  if (!Array.isArray(links)) return "";
+  return (links as CompanyLink[]).map((l) => `${l.name}|${l.url}`).join("\n");
+}
 
 export default async function SignatureAdminPage({
   searchParams,
@@ -37,6 +49,9 @@ export default async function SignatureAdminPage({
     orderBy: [{ isDefault: "desc" }, { sortOrder: "asc" }, { createdAt: "asc" }],
   });
 
+  const editing = sp.edit ? templates.find((t) => t.id === sp.edit) ?? null : null;
+  const formAction = editing ? updateTemplateAction.bind(null, editing.id) : createTemplateAction;
+
   return (
     <div>
       <PageHeader
@@ -50,33 +65,37 @@ export default async function SignatureAdminPage({
       )}
 
       <Card className="mb-5">
-        <CardHeader><CardTitle className="text-sm">สร้างเทมเพลตใหม่ / New Template</CardTitle></CardHeader>
+        <CardHeader className="flex-row items-center justify-between">
+          <CardTitle className="text-sm">{editing ? `แก้ไข: ${editing.name}` : "สร้างเทมเพลตใหม่ / New Template"}</CardTitle>
+          {editing && <Link href="/settings/signature" className="text-xs text-primary hover:underline">+ สร้างใหม่แทน / New instead</Link>}
+        </CardHeader>
         <CardContent>
-          <form action={createTemplateAction} className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            <div><Label htmlFor="name">ชื่อเทมเพลต / Name *</Label><Input id="name" name="name" required className="mt-1" defaultValue="Executive Classic" /></div>
-            <div><Label htmlFor="companyName">ชื่อบริษัท / Company</Label><Input id="companyName" name="companyName" className="mt-1" /></div>
-            <div><Label htmlFor="logoUrl">โลโก้ (URL)</Label><Input id="logoUrl" name="logoUrl" className="mt-1" placeholder="https://.../logo.png" /></div>
-            <div><Label htmlFor="primaryColor">สีหลัก / Primary</Label><Input id="primaryColor" name="primaryColor" type="text" className="mt-1" defaultValue="#24386F" /></div>
-            <div><Label htmlFor="secondaryColor">สีรอง / Secondary</Label><Input id="secondaryColor" name="secondaryColor" className="mt-1" defaultValue="#6b7280" /></div>
-            <div><Label htmlFor="fontFamily">ฟอนต์ / Font</Label><Input id="fontFamily" name="fontFamily" className="mt-1" defaultValue="Arial, Helvetica, sans-serif" /></div>
-            <div><Label htmlFor="fontSize">ขนาดฟอนต์ / Size</Label><Input id="fontSize" name="fontSize" type="number" min={9} max={20} className="mt-1" defaultValue={13} /></div>
+          <form action={formAction} className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3" key={editing?.id ?? "new"}>
+            <div><Label htmlFor="name">ชื่อเทมเพลต / Name *</Label><Input id="name" name="name" required className="mt-1" defaultValue={editing?.name ?? "Executive Classic"} /></div>
+            <div><Label htmlFor="companyName">ชื่อบริษัท / Company</Label><Input id="companyName" name="companyName" className="mt-1" defaultValue={editing?.companyName ?? ""} /></div>
+            <div><Label htmlFor="logoUrl">โลโก้ (URL)</Label><Input id="logoUrl" name="logoUrl" className="mt-1" placeholder="https://.../logo.png" defaultValue={editing?.logoUrl ?? ""} /></div>
+            <div><Label htmlFor="primaryColor">สีหลัก / Primary</Label><Input id="primaryColor" name="primaryColor" className="mt-1" defaultValue={editing?.primaryColor ?? "#24386F"} /></div>
+            <div><Label htmlFor="secondaryColor">สีรอง / Secondary</Label><Input id="secondaryColor" name="secondaryColor" className="mt-1" defaultValue={editing?.secondaryColor ?? "#6b7280"} /></div>
+            <div><Label htmlFor="fontFamily">ฟอนต์ / Font</Label><Input id="fontFamily" name="fontFamily" className="mt-1" defaultValue={editing?.fontFamily ?? "Arial, Helvetica, sans-serif"} /></div>
+            <div><Label htmlFor="fontSize">ขนาดฟอนต์ / Size</Label><Input id="fontSize" name="fontSize" type="number" min={9} max={20} className="mt-1" defaultValue={editing?.fontSize ?? 13} /></div>
             <div>
               <Label htmlFor="dividerStyle">เส้นคั่น / Divider</Label>
-              <Select id="dividerStyle" name="dividerStyle" className="mt-1" defaultValue="solid">
+              <Select id="dividerStyle" name="dividerStyle" className="mt-1" defaultValue={editing?.dividerStyle ?? "solid"}>
                 <option value="solid">solid</option>
                 <option value="dashed">dashed</option>
                 <option value="none">none</option>
               </Select>
             </div>
             <div className="flex items-end gap-2">
-              <label className="flex items-center gap-2 text-sm"><input type="checkbox" name="isDefault" /> ตั้งเป็นค่าเริ่มต้น / Default</label>
+              <label className="flex items-center gap-2 text-sm"><input type="checkbox" name="isDefault" defaultChecked={editing?.isDefault ?? false} /> ตั้งเป็นค่าเริ่มต้น / Default</label>
             </div>
             <div className="sm:col-span-2 lg:col-span-3">
               <Label htmlFor="defaultLinks">ลิงก์บริษัทเริ่มต้น / Default links (บรรทัดละ 1: ชื่อ|URL)</Label>
-              <Textarea id="defaultLinks" name="defaultLinks" rows={3} className="mt-1 font-mono text-xs" placeholder={"Global Top Group|https://example.com\nMarina Golden Bay|https://example.com"} />
+              <Textarea id="defaultLinks" name="defaultLinks" rows={3} className="mt-1 font-mono text-xs" defaultValue={editing ? linksToText(editing.defaultLinks) : ""} placeholder={"Global Top Group|https://example.com"} />
             </div>
-            <div className="flex items-end sm:col-span-2 lg:col-span-3">
-              <Button type="submit">สร้างเทมเพลต / Create</Button>
+            <div className="flex items-end gap-2 sm:col-span-2 lg:col-span-3">
+              <Button type="submit">{editing ? "บันทึกการแก้ไข / Save" : "สร้างเทมเพลต / Create"}</Button>
+              {editing && <Button variant="outline" asChild><Link href="/settings/signature">ยกเลิก / Cancel</Link></Button>}
             </div>
           </form>
         </CardContent>
@@ -99,6 +118,7 @@ export default async function SignatureAdminPage({
           {templates.map((t) => {
             const links = Array.isArray(t.defaultLinks) ? t.defaultLinks.length : 0;
             const setDef = setDefaultTemplateAction.bind(null, t.id);
+            const dup = duplicateTemplateAction.bind(null, t.id);
             const del = deleteTemplateAction.bind(null, t.id);
             return (
               <TableRow key={t.id}>
@@ -115,8 +135,10 @@ export default async function SignatureAdminPage({
                 <TableCell>{t.isDefault ? <Badge variant="success">ค่าเริ่มต้น / Default</Badge> : <Badge variant="secondary">—</Badge>}</TableCell>
                 <TableCell>
                   <div className="flex flex-wrap gap-1.5">
+                    <Button variant="outline" size="sm" asChild><Link href={`/settings/signature?edit=${t.id}`}>แก้ไข</Link></Button>
+                    <form action={dup}><Button type="submit" variant="outline" size="sm">ทำสำเนา</Button></form>
                     {!t.isDefault && (
-                      <form action={setDef}><Button type="submit" variant="outline" size="sm">ตั้งเป็นค่าเริ่มต้น</Button></form>
+                      <form action={setDef}><Button type="submit" variant="outline" size="sm">ตั้งค่าเริ่มต้น</Button></form>
                     )}
                     <form action={del}>
                       <ConfirmButton variant="outline" size="sm" confirmText="ลบเทมเพลตนี้?">ลบ</ConfirmButton>

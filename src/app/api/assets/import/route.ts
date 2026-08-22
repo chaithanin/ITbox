@@ -54,6 +54,7 @@ const COLUMNS = [
   "project",
   "ipAddress",
   "notes",
+  "assignedToName",
 ] as const;
 
 type ColumnName = (typeof COLUMNS)[number];
@@ -198,6 +199,7 @@ export const GET = apiHandler(async () => {
     project: "Laptop Refresh 2026",
     ipAddress: "192.168.1.10",
     notes: "Imported via CSV",
+    assignedToName: "Somchai Jaidee",
   };
 
   // BOM so Excel opens Thai text as UTF-8
@@ -311,13 +313,30 @@ export const POST = apiHandler(async (req: Request) => {
 
   // ---- Prefetch org data for validation (one query each) ----
   const orgWhere = { organizationId: user.organizationId, deletedAt: null };
-  const [existingAssets, categories, departments, locations, vendors] = await Promise.all([
+  const [existingAssets, categories, departments, locations, vendors, employees] = await Promise.all([
     prisma.asset.findMany({ where: orgWhere, select: { assetTag: true } }),
     prisma.assetCategory.findMany({ where: orgWhere, select: { id: true, name: true } }),
     prisma.department.findMany({ where: orgWhere, select: { id: true, code: true, name: true } }),
     prisma.location.findMany({ where: orgWhere, select: { id: true, code: true, name: true } }),
     prisma.vendor.findMany({ where: orgWhere, select: { id: true, name: true } }),
+    prisma.employee.findMany({ where: orgWhere, select: { id: true, firstName: true, lastName: true } }),
   ]);
+
+  // Match an asset's holder (assignedToName) to an employee by full name or first name.
+  const empByFull = new Map<string, string>();
+  const empByFirst = new Map<string, string>();
+  for (const e of employees) {
+    empByFull.set(`${e.firstName} ${e.lastName}`.trim().toLowerCase(), e.id);
+    const f = e.firstName.trim().toLowerCase();
+    if (f && !empByFirst.has(f)) empByFirst.set(f, e.id);
+  }
+  const resolveEmployee = (name: string): string | null => {
+    const n = name.trim().toLowerCase();
+    if (!n) return null;
+    return empByFull.get(n) ?? empByFirst.get(n) ?? null;
+  };
+  // assetTag(lower) -> employeeId for CHECKED_OUT assignment after asset creation
+  const assignByTag = new Map<string, string>();
 
   const existingTags = new Set(existingAssets.map((a) => a.assetTag.toLowerCase()));
   // category / department / location resolve by NAME and are AUTO-CREATED when
@@ -459,6 +478,8 @@ export const POST = apiHandler(async (req: Request) => {
     }
 
     seenTags.add(assetTag.toLowerCase());
+    const holderEmpId = resolveEmployee(cell(r, "assignedToName"));
+    if (holderEmpId) assignByTag.set(assetTag.toLowerCase(), holderEmpId);
     validRows.push({
       organizationId: user.organizationId,
       assetTag,
@@ -495,7 +516,7 @@ export const POST = apiHandler(async (req: Request) => {
           deletedAt: null,
           assetTag: { in: validRows.map((v) => v.assetTag) },
         },
-        select: { id: true },
+        select: { id: true, assetTag: true },
       });
       await tx.assetHistory.createMany({
         data: created.map((a) => ({
@@ -506,6 +527,27 @@ export const POST = apiHandler(async (req: Request) => {
           actorId: user.id,
         })),
       });
+      // Link assets to their holder (assignedToName → employee) as an
+      // active CHECKED_OUT assignment, and mark the asset IN_USE.
+      const assignments = created
+        .map((a) => ({ a, empId: assignByTag.get(a.assetTag.toLowerCase()) }))
+        .filter((x): x is { a: typeof x.a; empId: string } => !!x.empId);
+      if (assignments.length > 0) {
+        await tx.assetAssignment.createMany({
+          data: assignments.map(({ a, empId }) => ({
+            organizationId: user.organizationId,
+            assetId: a.id,
+            employeeId: empId,
+            status: "CHECKED_OUT" as const,
+            assignedById: user.id,
+            purpose: "Bulk import",
+          })),
+        });
+        await tx.asset.updateMany({
+          where: { id: { in: assignments.map(({ a }) => a.id) } },
+          data: { status: "IN_USE" },
+        });
+      }
     });
   }
 

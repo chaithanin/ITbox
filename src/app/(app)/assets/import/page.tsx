@@ -57,6 +57,7 @@ const COLUMN_DOCS: ColumnDoc[] = [
   { name: "project", required: false, description: "โครงการ / Project" },
   { name: "ipAddress", required: false, description: "IP Address" },
   { name: "notes", required: false, description: "หมายเหตุ / Notes" },
+  { name: "assignedToName", required: false, description: "ชื่อผู้ถือครอง — จับคู่กับพนักงาน (ชื่อ) แล้วสร้างการมอบหมาย + ตั้งสถานะ IN_USE / Holder name — matched to an employee to create an assignment" },
 ];
 
 export default async function AssetImportPage() {

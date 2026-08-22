@@ -68,6 +68,73 @@ export async function createTemplateAction(formData: FormData) {
   redirect("/settings/signature?ok=created");
 }
 
+export async function updateTemplateAction(id: string, formData: FormData) {
+  const user = await requirePermission("support:settings");
+  const existing = await prisma.signatureTemplate.findFirst({
+    where: { id, organizationId: user.organizationId, deletedAt: null },
+    select: { id: true },
+  });
+  if (!existing) redirect("/settings/signature?error=notfound");
+  const p = templateSchema.safeParse(Object.fromEntries(formData));
+  if (!p.success) redirect(`/settings/signature?edit=${id}&error=invalid`);
+  const d = p.data;
+  if (d.logoUrl && !safeUrl(d.logoUrl)) redirect(`/settings/signature?edit=${id}&error=logo`);
+  const isDefault = d.isDefault === "on";
+  await prisma.$transaction(async (tx) => {
+    if (isDefault) {
+      await tx.signatureTemplate.updateMany({
+        where: { organizationId: user.organizationId, isDefault: true, id: { not: id } },
+        data: { isDefault: false },
+      });
+    }
+    await tx.signatureTemplate.update({
+      where: { id },
+      data: {
+        name: d.name,
+        companyName: d.companyName || null,
+        logoUrl: d.logoUrl || null,
+        primaryColor: d.primaryColor,
+        secondaryColor: d.secondaryColor,
+        fontFamily: d.fontFamily,
+        fontSize: d.fontSize,
+        dividerStyle: d.dividerStyle,
+        defaultLinks: parseLinks(d.defaultLinks),
+        isDefault,
+      },
+    });
+  });
+  await auditLog(user, { action: "UPDATE", entityType: "SIGNATURE_TEMPLATE", entityId: id });
+  revalidatePath("/settings/signature");
+  redirect("/settings/signature?ok=updated");
+}
+
+export async function duplicateTemplateAction(id: string) {
+  const user = await requirePermission("support:settings");
+  const t = await prisma.signatureTemplate.findFirst({
+    where: { id, organizationId: user.organizationId, deletedAt: null },
+  });
+  if (!t) redirect("/settings/signature?error=notfound");
+  await prisma.signatureTemplate.create({
+    data: {
+      organizationId: user.organizationId,
+      name: `${t.name} (copy)`,
+      companyName: t.companyName,
+      logoUrl: t.logoUrl,
+      primaryColor: t.primaryColor,
+      secondaryColor: t.secondaryColor,
+      fontFamily: t.fontFamily,
+      fontSize: t.fontSize,
+      dividerStyle: t.dividerStyle,
+      defaultLinks: t.defaultLinks ?? [],
+      isDefault: false,
+      sortOrder: t.sortOrder,
+    },
+  });
+  await auditLog(user, { action: "CREATE", entityType: "SIGNATURE_TEMPLATE", detail: { duplicatedFrom: id } });
+  revalidatePath("/settings/signature");
+  redirect("/settings/signature?ok=duplicated");
+}
+
 export async function setDefaultTemplateAction(id: string) {
   const user = await requirePermission("support:settings");
   const t = await prisma.signatureTemplate.findFirst({
