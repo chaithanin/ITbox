@@ -33,9 +33,9 @@ const COLUMN_DOCS: ColumnDoc[] = [
   { name: "brand", required: false, description: "ยี่ห้อ / Brand" },
   { name: "model", required: false, description: "รุ่น / Model" },
   { name: "specification", required: false, description: "สเปค / Specification" },
-  { name: "category", required: false, description: "ชื่อหมวดหมู่ที่มีอยู่ในระบบ / Existing category name" },
-  { name: "department", required: false, description: "รหัสแผนกที่มีอยู่ในระบบ / Existing department code" },
-  { name: "location", required: false, description: "รหัสสถานที่ที่มีอยู่ในระบบ / Existing location code" },
+  { name: "category", required: false, description: "ชื่อหมวดหมู่ (สร้างให้อัตโนมัติถ้ายังไม่มี) / Category name (auto-created if missing)" },
+  { name: "department", required: false, description: "ชื่อแผนก (สร้างให้อัตโนมัติถ้ายังไม่มี) / Department name (auto-created if missing)" },
+  { name: "location", required: false, description: "ชื่อสถานที่ (สร้างให้อัตโนมัติถ้ายังไม่มี) / Location name (auto-created if missing)" },
   { name: "vendor", required: false, description: "ชื่อผู้ขายที่มีอยู่ในระบบ / Existing vendor name" },
   { name: "purchaseDate", required: false, description: "วันที่ซื้อ รูปแบบ YYYY-MM-DD / Purchase date (YYYY-MM-DD)" },
   { name: "purchasePrice", required: false, description: "ราคาซื้อ (ตัวเลข) / Purchase price (numeric)" },
@@ -109,11 +109,11 @@ export default async function AssetImportPage() {
             <CardTitle>รูปแบบไฟล์ / File Format</CardTitle>
             <CardDescription>
               ใช้ได้ทั้ง CSV และ Excel (.xlsx — ใช้แผ่นงานแรก) แถวแรกต้องเป็นหัวตาราง
-              (ชื่อคอลัมน์ไม่สนตัวพิมพ์เล็ก-ใหญ่) ค่า category / department / location / vendor
-              ต้องมีอยู่ในระบบแล้ว — ระบบจะไม่สร้างให้อัตโนมัติ / Works with CSV and Excel (.xlsx —
-              first worksheet is used). The first row must be a header (column names are
-              case-insensitive). Category, department, location and vendor values must already
-              exist — they are not auto-created.
+              (ชื่อคอลัมน์ไม่สนตัวพิมพ์เล็ก-ใหญ่) · category / department / location จับคู่ด้วย “ชื่อ”
+              และสร้างให้อัตโนมัติถ้ายังไม่มี ส่วน vendor จับคู่ด้วยชื่อที่มีอยู่แล้ว (ถ้าไม่พบจะเว้นว่าง) /
+              CSV or Excel (.xlsx, first sheet). First row is the header (case-insensitive).
+              Category, department and location match by name and are auto-created if missing;
+              vendor matches an existing name (ignored if not found).
             </CardDescription>
           </CardHeader>
           <CardContent>

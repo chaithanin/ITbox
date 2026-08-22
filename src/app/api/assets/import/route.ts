@@ -314,16 +314,51 @@ export const POST = apiHandler(async (req: Request) => {
   const [existingAssets, categories, departments, locations, vendors] = await Promise.all([
     prisma.asset.findMany({ where: orgWhere, select: { assetTag: true } }),
     prisma.assetCategory.findMany({ where: orgWhere, select: { id: true, name: true } }),
-    prisma.department.findMany({ where: orgWhere, select: { id: true, code: true } }),
-    prisma.location.findMany({ where: orgWhere, select: { id: true, code: true } }),
+    prisma.department.findMany({ where: orgWhere, select: { id: true, code: true, name: true } }),
+    prisma.location.findMany({ where: orgWhere, select: { id: true, code: true, name: true } }),
     prisma.vendor.findMany({ where: orgWhere, select: { id: true, name: true } }),
   ]);
 
   const existingTags = new Set(existingAssets.map((a) => a.assetTag.toLowerCase()));
+  // category / department / location resolve by NAME and are AUTO-CREATED when
+  // missing (bulk-import friendly, consistent with the employee importer).
   const categoryByName = new Map(categories.map((c) => [c.name.toLowerCase(), c.id]));
-  const departmentByCode = new Map(departments.map((d) => [d.code.toLowerCase(), d.id]));
-  const locationByCode = new Map(locations.map((l) => [l.code.toLowerCase(), l.id]));
+  const departmentByName = new Map(departments.map((d) => [d.name.toLowerCase(), d.id]));
+  const locationByName = new Map(locations.map((l) => [l.name.toLowerCase(), l.id]));
   const vendorByName = new Map(vendors.map((v) => [v.name.toLowerCase(), v.id]));
+  const deptCodes = new Set(departments.map((d) => d.code.toUpperCase()));
+  const locCodes = new Set(locations.map((l) => l.code.toUpperCase()));
+
+  const uniqueCode = (name: string, prefix: string, taken: Set<string>) => {
+    const base =
+      name.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 16) ||
+      `${prefix}${Math.abs([...name].reduce((h, c) => (h * 31 + c.charCodeAt(0)) | 0, 7)) % 100000}`;
+    let code = base, n = 1;
+    while (taken.has(code.toUpperCase())) code = `${base.slice(0, 14)}-${++n}`;
+    taken.add(code.toUpperCase());
+    return code;
+  };
+
+  // Pre-create any category / department / location referenced by name but not
+  // yet present, so the per-row lookups below always resolve.
+  const wantCat = new Set<string>(), wantDept = new Set<string>(), wantLoc = new Set<string>();
+  for (const r of dataRows) {
+    const c = cell(r, "category"); if (c && !categoryByName.has(c.toLowerCase())) wantCat.add(c);
+    const d = cell(r, "department"); if (d && !departmentByName.has(d.toLowerCase())) wantDept.add(d);
+    const l = cell(r, "location"); if (l && !locationByName.has(l.toLowerCase())) wantLoc.add(l);
+  }
+  for (const name of wantCat) {
+    const c = await prisma.assetCategory.create({ data: { organizationId: user.organizationId, name } });
+    categoryByName.set(name.toLowerCase(), c.id);
+  }
+  for (const name of wantDept) {
+    const d = await prisma.department.create({ data: { organizationId: user.organizationId, name, code: uniqueCode(name, "DEPT", deptCodes) } });
+    departmentByName.set(name.toLowerCase(), d.id);
+  }
+  for (const name of wantLoc) {
+    const l = await prisma.location.create({ data: { organizationId: user.organizationId, name, code: uniqueCode(name, "LOC", locCodes) } });
+    locationByName.set(name.toLowerCase(), l.id);
+  }
 
   // ---- Validate rows ----
   const errors: RowError[] = [];
@@ -412,9 +447,11 @@ export const POST = apiHandler(async (req: Request) => {
       return id;
     };
     const categoryId = lookup("category", categoryByName, "category");
-    const departmentId = lookup("department", departmentByCode, "department");
-    const locationId = lookup("location", locationByCode, "location");
-    const vendorId = lookup("vendor", vendorByName, "vendor");
+    const departmentId = lookup("department", departmentByName, "department");
+    const locationId = lookup("location", locationByName, "location");
+    // Vendor is optional and NOT auto-created — unknown vendor is ignored, not an error.
+    const vendorRaw = cell(r, "vendor");
+    const vendorId = vendorRaw ? vendorByName.get(vendorRaw.toLowerCase()) : undefined;
 
     if (rowErrors.length > 0) {
       errors.push({ row: rowNumber, assetTag, error: rowErrors.join("; ") });
