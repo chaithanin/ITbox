@@ -298,6 +298,9 @@ export interface CreateCaseInput {
   source?: CaseSource;
   // On-behalf: requester differs from creator (agents only)
   requesterUserId?: string | null;
+  // Reporter identity captured on the form (name + staff ID of who reported it)
+  reporterName?: string | null;
+  reporterEmployeeCode?: string | null;
   attachments?: Array<{ name: string; storagePath: string; contentType?: string; sizeBytes?: number }>;
 }
 
@@ -398,6 +401,8 @@ export async function createCase(user: CurrentUser, input: CreateCaseInput) {
       requesterEmployeeId: requester?.employee?.id ?? null,
       onBehalf: requesterUserId !== user.id,
       createdById: user.id,
+      reporterName: input.reporterName ?? null,
+      reporterEmployeeCode: input.reporterEmployeeCode ?? null,
       departmentId: asset?.departmentId ?? requester?.employee?.departmentId ?? null,
       locationId: input.locationId ?? asset?.locationId ?? requester?.employee?.locationId ?? null,
       assetId: asset?.id ?? null,

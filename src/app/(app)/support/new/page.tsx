@@ -166,6 +166,32 @@ export default async function NewCasePage({
             <section>
               <SectionTitle step={1}>เรื่องที่ต้องการแจ้ง / What’s the problem</SectionTitle>
               <div className="space-y-4">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div>
+                    <Label htmlFor="reporterName">
+                      ชื่อผู้แจ้ง / Reporter name <span className="text-destructive">*</span>
+                    </Label>
+                    <Input
+                      id="reporterName"
+                      name="reporterName"
+                      required
+                      maxLength={120}
+                      className="mt-1"
+                      defaultValue={user.name}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="reporterEmployeeCode">รหัสพนักงาน / Staff ID</Label>
+                    <Input
+                      id="reporterEmployeeCode"
+                      name="reporterEmployeeCode"
+                      maxLength={50}
+                      className="mt-1"
+                      defaultValue={employee?.employeeCode ?? ""}
+                      placeholder="เช่น EMP-0001"
+                    />
+                  </div>
+                </div>
                 <div>
                   <Label htmlFor="subject">
                     เรื่อง / Subject <span className="text-destructive">*</span>

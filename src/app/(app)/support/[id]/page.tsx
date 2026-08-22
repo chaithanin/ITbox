@@ -291,10 +291,14 @@ export default async function CaseDetailPage({
               <InfoRow
                 label="ผู้แจ้ง / Requester"
                 value={
+                  c.reporterName ??
                   c.requester?.name ??
-                  (c.reporterName ? `${c.reporterName} (ภายนอก / external)` : "-")
+                  "-"
                 }
               />
+              {c.reporterEmployeeCode && (
+                <InfoRow label="รหัสพนักงาน / Staff ID" value={c.reporterEmployeeCode} />
+              )}
               {c.reporterEmail && (
                 <InfoRow
                   label="อีเมลผู้แจ้ง / Reporter email"

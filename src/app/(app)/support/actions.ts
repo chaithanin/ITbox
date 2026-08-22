@@ -49,6 +49,8 @@ const createSchema = z.object({
   locationId: z.preprocess(emptyNull, z.string().uuid().nullable()),
   assetId: z.preprocess(emptyNull, z.string().uuid().nullable()),
   requesterUserId: z.preprocess(emptyNull, z.string().uuid().nullable()),
+  reporterName: z.preprocess(emptyNull, z.string().max(120).nullable()),
+  reporterEmployeeCode: z.preprocess(emptyNull, z.string().max(50).nullable()),
 });
 
 export async function createCaseAction(formData: FormData) {

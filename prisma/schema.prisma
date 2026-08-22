@@ -51,6 +51,8 @@ model Organization {
   supportTeams      SupportTeam[]
   holidays          Holiday[]
   kpiConfigs        KpiConfig[]
+  signatureTemplates SignatureTemplate[]
+  signatureProfiles  SignatureProfile[]
 
   @@map("organizations")
 }
@@ -114,6 +116,7 @@ model User {
   casesAssigned      SupportCase[]   @relation("CaseAssignee")
   caseComments       CaseComment[]
   supportTeamMemberships SupportTeamMember[]
+  signatureProfile   SignatureProfile?
 
   @@index([organizationId])
   @@map("users")
@@ -1338,11 +1341,13 @@ model SupportCase {
   onBehalf            Boolean @default(false)
   createdById         String? @db.Uuid
 
-  // External/anonymous reporter (public web-intake form; no user account).
-  // Populated when the case is opened via /report/<org-slug>.
-  reporterName        String?
-  reporterEmail       String?
-  reporterPhone       String?
+  // Reporter identity captured on the form (name + staff ID of the person
+  // reporting). For public web-intake (no account) and to record the reporter
+  // explicitly on internal cases even when opened on someone's behalf.
+  reporterName         String?
+  reporterEmail        String?
+  reporterPhone        String?
+  reporterEmployeeCode String?
 
   departmentId String? @db.Uuid
   locationId   String? @db.Uuid
@@ -1488,4 +1493,68 @@ model KpiConfig {
   @@unique([organizationId, metric])
   @@index([organizationId])
   @@map("kpi_configs")
+}
+
+// ---------------- Email Signature Generator ----------------
+
+/// Admin-managed signature template: branding + defaults for the whole org.
+model SignatureTemplate {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @db.Uuid
+  name           String
+  isDefault      Boolean  @default(false)
+  active         Boolean  @default(true)
+  sortOrder      Int      @default(0)
+
+  // Branding / layout config
+  companyName    String?
+  logoUrl        String?
+  primaryColor   String   @default("#24386F")
+  secondaryColor String   @default("#6b7280")
+  fontFamily     String   @default("Arial, Helvetica, sans-serif")
+  fontSize       Int      @default(13)
+  dividerStyle   String   @default("solid") // solid | dashed | none
+  /// Default company links: [{ name, url, icon? }]
+  defaultLinks   Json     @default("[]")
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  organization Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  profiles     SignatureProfile[]
+
+  @@index([organizationId])
+  @@map("signature_templates")
+}
+
+/// A user's own signature content (auto-populated from their profile/employee).
+model SignatureProfile {
+  id             String  @id @default(uuid()) @db.Uuid
+  organizationId String  @db.Uuid
+  userId         String  @unique @db.Uuid
+  templateId     String? @db.Uuid
+
+  fullName    String
+  position    String?
+  department  String?
+  mobilePhone String?
+  officePhone String?
+  extension   String?
+  email       String?
+  website     String?
+  address     String?
+  logoUrl     String?
+  /// Per-user company links: [{ name, url, icon? }]
+  companyLinks Json @default("[]")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  template     SignatureTemplate? @relation(fields: [templateId], references: [id])
+
+  @@index([organizationId])
+  @@map("signature_profiles")
 }
