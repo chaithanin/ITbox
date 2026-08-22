@@ -11,6 +11,9 @@ interface DirEntry {
   fullName: string;
   position: string;
   department: string;
+  departmentId: string;
+  location: string;
+  locationId: string;
 }
 
 export function ReporterFields({
@@ -22,6 +25,7 @@ export function ReporterFields({
 }) {
   const [name, setName] = useState(defaultName);
   const [code, setCode] = useState(defaultCode);
+  const [picked, setPicked] = useState<DirEntry | null>(null);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<DirEntry[]>([]);
   const [loading, setLoading] = useState(false);
@@ -66,9 +70,18 @@ export function ReporterFields({
   function pick(e: DirEntry) {
     setName(e.fullName);
     setCode(e.employeeCode);
+    setPicked(e);
     setQuery("");
     setResults([]);
     setOpen(false);
+    // Auto-fill the Location select (uncontrolled native <select>) if the
+    // employee's location exists as an option.
+    if (e.locationId && typeof document !== "undefined") {
+      const sel = document.getElementById("locationId") as HTMLSelectElement | null;
+      if (sel && Array.from(sel.options).some((o) => o.value === e.locationId)) {
+        sel.value = e.locationId;
+      }
+    }
   }
 
   return (
@@ -115,6 +128,14 @@ export function ReporterFields({
           </div>
         )}
       </div>
+
+      {picked && (
+        <p className="rounded-md bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
+          เติมจาก <span className="font-medium text-foreground">{picked.fullName}</span>
+          {picked.department ? ` · แผนก ${picked.department}` : ""}
+          {picked.location ? ` · สถานที่ ${picked.location} (เลือกให้อัตโนมัติ)` : ""}
+        </p>
+      )}
 
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
