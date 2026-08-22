@@ -13,6 +13,13 @@ export default async function SettingsPage() {
 
   const cards = [
     {
+      href: "/settings/organization",
+      icon: Building2,
+      title: "ข้อมูลองค์กร / Organization",
+      desc: "ชื่อบริษัท เลขผู้เสียภาษี ที่อยู่ และโลโก้",
+      show: user.permissions.has("settings:manage"),
+    },
+    {
       href: "/settings/profile",
       icon: UserCog,
       title: "โปรไฟล์และความปลอดภัย / Profile & Security",
