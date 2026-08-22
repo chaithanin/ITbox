@@ -2,7 +2,11 @@
  * Email signature renderer — pure, dependency-free so it runs identically on the
  * server (save/download) and in the browser (live preview). Produces Outlook-safe
  * HTML: nested tables, inline CSS, fixed widths, web-safe fonts, no JS/external
- * CSS. Every dynamic value is HTML-escaped and every URL validated (XSS-safe).
+ * CSS/SVG. Every dynamic value is HTML-escaped and every URL validated (XSS-safe).
+ *
+ * Layout ("Chaithanin Executive"): a warm beige band with the company monogram on
+ * the left and the person's name/title + a divider + icon contact rows on the
+ * right, followed by a full-width row of subsidiary buttons underneath.
  */
 
 export interface CompanyLink {
@@ -28,21 +32,25 @@ export interface SignatureData {
 export interface TemplateConfig {
   companyName?: string | null;
   logoUrl?: string | null;
-  primaryColor: string;
-  secondaryColor: string;
+  primaryColor: string; // brand brown — monogram, name, icons
+  secondaryColor: string; // muted tone — job title
   fontFamily: string;
   fontSize: number;
   dividerStyle: string; // solid | dashed | none
+  bgColor?: string | null; // band background (beige)
+  dividerColor?: string | null; // hairline under the name
 }
 
 export const DEFAULT_TEMPLATE: TemplateConfig = {
-  companyName: "",
+  companyName: "Chaithanin Co.,Ltd.",
   logoUrl: "",
-  primaryColor: "#24386F",
-  secondaryColor: "#6b7280",
+  primaryColor: "#6E4030",
+  secondaryColor: "#8B7B6E",
   fontFamily: "Arial, Helvetica, sans-serif",
   fontSize: 13,
   dividerStyle: "solid",
+  bgColor: "#EDE5DD",
+  dividerColor: "#CBB9A9",
 };
 
 // ---------- safety helpers ----------
@@ -93,123 +101,149 @@ function isEmail(s: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s.trim());
 }
 
+function clamp(n: number, lo: number, hi: number): number {
+  return Math.max(lo, Math.min(n, hi));
+}
+
+// Text-presentation glyphs (VS-16 -> VS-15 requested where relevant) so mail
+// clients render them monochrome and honor our brown color, no external images.
+const ICON = {
+  phone: "☎︎", // ☎
+  email: "✉︎", // ✉
+  web: "🌐︎", // 🌐 (text style)
+  pin: "📍︎", // 📍 (text style)
+};
+
 // ---------- renderer ----------
 
-/**
- * "Executive Classic": logo + company on the left, contact block on the right,
- * a horizontal divider, then a row of company link buttons underneath.
- */
 export function renderSignatureHtml(data: SignatureData, cfg: TemplateConfig): string {
-  const primary = escapeHtml(cfg.primaryColor || "#24386F");
-  const secondary = escapeHtml(cfg.secondaryColor || "#6b7280");
+  const brown = escapeHtml(cfg.primaryColor || "#6E4030");
+  const titleColor = escapeHtml(cfg.secondaryColor || "#8B7B6E");
+  const bg = escapeHtml(cfg.bgColor || "#EDE5DD");
+  const line = escapeHtml(cfg.dividerColor || "#CBB9A9");
+  const textColor = "#5A4A40";
   const font = cfg.fontFamily || "Arial, Helvetica, sans-serif";
-  const size = Math.max(9, Math.min(cfg.fontSize || 13, 20));
-  const small = size - 1;
+  const serif = "Georgia, 'Times New Roman', serif";
+  const size = clamp(cfg.fontSize || 13, 9, 20);
+  const small = size - 2;
   const logo = safeUrl(data.logoUrl) ?? safeUrl(cfg.logoUrl);
-  const companyName = (cfg.companyName ?? "").trim();
+  const companyName = (cfg.companyName ?? "Chaithanin Co.,Ltd.").trim();
 
-  const label = (text: string) =>
-    `<span style="color:${secondary};font-family:${font};font-size:${small}px;">${escapeHtml(text)}</span>`;
-
-  const contactRow = (labelText: string, valueHtml: string) =>
-    `<tr><td style="padding:1px 0;font-family:${font};font-size:${small}px;line-height:1.5;">` +
-    `${label(labelText)}&nbsp;${valueHtml}</td></tr>`;
+  // ----- contact rows -----
+  const iconCell = (glyph: string) =>
+    `<td width="20" valign="top" style="padding:3px 8px 3px 0;font-family:${font};font-size:${size}px;line-height:1.4;color:${brown};">${glyph}</td>`;
+  const textCell = (html: string) =>
+    `<td valign="top" style="padding:3px 0;font-family:${font};font-size:${small}px;line-height:1.4;color:${textColor};">${html}</td>`;
+  const row = (glyph: string, html: string) => `<tr>${iconCell(glyph)}${textCell(html)}</tr>`;
 
   const rows: string[] = [];
 
+  // Phone — mobile / office on one line, like the reference.
+  const phones: string[] = [];
   if (data.mobilePhone) {
-    rows.push(
-      contactRow(
-        "Mobile:",
-        `<a href="${escapeHtml(telHref(data.mobilePhone))}" style="color:#1f2937;text-decoration:none;">${escapeHtml(data.mobilePhone)}</a>`
-      )
+    phones.push(
+      `<a href="${escapeHtml(telHref(data.mobilePhone))}" style="color:${textColor};text-decoration:none;">${escapeHtml(data.mobilePhone)}</a>`
     );
   }
   if (data.officePhone) {
     const ext = data.extension ? ` ${escapeHtml("ext. " + data.extension)}` : "";
-    rows.push(
-      contactRow(
-        "Office:",
-        `<a href="${escapeHtml(telHref(data.officePhone))}" style="color:#1f2937;text-decoration:none;">${escapeHtml(data.officePhone)}</a>${ext}`
-      )
+    phones.push(
+      `<a href="${escapeHtml(telHref(data.officePhone))}" style="color:${textColor};text-decoration:none;">${escapeHtml(data.officePhone)}</a>${ext}`
     );
   }
+  if (phones.length) rows.push(row(ICON.phone, phones.join(" / ")));
+
   if (data.email && isEmail(data.email)) {
     rows.push(
-      contactRow(
-        "Email:",
-        `<a href="mailto:${escapeHtml(data.email)}" style="color:${primary};text-decoration:none;">${escapeHtml(data.email)}</a>`
+      row(
+        ICON.email,
+        `<a href="mailto:${escapeHtml(data.email)}" style="color:${textColor};text-decoration:none;">${escapeHtml(data.email)}</a>`
       )
     );
   }
+
   const web = safeUrl(data.website);
   if (web) {
     rows.push(
-      contactRow(
-        "Web:",
-        `<a href="${escapeHtml(web)}" style="color:${primary};text-decoration:none;">${escapeHtml(data.website!.replace(/^https?:\/\//i, ""))}</a>`
+      row(
+        ICON.web,
+        `<a href="${escapeHtml(web)}" style="color:${textColor};text-decoration:none;">${escapeHtml(data.website!.replace(/^https?:\/\//i, "").replace(/\/$/, ""))}</a>`
       )
     );
   }
+
   if (data.address) {
     rows.push(
-      contactRow(
-        "Address:",
-        `<a href="${escapeHtml(mapsHref(data.address))}" style="color:#1f2937;text-decoration:none;">${escapeHtml(data.address)}</a>`
+      row(
+        ICON.pin,
+        `<a href="${escapeHtml(mapsHref(data.address))}" style="color:${textColor};text-decoration:none;">${escapeHtml(data.address)}</a>`
       )
     );
   }
 
-  const divider =
+  // ----- name / title / divider -----
+  const nameHtml = `<tr><td style="font-family:${font};font-size:${size + 5}px;font-weight:bold;color:${brown};letter-spacing:0.3px;padding-bottom:3px;">${escapeHtml(data.fullName)}</td></tr>`;
+  const titleText = [data.position, data.department].filter(Boolean).join(" · ");
+  const titleHtml = titleText
+    ? `<tr><td style="font-family:${font};font-size:${small}px;font-weight:bold;color:${titleColor};letter-spacing:2px;text-transform:uppercase;padding-bottom:8px;">${escapeHtml(titleText)}</td></tr>`
+    : "";
+  const dividerHtml =
     cfg.dividerStyle === "none"
-      ? ""
-      : `<tr><td style="padding:6px 0;"><table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"><tr><td style="border-top:1px ${cfg.dividerStyle === "dashed" ? "dashed" : "solid"} ${primary};font-size:0;line-height:0;">&nbsp;</td></tr></table></td></tr>`;
+      ? `<tr><td style="height:6px;font-size:0;line-height:0;">&nbsp;</td></tr>`
+      : `<tr><td style="padding:0 0 8px 0;"><table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"><tr><td style="border-top:1px ${cfg.dividerStyle === "dashed" ? "dashed" : "solid"} ${line};font-size:0;line-height:0;">&nbsp;</td></tr></table></td></tr>`;
 
+  // ----- left logo column -----
+  const logoBlock = logo
+    ? `<img src="${escapeHtml(logo)}" alt="${escapeHtml(companyName)}" width="150" style="display:block;border:0;width:150px;height:auto;margin:0 auto;" />` +
+      `<div style="font-family:${serif};color:${brown};font-size:${size}px;text-align:center;margin-top:6px;">${escapeHtml(companyName)}</div>`
+    : `<div style="font-family:${serif};color:${brown};line-height:1;white-space:nowrap;">` +
+      `<span style="font-size:${size + 21}px;font-weight:bold;letter-spacing:1px;">CH<span style="font-size:${size + 39}px;">T</span>NN</span>` +
+      `</div>` +
+      `<div style="font-family:${serif};color:${brown};font-size:${size + 2}px;margin-top:2px;">${escapeHtml(companyName)}</div>`;
+
+  const leftCol =
+    `<td valign="middle" width="200" style="padding:0 20px 0 4px;text-align:center;">${logoBlock}</td>`;
+
+  // ----- subsidiary buttons row -----
   const links = (data.companyLinks ?? [])
     .map((l) => ({ name: (l.name ?? "").trim(), url: safeUrl(l.url) }))
-    .filter((l) => l.name && l.url);
+    .filter((l) => l.name);
 
-  const linksHtml = links.length
-    ? `<tr><td style="padding-top:10px;">` +
-      `<table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>` +
-      links
-        .map(
-          (l) =>
-            `<td style="padding:0 6px 0 0;"><a href="${escapeHtml(l.url!)}" style="display:inline-block;padding:5px 10px;background-color:${primary};color:#ffffff;font-family:${font};font-size:${small - 1}px;text-decoration:none;border-radius:3px;">${escapeHtml(l.name)}</a></td>`
-        )
-        .join("") +
+  const buttonCell = (l: { name: string; url: string | null }) => {
+    const inner = l.url
+      ? `<a href="${escapeHtml(l.url)}" style="display:block;text-align:center;font-family:${serif};font-size:${small}px;font-weight:bold;color:#ffffff;text-decoration:none;padding:7px 6px;">${escapeHtml(l.name)}</a>`
+      : `<span style="display:block;text-align:center;font-family:${serif};font-size:${small}px;font-weight:bold;color:#ffffff;padding:7px 6px;">${escapeHtml(l.name)}</span>`;
+    return (
+      `<td valign="middle" style="padding:0 2px;">` +
+      `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color:${brown};background-image:linear-gradient(180deg,#7A4A38,#5E3628);border-collapse:collapse;">` +
+      `<tr><td style="background-color:${brown};background-image:linear-gradient(180deg,#7A4A38,#5E3628);">${inner}</td></tr>` +
+      `</table></td>`
+    );
+  };
+
+  const buttonsRow = links.length
+    ? `<tr><td colspan="2" style="padding:14px 0 0 0;">` +
+      `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:separate;"><tr>` +
+      links.map(buttonCell).join("") +
       `</tr></table></td></tr>`
     : "";
 
-  const logoCell = logo
-    ? `<img src="${escapeHtml(logo)}" alt="${escapeHtml(companyName || "Company logo")}" width="96" style="display:block;border:0;width:96px;height:auto;" />`
-    : companyName
-      ? `<span style="font-family:${font};font-size:${size + 3}px;font-weight:bold;color:${primary};">${escapeHtml(companyName)}</span>`
-      : "";
-
-  const leftCol =
-    logoCell || companyName
-      ? `<td valign="top" style="padding:0 16px 0 0;border-right:1px solid #e5e7eb;">` +
-        `<table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td style="text-align:center;">${logoCell}</td></tr>` +
-        (logo && companyName
-          ? `<tr><td style="text-align:center;padding-top:6px;font-family:${font};font-size:${small}px;font-weight:bold;color:${primary};">${escapeHtml(companyName)}</td></tr>`
-          : "") +
-        `</table></td>`
-      : "";
-
+  // ----- assemble -----
   return (
-    `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;font-family:${font};">` +
+    `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="620" style="border-collapse:collapse;background-color:${bg};font-family:${font};max-width:620px;">` +
+    `<tr><td style="padding:20px 22px 18px 22px;">` +
+    `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse;">` +
     `<tr>` +
     leftCol +
-    `<td valign="top" style="padding:0 0 0 ${leftCol ? "16" : "0"}px;">` +
-    `<table role="presentation" cellpadding="0" cellspacing="0" border="0">` +
-    `<tr><td style="font-family:${font};font-size:${size + 3}px;font-weight:bold;color:${primary};padding-bottom:1px;">${escapeHtml(data.fullName)}</td></tr>` +
-    (data.position
-      ? `<tr><td style="font-family:${font};font-size:${small}px;color:${secondary};padding-bottom:1px;">${escapeHtml(data.position)}${data.department ? " · " + escapeHtml(data.department) : ""}</td></tr>`
-      : "") +
-    divider +
-    rows.join("") +
-    linksHtml +
-    `</table></td></tr></table>`
+    `<td valign="middle" style="padding:0;">` +
+    `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse;">` +
+    nameHtml +
+    titleHtml +
+    dividerHtml +
+    `<tr><td><table role="presentation" cellpadding="0" cellspacing="0" border="0">${rows.join("")}</table></td></tr>` +
+    `</table></td></tr>` +
+    buttonsRow +
+    `</table>` +
+    `</td></tr></table>`
   );
 }

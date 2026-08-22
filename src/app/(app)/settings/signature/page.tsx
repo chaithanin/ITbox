@@ -71,11 +71,11 @@ export default async function SignatureAdminPage({
         </CardHeader>
         <CardContent>
           <form action={formAction} className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3" key={editing?.id ?? "new"}>
-            <div><Label htmlFor="name">ชื่อเทมเพลต / Name *</Label><Input id="name" name="name" required className="mt-1" defaultValue={editing?.name ?? "Executive Classic"} /></div>
-            <div><Label htmlFor="companyName">ชื่อบริษัท / Company</Label><Input id="companyName" name="companyName" className="mt-1" defaultValue={editing?.companyName ?? ""} /></div>
-            <div><Label htmlFor="logoUrl">โลโก้ (URL)</Label><Input id="logoUrl" name="logoUrl" className="mt-1" placeholder="https://.../logo.png" defaultValue={editing?.logoUrl ?? ""} /></div>
-            <div><Label htmlFor="primaryColor">สีหลัก / Primary</Label><Input id="primaryColor" name="primaryColor" className="mt-1" defaultValue={editing?.primaryColor ?? "#24386F"} /></div>
-            <div><Label htmlFor="secondaryColor">สีรอง / Secondary</Label><Input id="secondaryColor" name="secondaryColor" className="mt-1" defaultValue={editing?.secondaryColor ?? "#6b7280"} /></div>
+            <div><Label htmlFor="name">ชื่อเทมเพลต / Name *</Label><Input id="name" name="name" required className="mt-1" defaultValue={editing?.name ?? "Chaithanin Executive"} /></div>
+            <div><Label htmlFor="companyName">ชื่อบริษัท / Company</Label><Input id="companyName" name="companyName" className="mt-1" defaultValue={editing?.companyName ?? "Chaithanin Co.,Ltd."} /></div>
+            <div><Label htmlFor="logoUrl">โลโก้ (URL)</Label><Input id="logoUrl" name="logoUrl" className="mt-1" placeholder="https://.../logo.png (เว้นว่าง = ใช้อักษรย่อ CHTNN)" defaultValue={editing?.logoUrl ?? ""} /></div>
+            <div><Label htmlFor="primaryColor">สีหลัก / Primary</Label><Input id="primaryColor" name="primaryColor" className="mt-1" defaultValue={editing?.primaryColor ?? "#6E4030"} /></div>
+            <div><Label htmlFor="secondaryColor">สีรอง / Secondary</Label><Input id="secondaryColor" name="secondaryColor" className="mt-1" defaultValue={editing?.secondaryColor ?? "#8B7B6E"} /></div>
             <div><Label htmlFor="fontFamily">ฟอนต์ / Font</Label><Input id="fontFamily" name="fontFamily" className="mt-1" defaultValue={editing?.fontFamily ?? "Arial, Helvetica, sans-serif"} /></div>
             <div><Label htmlFor="fontSize">ขนาดฟอนต์ / Size</Label><Input id="fontSize" name="fontSize" type="number" min={9} max={20} className="mt-1" defaultValue={editing?.fontSize ?? 13} /></div>
             <div>
@@ -91,7 +91,7 @@ export default async function SignatureAdminPage({
             </div>
             <div className="sm:col-span-2 lg:col-span-3">
               <Label htmlFor="defaultLinks">ลิงก์บริษัทเริ่มต้น / Default links (บรรทัดละ 1: ชื่อ|URL)</Label>
-              <Textarea id="defaultLinks" name="defaultLinks" rows={3} className="mt-1 font-mono text-xs" defaultValue={editing ? linksToText(editing.defaultLinks) : ""} placeholder={"Global Top Group|https://example.com"} />
+              <Textarea id="defaultLinks" name="defaultLinks" rows={4} className="mt-1 font-mono text-xs" defaultValue={editing ? linksToText(editing.defaultLinks) : "Marina Golden Bay Victoria Co.,Ltd.\nMarina Golden Bay Elya Co., Ltd.\nHarmonia City Garden Co.,Ltd.\nGlobal Top Group Co.,Ltd."} placeholder={"Global Top Group Co.,Ltd.|https://example.com (URL ไม่บังคับ)"} />
             </div>
             <div className="flex items-end gap-2 sm:col-span-2 lg:col-span-3">
               <Button type="submit">{editing ? "บันทึกการแก้ไข / Save" : "สร้างเทมเพลต / Create"}</Button>

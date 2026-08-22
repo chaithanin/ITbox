@@ -25,8 +25,11 @@ function parseLinks(raw: string): { name: string; url: string }[] {
   const out: { name: string; url: string }[] = [];
   for (const line of raw.split(/\r?\n/)) {
     const [name, url] = line.split("|").map((s) => s.trim());
+    if (!name) continue;
+    // URL is optional: subsidiary "buttons" may be labels with no link. An
+    // invalid URL is dropped to "" (rendered as a non-clickable button).
     const safe = url ? safeUrl(url) : null;
-    if (name && safe) out.push({ name, url: safe });
+    out.push({ name, url: safe ?? "" });
   }
   return out;
 }
