@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Plus } from "lucide-react";
+import { Plus, Upload } from "lucide-react";
 import { getCurrentUser } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import { PageHeader } from "@/components/page-header";
@@ -115,11 +115,18 @@ export default async function MaintenancePage({
         description="ติดตามงานซ่อมบำรุงทรัพย์สิน / Track asset maintenance tickets"
       >
         {canManage && (
-          <Button asChild>
-            <Link href="/maintenance/new">
-              <Plus className="h-4 w-4" /> แจ้งซ่อม / New Ticket
-            </Link>
-          </Button>
+          <>
+            <Button variant="outline" asChild>
+              <Link href="/maintenance/import">
+                <Upload className="h-4 w-4" /> นำเข้า / Import
+              </Link>
+            </Button>
+            <Button asChild>
+              <Link href="/maintenance/new">
+                <Plus className="h-4 w-4" /> แจ้งซ่อม / New Ticket
+              </Link>
+            </Button>
+          </>
         )}
       </PageHeader>
 
