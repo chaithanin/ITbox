@@ -42,11 +42,15 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           children: [
             { href: "/support", label: t("myCases") },
             { href: "/support/new", label: t("newCase") },
+            { href: "/support/signature", label: "Email Signature" },
             ...(has("support:read")
               ? [
                   { href: "/support/queue", label: t("supportQueue") },
                   { href: "/support/metrics", label: "รายงาน / Metrics" },
                 ]
+              : []),
+            ...(has("support:settings")
+              ? [{ href: "/settings/signature", label: "จัดการลายเซ็น / Signatures" }]
               : []),
           ],
         }]
