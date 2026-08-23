@@ -25,6 +25,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const kpiPopupMode = dbUser?.kpiPopupMode ?? "DAILY";
   const nav: NavItem[] = [
     { href: "/dashboard", label: t("dashboard"), icon: "dashboard" },
+    ...(has("report:read") ? [{ href: "/dashboard/it-dashboard", label: "IT Dashboard", icon: "reports" }] : []),
     ...(has("asset:read") ? [{ href: "/assets", label: t("assets"), icon: "assets" }] : []),
     ...(has("employee:read") ? [{ href: "/employees", label: t("employees"), icon: "employees" }] : []),
     ...(has("department:read") ? [{ href: "/departments", label: t("departments"), icon: "departments" }] : []),
