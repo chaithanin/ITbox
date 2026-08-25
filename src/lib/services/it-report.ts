@@ -129,3 +129,40 @@ export const CHECKLIST: { key: ItSystemCategory; label: string }[] = [
 export function healthColor(percent: number): string {
   return percent >= 95 ? "#16a34a" : percent >= 85 ? "#f59e0b" : "#dc2626";
 }
+
+/** Storage usage → health per the spec: <70% 🟢, 70–85% 🟡, >85% 🔴. */
+export function storageStatus(usedPercent: number): ItHealthStatus {
+  if (usedPercent > 85) return "CRITICAL";
+  if (usedPercent >= 70) return "WARNING";
+  return "NORMAL";
+}
+
+/**
+ * Estimate the date storage reaches 100% from a series of daily used% readings,
+ * via a simple least-squares fit of used% against day index. Returns null when
+ * there is too little data or usage is flat/shrinking (never fills).
+ */
+export function estimateFullDate(points: { date: Date; used: number }[]): Date | null {
+  const pts = [...points].sort((a, b) => a.date.getTime() - b.date.getTime());
+  if (pts.length < 2) return null;
+  const day = 24 * 3600 * 1000;
+  const t0 = pts[0].date.getTime();
+  const xs = pts.map((p) => (p.date.getTime() - t0) / day);
+  const ys = pts.map((p) => p.used);
+  const n = xs.length;
+  const sx = xs.reduce((s, x) => s + x, 0);
+  const sy = ys.reduce((s, y) => s + y, 0);
+  const sxx = xs.reduce((s, x) => s + x * x, 0);
+  const sxy = xs.reduce((s, x, i) => s + x * ys[i], 0);
+  const denom = n * sxx - sx * sx;
+  if (denom === 0) return null;
+  const slope = (n * sxy - sx * sy) / denom; // %/day
+  const intercept = (sy - slope * sx) / n;
+  if (slope <= 0.01) return null; // not meaningfully growing
+  const last = pts[pts.length - 1];
+  if (last.used >= 100) return last.date;
+  const daysToFull = (100 - intercept) / slope; // x where y=100
+  const lastX = xs[xs.length - 1];
+  if (daysToFull <= lastX) return last.date;
+  return new Date(t0 + daysToFull * day);
+}

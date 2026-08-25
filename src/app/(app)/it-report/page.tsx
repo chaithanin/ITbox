@@ -13,8 +13,10 @@ import { Button } from "@/components/ui/button";
 import {
   CATEGORY_META, CATEGORY_ORDER, HEALTH_META, MODE_META, CHECKLIST,
   rollupByCategory, computeKpis, exceptions, healthColor,
+  storageStatus, estimateFullDate,
   type HealthCheck, type ItSystemCategory,
 } from "@/lib/services/it-report";
+import { Sparkline } from "../dashboard/it-dashboard/charts";
 import { RecordCheckForm } from "./record-form";
 import { verifyCheckAction } from "./actions";
 
@@ -58,7 +60,8 @@ export default async function ItReportPage({
   });
   const reportDate = latest?.checkDate ?? new Date();
 
-  const [rawChecks, openIssues, openCount, overdueCount, locations] = await Promise.all([
+  const since = new Date(Date.now() - 30 * 24 * 3600 * 1000);
+  const [rawChecks, openIssues, openCount, overdueCount, locations, history] = await Promise.all([
     prisma.itHealthCheck.findMany({
       where: { organizationId: orgId, deletedAt: null, checkDate: reportDate },
       include: { location: { select: { name: true } } },
@@ -73,7 +76,47 @@ export default async function ItReportPage({
     prisma.supportCase.count({ where: { organizationId: orgId, deletedAt: null, status: { in: OPEN_STATUSES as unknown as CaseStatus[] } } }),
     prisma.supportCase.count({ where: { organizationId: orgId, deletedAt: null, status: { in: OPEN_STATUSES as unknown as CaseStatus[] }, resolutionDueAt: { lt: new Date() } } }),
     prisma.location.findMany({ where: { organizationId: orgId, deletedAt: null }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
+    prisma.itHealthCheck.findMany({
+      where: { organizationId: orgId, deletedAt: null, checkDate: { gte: since } },
+      select: { checkDate: true, category: true, name: true, status: true, healthPercent: true, metrics: true },
+    }),
   ]);
+
+  // ---- Overall-health trend across recent report dates ----
+  const byDate = new Map<string, { normal: number; checked: number }>();
+  for (const h of history) {
+    const k = h.checkDate.toISOString().slice(0, 10);
+    let e = byDate.get(k);
+    if (!e) { e = { normal: 0, checked: 0 }; byDate.set(k, e); }
+    if (h.status !== "NOT_CHECKED") e.checked++;
+    if (h.status === "NORMAL") e.normal++;
+  }
+  const trendDates = [...byDate.keys()].sort().slice(-10);
+  const trendPoints = trendDates.map((k) => {
+    const e = byDate.get(k)!;
+    return e.checked > 0 ? Math.round((e.normal / e.checked) * 100) : 0;
+  });
+
+  // ---- Storage forecast: per storage item, series of used% over time ----
+  const usedOf = (m: unknown, hp: number | null): number | null => {
+    const mm = (m ?? {}) as Record<string, unknown>;
+    const raw = mm.usedPercent ?? mm.storage ?? mm.used;
+    const n = typeof raw === "string" ? Number(raw.replace("%", "")) : typeof raw === "number" ? raw : hp;
+    return typeof n === "number" && Number.isFinite(n) ? n : null;
+  };
+  const storageSeries = new Map<string, { date: Date; used: number }[]>();
+  for (const h of history) {
+    if (h.category !== "STORAGE") continue;
+    const used = usedOf(h.metrics, h.healthPercent);
+    if (used == null) continue;
+    const arr = storageSeries.get(h.name) ?? [];
+    arr.push({ date: h.checkDate, used });
+    storageSeries.set(h.name, arr);
+  }
+  const storageForecast = [...storageSeries.entries()].map(([name, series]) => {
+    const latest = [...series].sort((a, b) => b.date.getTime() - a.date.getTime())[0];
+    return { name, used: latest.used, status: storageStatus(latest.used), fullDate: estimateFullDate(series) };
+  }).sort((a, b) => b.used - a.used);
 
   const checks: HealthCheck[] = rawChecks.map((c) => ({
     id: c.id, category: c.category as ItSystemCategory, name: c.name, mode: c.mode, status: c.status,
@@ -144,6 +187,45 @@ export default async function ItReportPage({
           </CardContent>
         </Card>
       </div>
+
+      {/* TREND + STORAGE FORECAST */}
+      {(trendPoints.length > 1 || storageForecast.length > 0) && (
+        <div className="grid gap-5 lg:grid-cols-2">
+          {trendPoints.length > 1 && (
+            <Card>
+              <CardHeader className="pb-2"><CardTitle className="flex items-center gap-2 text-sm"><Activity className="h-4 w-4 text-blue-600" /> แนวโน้มสุขภาพ / Health Trend ({trendDates.length} วัน)</CardTitle></CardHeader>
+              <CardContent>
+                <Sparkline points={trendPoints} color={hColor} height={70} />
+                <div className="mt-1 flex justify-between text-[10px] text-muted-foreground">
+                  <span>{trendDates[0]?.slice(5)}</span><span>{trendDates[trendDates.length - 1]?.slice(5)}</span>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+          {storageForecast.length > 0 && (
+            <Card>
+              <CardHeader className="pb-2"><CardTitle className="flex items-center gap-2 text-sm"><HardDrive className="h-4 w-4 text-sky-600" /> พื้นที่จัดเก็บ / Storage Forecast</CardTitle></CardHeader>
+              <CardContent className="space-y-2.5">
+                {storageForecast.map((s) => {
+                  const h = HEALTH_META[s.status];
+                  return (
+                    <div key={s.name} className="text-xs">
+                      <div className="flex items-center justify-between">
+                        <span className="font-medium">{s.name}</span>
+                        <span className={h.text}>{s.used}%{s.fullDate ? ` · เต็ม ~${s.fullDate.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}` : ""}</span>
+                      </div>
+                      <div className="mt-1 h-2.5 w-full overflow-hidden rounded-full bg-muted">
+                        <div className={`h-full rounded-full ${h.bg}`} style={{ width: `${Math.min(100, s.used)}%` }} />
+                      </div>
+                    </div>
+                  );
+                })}
+                <p className="text-[10px] text-muted-foreground">Threshold: &lt;70% 🟢 · 70–85% 🟡 · &gt;85% 🔴 · วันที่เต็มประเมินจากแนวโน้ม used% ย้อนหลัง</p>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      )}
 
       <div className="grid gap-5 lg:grid-cols-2">
         {/* NEED ATTENTION */}

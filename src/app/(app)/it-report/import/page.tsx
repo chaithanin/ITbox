@@ -19,6 +19,7 @@ const COLUMN_DOCS = [
   { name: "online", required: false, description: "เฉพาะ CCTV: Online / Offline (Connectivity)" },
   { name: "recording", required: false, description: "เฉพาะ CCTV: OK / Missing / Cannot Verify (Recording)" },
   { name: "lastRecording", required: false, description: "เฉพาะ CCTV: วันบันทึกล่าสุด / Last recording date" },
+  { name: "usedPercent", required: false, description: "เฉพาะ STORAGE: % พื้นที่ใช้ไป — ระบบใช้พยากรณ์วันที่ดิสก์เต็ม / Storage used % (drives full-date forecast)" },
 ];
 
 export default async function ItHealthImportPage() {
@@ -52,7 +53,7 @@ export default async function ItHealthImportPage() {
         <Card>
           <CardHeader>
             <CardTitle>รูปแบบไฟล์ / File Format</CardTitle>
-            <CardDescription>แถวแรกเป็นหัวตาราง · ต้องมี category และ name · CCTV ใช้ online + recording แยกสถานะการเชื่อมต่อและการบันทึก</CardDescription>
+            <CardDescription>แถวแรกเป็นหัวตาราง · ต้องมี category และ name · CCTV ใช้ online + recording แยกสถานะ · คอลัมน์อื่นๆ ที่เพิ่มเอง (เช่น GPS topSpeed/idle, Mango ip/loginTime) จะถูกเก็บเป็น metric อัตโนมัติ</CardDescription>
           </CardHeader>
           <CardContent>
             <Table>

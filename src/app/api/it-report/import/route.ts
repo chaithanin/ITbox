@@ -191,11 +191,19 @@ export const POST = apiHandler(async (req: Request) => {
       else rowErrors.push(`Invalid healthPercent "${hpRaw}"`);
     }
 
-    // CCTV / generic extra metrics
+    // CCTV / generic extra metrics. Any column not in the core set (e.g. GPS
+    // topSpeed/idle/distance, Mango ip/loginTime, Storage usedPercent) is kept
+    // in the flexible metrics JSON so every category's detail survives.
     const metrics: Record<string, string> = {};
     const online = cell(r, "online"); if (online) metrics.online = online;
     const recording = cell(r, "recording"); if (recording) metrics.recording = recording;
     const lastRecording = cell(r, "lastRecording"); if (lastRecording) metrics.lastRecording = lastRecording;
+    const CORE = new Set(COLUMNS.map((c) => c.toLowerCase()));
+    headerRow.forEach((h, idx) => {
+      if (!h || CORE.has(h)) return;
+      const v = (r[idx] ?? "").trim();
+      if (v) metrics[h] = v;
+    });
 
     const locRaw = cell(r, "location");
     const locationId = locRaw ? locByName.get(locRaw.toLowerCase()) ?? null : null;
