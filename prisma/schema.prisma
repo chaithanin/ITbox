@@ -52,6 +52,7 @@ model Organization {
   holidays          Holiday[]
   kpiConfigs        KpiConfig[]
   signatureTemplates SignatureTemplate[]
+  itHealthChecks    ItHealthCheck[]
   signatureProfiles  SignatureProfile[]
 
   @@map("organizations")
@@ -342,6 +343,7 @@ model Location {
   employees    Employee[]
   assets       Asset[]
   supportCases SupportCase[] @relation("CaseLocation")
+  itHealthChecks ItHealthCheck[]
 
   @@unique([organizationId, code])
   @@map("locations")
@@ -1557,4 +1559,69 @@ model SignatureProfile {
 
   @@index([organizationId])
   @@map("signature_profiles")
+}
+
+// ------------------------------------------------------------------
+// IT Support Report Center — daily IT health monitoring
+// ------------------------------------------------------------------
+
+enum ItSystemCategory {
+  SERVER
+  BACKUP
+  STORAGE
+  CCTV
+  PHONE
+  GPS
+  LOG
+  MANGO_LOGIN
+  MANGO_USAGE
+  OTHER
+}
+
+/// Health of a monitored item: 🟢 NORMAL, 🟡 WARNING, 🔴 CRITICAL, ⚪ NOT_CHECKED
+enum ItHealthStatus {
+  NORMAL
+  WARNING
+  CRITICAL
+  NOT_CHECKED
+}
+
+/// How the data is obtained / trust level: 🟢 AUTO (system pulled it),
+/// 🟡 CHECK_REQUIRED (IT must verify), 🔴 ISSUE (problem needing action).
+enum ItReportMode {
+  AUTO
+  CHECK_REQUIRED
+  ISSUE
+}
+
+model ItHealthCheck {
+  id             String           @id @default(uuid()) @db.Uuid
+  organizationId String           @db.Uuid
+  checkDate      DateTime         @db.Date
+  category       ItSystemCategory
+  name           String
+  locationId     String?          @db.Uuid
+  mode           ItReportMode     @default(CHECK_REQUIRED)
+  status         ItHealthStatus   @default(NOT_CHECKED)
+  healthPercent  Int?
+  /// Flexible per-category metrics, e.g. { cpu, ram, storage } / { lastBackup, size, result } / { online, recording }
+  metrics        Json?
+  note           String?
+  /// When an issue is opened for this finding, the linked SupportCase id.
+  issueCaseId    String?          @db.Uuid
+  checkedById    String?          @db.Uuid
+  verifiedById   String?          @db.Uuid
+  verifiedAt     DateTime?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  location     Location?    @relation(fields: [locationId], references: [id])
+
+  @@unique([organizationId, checkDate, category, name])
+  @@index([organizationId, checkDate])
+  @@index([organizationId, category, status])
+  @@map("it_health_checks")
 }

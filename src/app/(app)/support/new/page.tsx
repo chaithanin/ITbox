@@ -184,6 +184,7 @@ export default async function NewCasePage({
                     maxLength={300}
                     className="mt-1"
                     placeholder="สรุปปัญหาสั้น ๆ เช่น “เปิดอีเมลไม่ได้”"
+                    defaultValue={sp.subject ?? ""}
                   />
                 </div>
                 <div>
