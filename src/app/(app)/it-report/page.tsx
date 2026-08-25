@@ -1,7 +1,7 @@
 import Link from "next/link";
 import {
   Activity, AlertTriangle, ShieldCheck, ClipboardCheck, ListChecks,
-  Server, Database, HardDrive, Cctv, Smartphone, Navigation, ScrollText, LogIn, MonitorCog, CheckCircle2, Circle, ChevronRight, Upload,
+  Server, Database, HardDrive, Cctv, Smartphone, Navigation, ScrollText, LogIn, MonitorCog, CheckCircle2, Circle, ChevronRight, Upload, FileText, Download,
 } from "lucide-react";
 import type { CaseStatus } from "@prisma/client";
 import { requirePermission, getCurrentUser } from "@/lib/session";
@@ -98,6 +98,12 @@ export default async function ItReportPage({
             <Link href="/it-report/import"><Upload className="h-4 w-4" /> นำเข้าผลตรวจ / Import</Link>
           </Button>
         )}
+        <Button variant="outline" asChild>
+          <a href={`/api/it-report/export?format=pdf&date=${reportDate.toISOString().slice(0, 10)}`}><FileText className="h-4 w-4" /> PDF</a>
+        </Button>
+        <Button asChild>
+          <a href={`/api/it-report/export?format=xlsx&date=${reportDate.toISOString().slice(0, 10)}`}><Download className="h-4 w-4" /> Generate Report</a>
+        </Button>
       </PageHeader>
 
       {msg && (
