@@ -1,6 +1,7 @@
+import Link from "next/link";
 import {
   Ticket, Timer, ShieldCheck, MonitorSmartphone, KeyRound, Coins,
-  Gauge, AlertTriangle, Boxes, Wrench, Clock, TrendingUp,
+  Gauge, AlertTriangle, Boxes, Wrench, Clock, TrendingUp, ChevronRight,
 } from "lucide-react";
 import type { CaseStatus } from "@prisma/client";
 import { requirePermission } from "@/lib/session";
@@ -192,14 +193,14 @@ export default async function ItDashboardPage() {
     { label: "ไลเซนส์ / Licenses", value: licenseCost, color: COST_COLORS[1] },
   ].filter((s) => s.value > 0);
 
-  // ---- Alerts ----
-  const alerts: { icon: React.ComponentType<{ className?: string }>; text: string; value: string; tone: string }[] = [];
-  if (openOverdue > 0) alerts.push({ icon: AlertTriangle, text: "เคสเกิน SLA (ค้างและเลยกำหนด) / Overdue tickets", value: `${openOverdue}`, tone: "text-red-600" });
-  if (expiringSoon > 0) alerts.push({ icon: KeyRound, text: "ไลเซนส์ใกล้หมดอายุใน 30 วัน / Licenses expiring", value: `${expiringSoon}`, tone: "text-amber-600" });
-  if (inRepair > 0) alerts.push({ icon: Wrench, text: "อุปกรณ์อยู่ระหว่างซ่อม / Assets in repair", value: `${inRepair}`, tone: "text-amber-600" });
-  if (warrantyExpired > 0) alerts.push({ icon: ShieldCheck, text: "อุปกรณ์ใช้งานที่หมดประกันแล้ว / In-use out of warranty", value: `${warrantyExpired}`, tone: "text-orange-600" });
-  if (oldAssets > 0) alerts.push({ icon: MonitorSmartphone, text: "อุปกรณ์อายุเกิน 4 ปี ควรพิจารณาเปลี่ยน / Assets over 4 years", value: `${oldAssets}`, tone: "text-orange-600" });
-  if (slaCompliance < 95) alerts.push({ icon: Gauge, text: "SLA Compliance ต่ำกว่าเป้าหมาย 95% / Below target", value: `${slaCompliance.toFixed(1)}%`, tone: "text-red-600" });
+  // ---- Alerts (each deep-links to the exact filtered list) ----
+  const alerts: { icon: React.ComponentType<{ className?: string }>; text: string; value: string; tone: string; href?: string }[] = [];
+  if (openOverdue > 0) alerts.push({ icon: AlertTriangle, text: "เคสเกิน SLA (ค้างและเลยกำหนด) / Overdue tickets", value: `${openOverdue}`, tone: "text-red-600", href: "/support/queue?overdue=1" });
+  if (expiringSoon > 0) alerts.push({ icon: KeyRound, text: "ไลเซนส์ใกล้หมดอายุใน 30 วัน / Licenses expiring", value: `${expiringSoon}`, tone: "text-amber-600", href: "/licenses?expiring=soon" });
+  if (inRepair > 0) alerts.push({ icon: Wrench, text: "อุปกรณ์อยู่ระหว่างซ่อม / Assets in repair", value: `${inRepair}`, tone: "text-amber-600", href: "/assets?status=IN_REPAIR" });
+  if (warrantyExpired > 0) alerts.push({ icon: ShieldCheck, text: "อุปกรณ์ใช้งานที่หมดประกันแล้ว / In-use out of warranty", value: `${warrantyExpired}`, tone: "text-orange-600", href: "/assets?warranty=expired" });
+  if (oldAssets > 0) alerts.push({ icon: MonitorSmartphone, text: "อุปกรณ์อายุเกิน 4 ปี ควรพิจารณาเปลี่ยน / Assets over 4 years", value: `${oldAssets}`, tone: "text-orange-600", href: "/assets?age=old" });
+  if (slaCompliance < 95) alerts.push({ icon: Gauge, text: "SLA Compliance ต่ำกว่าเป้าหมาย 95% / Below target", value: `${slaCompliance.toFixed(1)}%`, tone: "text-red-600", href: "/support/metrics" });
   if (alerts.length === 0) alerts.push({ icon: ShieldCheck, text: "ไม่มีรายการที่ต้องดำเนินการเร่งด่วน / Nothing critical", value: "✓", tone: "text-emerald-600" });
 
   return (
@@ -351,13 +352,27 @@ export default async function ItDashboardPage() {
         <CardHeader className="pb-2"><CardTitle className="flex items-center gap-2 text-sm"><AlertTriangle className="h-4 w-4 text-red-600" /> IT Alerts & Actions / รายการที่ต้องดำเนินการ</CardTitle></CardHeader>
         <CardContent>
           <div className="grid gap-2.5 sm:grid-cols-2">
-            {alerts.map((a, i) => (
-              <div key={i} className="flex items-center gap-3 rounded-md border p-3">
-                <a.icon className={`h-5 w-5 shrink-0 ${a.tone}`} />
-                <span className="flex-1 text-sm">{a.text}</span>
-                <span className={`text-lg font-bold tabular-nums ${a.tone}`}>{a.value}</span>
-              </div>
-            ))}
+            {alerts.map((a, i) => {
+              const inner = (
+                <>
+                  <a.icon className={`h-5 w-5 shrink-0 ${a.tone}`} />
+                  <span className="flex-1 text-sm">{a.text}</span>
+                  <span className={`text-lg font-bold tabular-nums ${a.tone}`}>{a.value}</span>
+                  {a.href && <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />}
+                </>
+              );
+              return a.href ? (
+                <Link
+                  key={i}
+                  href={a.href}
+                  className="flex items-center gap-3 rounded-md border p-3 transition-colors hover:bg-accent"
+                >
+                  {inner}
+                </Link>
+              ) : (
+                <div key={i} className="flex items-center gap-3 rounded-md border p-3">{inner}</div>
+              );
+            })}
           </div>
           <p className="mt-3 flex items-center gap-1.5 text-[11px] text-muted-foreground">
             <Clock className="h-3.5 w-3.5" /> อัปเดตล่าสุด {now.toLocaleString("th-TH")} · ข้อมูลจริงจากระบบ TECHCORE

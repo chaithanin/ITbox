@@ -102,6 +102,7 @@ export default async function SupportQueuePage({
   const teamId = isUuid(sp.teamId) ? sp.teamId : undefined;
   const categoryId = isUuid(sp.categoryId) ? sp.categoryId : undefined;
   const assignee = sp.assignee?.trim() || undefined;
+  const overdueOnly = sp.overdue === "1"; // dashboard alert deep-link
 
   let assigneeWhere: Prisma.SupportCaseWhereInput = {};
   if (assignee === "me") assigneeWhere = { assignedUserId: user.id };
@@ -123,6 +124,7 @@ export default async function SupportQueuePage({
     ...(priority ? { priority } : {}),
     ...(teamId ? { assignedTeamId: teamId } : {}),
     ...(categoryId ? { categoryId } : {}),
+    ...(overdueOnly ? { resolutionDueAt: { lt: new Date() } } : {}),
     ...assigneeWhere,
   };
 

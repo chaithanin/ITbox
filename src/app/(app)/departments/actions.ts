@@ -109,3 +109,42 @@ export async function softDeleteDepartment(formData: FormData) {
   revalidatePath("/departments");
   redirect("/departments");
 }
+
+/**
+ * Merge one department into another: reassign every record that references the
+ * source department (employees, assets, vault items/shares, purchase requests,
+ * support cases) to the target, then soft-delete the source. Used to clean up
+ * duplicates created by imports (e.g. "IT" + "Information Technology").
+ */
+export async function mergeDepartment(formData: FormData) {
+  const user = await requirePermission("department:manage");
+  const sourceId = z.uuid().parse(formData.get("sourceId"));
+  const targetId = z.uuid().parse(formData.get("targetId"));
+  if (sourceId === targetId) redirect(`/departments/${sourceId}?error=same`);
+
+  const orgId = user.organizationId;
+  const [source, target] = await Promise.all([
+    prisma.department.findFirst({ where: { id: sourceId, organizationId: orgId, deletedAt: null }, select: { id: true, code: true, name: true } }),
+    prisma.department.findFirst({ where: { id: targetId, organizationId: orgId, deletedAt: null }, select: { id: true, code: true, name: true } }),
+  ]);
+  if (!source || !target) redirect(`/departments/${sourceId}?error=notfound`);
+
+  await prisma.$transaction([
+    prisma.employee.updateMany({ where: { organizationId: orgId, departmentId: sourceId }, data: { departmentId: targetId } }),
+    prisma.asset.updateMany({ where: { organizationId: orgId, departmentId: sourceId }, data: { departmentId: targetId } }),
+    prisma.vaultItem.updateMany({ where: { organizationId: orgId, departmentId: sourceId }, data: { departmentId: targetId } }),
+    prisma.vaultShare.updateMany({ where: { departmentId: sourceId }, data: { departmentId: targetId } }),
+    prisma.purchaseRequest.updateMany({ where: { organizationId: orgId, departmentId: sourceId }, data: { departmentId: targetId } }),
+    prisma.supportCase.updateMany({ where: { organizationId: orgId, departmentId: sourceId }, data: { departmentId: targetId } }),
+    prisma.department.update({ where: { id: sourceId }, data: { deletedAt: new Date() } }),
+  ]);
+
+  await auditLog(user, {
+    action: "UPDATE",
+    entityType: "DEPARTMENT",
+    entityId: targetId,
+    detail: { merged: true, from: { code: source!.code, name: source!.name }, into: { code: target!.code, name: target!.name } },
+  });
+  revalidatePath("/departments");
+  redirect(`/departments/${targetId}?ok=merged`);
+}

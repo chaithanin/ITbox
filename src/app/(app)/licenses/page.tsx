@@ -41,6 +41,8 @@ export default async function LicensesPage({
 
   const q = sp.q?.trim() || undefined;
   const { page, skip, take } = parsePage(sp.page);
+  const in30d = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+  const expiringOnly = sp.expiring === "soon"; // dashboard alert deep-link
 
   const where = {
     organizationId: user.organizationId,
@@ -53,9 +55,8 @@ export default async function LicensesPage({
           ],
         }
       : {}),
+    ...(expiringOnly ? { expiresAt: { gte: new Date(), lte: in30d } } : {}),
   };
-
-  const in30d = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
   const [licenses, total, totalLicenses, seatsUsed, expiringSoon] = await Promise.all([
     prisma.license.findMany({
       where,

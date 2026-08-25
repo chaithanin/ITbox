@@ -41,6 +41,12 @@ export default async function AssetsPage({
   const categoryId = sp.categoryId?.trim() || undefined;
   const departmentId = sp.departmentId?.trim() || undefined;
   const locationId = sp.locationId?.trim() || undefined;
+  // Dashboard alert deep-links: warranty=expired (in-use, past warranty),
+  // age=old (in service, purchased over 4 years ago).
+  const now = new Date();
+  const fourYearsAgo = new Date(now.getTime() - 4 * 365 * 24 * 3600 * 1000);
+  const warrantyExpired = sp.warranty === "expired";
+  const ageOld = sp.age === "old";
 
   const where: Prisma.AssetWhereInput = {
     organizationId: user.organizationId,
@@ -58,9 +64,11 @@ export default async function AssetsPage({
     ...(categoryId ? { categoryId } : {}),
     ...(departmentId ? { departmentId } : {}),
     ...(locationId ? { locationId } : {}),
+    ...(warrantyExpired ? { warrantyEnd: { lt: now }, status: { in: ["IN_USE", "ASSIGNED"] } } : {}),
+    ...(ageOld ? { purchaseDate: { lt: fourYearsAgo }, status: { notIn: ["RETIRED", "DISPOSED"] } } : {}),
   };
 
-  const [assets, total, categories, departments, locations] = await Promise.all([
+  const [assets, total, categories, departments, locations, statusGroups, categoryGroups, valueAgg, orgTotal] = await Promise.all([
     prisma.asset.findMany({
       where,
       orderBy: { assetTag: "asc" },
@@ -94,9 +102,39 @@ export default async function AssetsPage({
       orderBy: { name: "asc" },
       select: { id: true, name: true },
     }),
+    // Org-wide summary (independent of the current filter)
+    prisma.asset.groupBy({ by: ["status"], where: { organizationId: user.organizationId, deletedAt: null }, _count: true }),
+    prisma.asset.groupBy({ by: ["categoryId"], where: { organizationId: user.organizationId, deletedAt: null }, _count: true }),
+    prisma.asset.aggregate({ where: { organizationId: user.organizationId, deletedAt: null }, _sum: { purchasePrice: true } }),
+    prisma.asset.count({ where: { organizationId: user.organizationId, deletedAt: null } }),
   ]);
 
   const pageCount = Math.max(1, Math.ceil(total / take));
+
+  // ---- summary dashboard (org-wide) ----
+  const sc = new Map(statusGroups.map((g) => [g.status, g._count]));
+  const sumInUse = (sc.get("IN_USE") ?? 0) + (sc.get("ASSIGNED") ?? 0);
+  const sumAvail = sc.get("AVAILABLE") ?? 0;
+  const sumRepair = sc.get("IN_REPAIR") ?? 0;
+  const sumBad = (sc.get("DAMAGED") ?? 0) + (sc.get("LOST") ?? 0) + (sc.get("STOLEN") ?? 0);
+  const sumRetired = (sc.get("RETIRED") ?? 0) + (sc.get("DISPOSED") ?? 0);
+  const totalValue = Number(valueAgg._sum.purchasePrice ?? 0);
+  const fmtBaht = (n: number) => (n >= 1_000_000 ? `${(n / 1_000_000).toFixed(2)}M` : n >= 1_000 ? `${(n / 1_000).toFixed(1)}K` : n.toLocaleString());
+  const catNameById = new Map(categories.map((c) => [c.id, c.name]));
+  const catBars = categoryGroups
+    .filter((g) => g._count > 0)
+    .map((g) => ({ name: g.categoryId ? catNameById.get(g.categoryId) ?? "—" : "ไม่ระบุ", count: g._count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 6);
+  const catMax = Math.max(1, ...catBars.map((c) => c.count));
+  const SUMMARY: { label: string; value: number | string; href?: string; tone: string }[] = [
+    { label: "ทั้งหมด / Total", value: orgTotal, tone: "text-sky-600" },
+    { label: "ใช้งาน / In Use", value: sumInUse, href: "/assets?status=IN_USE", tone: "text-blue-600" },
+    { label: "ว่าง / Available", value: sumAvail, href: "/assets?status=AVAILABLE", tone: "text-emerald-600" },
+    { label: "ซ่อม / In Repair", value: sumRepair, href: "/assets?status=IN_REPAIR", tone: "text-amber-600" },
+    { label: "ชำรุด/สูญหาย", value: sumBad, tone: "text-red-600" },
+    { label: "มูลค่ารวม / Value", value: `฿${fmtBaht(totalValue)}`, tone: "text-rose-600" },
+  ];
 
   return (
     <div>
@@ -129,6 +167,46 @@ export default async function AssetsPage({
           </>
         )}
       </PageHeader>
+
+      {/* Summary dashboard (org-wide) */}
+      <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+        {SUMMARY.map((s) => {
+          const body = (
+            <>
+              <p className={cn("text-2xl font-bold leading-none", s.tone)}>{s.value}</p>
+              <p className="mt-1.5 text-xs text-muted-foreground">{s.label}</p>
+            </>
+          );
+          return s.href ? (
+            <Link key={s.label} href={s.href} className="rounded-lg border bg-card p-4 transition-colors hover:bg-accent">
+              {body}
+            </Link>
+          ) : (
+            <div key={s.label} className="rounded-lg border bg-card p-4">{body}</div>
+          );
+        })}
+      </div>
+
+      {catBars.length > 0 && (
+        <div className="mb-5 rounded-lg border bg-card p-4">
+          <p className="mb-3 text-xs font-medium text-muted-foreground">แยกตามหมวดหมู่ / By Category</p>
+          <div className="space-y-2.5">
+            {catBars.map((c) => (
+              <Link
+                key={c.name}
+                href={`/assets?categoryId=${encodeURIComponent(categories.find((x) => x.name === c.name)?.id ?? "")}`}
+                className="flex items-center gap-3 text-xs hover:opacity-80"
+              >
+                <span className="w-32 shrink-0 truncate text-muted-foreground">{c.name}</span>
+                <div className="h-3 flex-1 overflow-hidden rounded-full bg-muted">
+                  <div className="h-full rounded-full bg-sky-500" style={{ width: `${Math.round((c.count / catMax) * 100)}%` }} />
+                </div>
+                <span className="w-10 shrink-0 text-right font-medium tabular-nums">{c.count}</span>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
 
       <SearchFilterBar
         action="/assets"
