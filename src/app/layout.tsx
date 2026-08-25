@@ -1,6 +1,21 @@
 import type { Metadata, Viewport } from "next";
+import { Geist, Geist_Mono } from "next/font/google";
 import { getLocale } from "@/lib/i18n";
 import "./globals.css";
+
+const geistSans = Geist({
+  subsets: ["latin"],
+  variable: "--font-sans",
+  display: "swap",
+  fallback: ["Arial", "Helvetica", "sans-serif"],
+});
+
+const geistMono = Geist_Mono({
+  subsets: ["latin"],
+  variable: "--font-mono",
+  display: "swap",
+  fallback: ["ui-monospace", "SFMono-Regular", "Menlo", "monospace"],
+});
 
 export const metadata: Metadata = {
   title: { default: "TECHCORE — Enterprise IT Management", template: "%s | TECHCORE" },
@@ -29,7 +44,7 @@ export default async function RootLayout({
 }) {
   const locale = await getLocale();
   return (
-    <html lang={locale} suppressHydrationWarning>
+    <html lang={locale} suppressHydrationWarning className={`${geistSans.variable} ${geistMono.variable}`}>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
