@@ -1,7 +1,7 @@
 import Link from "next/link";
 import {
   Activity, AlertTriangle, ShieldCheck, ClipboardCheck, ListChecks,
-  Server, Database, HardDrive, Cctv, Smartphone, Navigation, ScrollText, LogIn, MonitorCog, CheckCircle2, Circle, ChevronRight,
+  Server, Database, HardDrive, Cctv, Smartphone, Navigation, ScrollText, LogIn, MonitorCog, CheckCircle2, Circle, ChevronRight, Upload,
 } from "lucide-react";
 import type { CaseStatus } from "@prisma/client";
 import { requirePermission, getCurrentUser } from "@/lib/session";
@@ -92,7 +92,13 @@ export default async function ItReportPage({
       <PageHeader
         title="IT Support Report / รายงานสุขภาพระบบ IT ประจำวัน"
         description={`Daily IT Health — ${fmtDate(reportDate)} · Monitor → Detect → Check → Issue → Resolve → Verify`}
-      />
+      >
+        {canRecord && (
+          <Button variant="outline" asChild>
+            <Link href="/it-report/import"><Upload className="h-4 w-4" /> นำเข้าผลตรวจ / Import</Link>
+          </Button>
+        )}
+      </PageHeader>
 
       {msg && (
         <p className={`rounded-md px-3 py-2 text-sm ${msg.error ? "bg-destructive/10 text-destructive" : "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"}`}>
@@ -262,7 +268,23 @@ export default async function ItReportPage({
                 <div key={c.id} className="flex flex-wrap items-center gap-2.5 rounded-md border p-2.5 text-sm">
                   <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
                   <span className="w-24 shrink-0 text-xs text-muted-foreground">{CATEGORY_META[c.category as ItSystemCategory].en}</span>
-                  <span className="min-w-[140px] flex-1 font-medium">{c.name}</span>
+                  <span className="min-w-[140px] flex-1 font-medium">
+                    {c.name}
+                    {(() => {
+                      const m = (c.metrics ?? {}) as Record<string, unknown>;
+                      const on = typeof m.online === "string" ? m.online : null;
+                      const rec = typeof m.recording === "string" ? m.recording : null;
+                      if (!on && !rec) return null;
+                      const tone = (v: string) => /off|missing|cannot|fail/i.test(v) ? "text-red-600" : /verify|warn/i.test(v) ? "text-amber-600" : "text-emerald-600";
+                      return (
+                        <span className="ml-2 text-[10px] font-normal text-muted-foreground">
+                          {on && <span className={tone(on)}>● {on}</span>}
+                          {on && rec && " · "}
+                          {rec && <span className={tone(rec)}>REC {rec}</span>}
+                        </span>
+                      );
+                    })()}
+                  </span>
                   <span className={`text-[11px] ${MODE_META[c.mode].text}`}>{MODE_META[c.mode].label}</span>
                   <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] ${h.badge}`}>
                     <span className={`h-2 w-2 rounded-full ${h.bg}`} /> {h.label}
