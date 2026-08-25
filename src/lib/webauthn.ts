@@ -20,7 +20,7 @@ import {
 import { prisma } from "@/lib/prisma";
 import { AuthError } from "@/lib/errors";
 
-const RP_NAME = "ITBox";
+const RP_NAME = "TECHCORE";
 const CHALLENGE_TTL_MS = 5 * 60_000;
 
 function rpConfig(): { rpID: string; origin: string } {

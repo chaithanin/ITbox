@@ -55,7 +55,7 @@ export default async function ScanPage({
       <div className="w-full max-w-md">
         <div className="mb-4 flex items-center justify-center gap-2">
           <Box className="h-6 w-6 text-primary" />
-          <span className="text-lg font-bold tracking-tight">ITBox</span>
+          <span className="text-lg font-bold tracking-tight">TECHCORE</span>
         </div>
 
         <div className="rounded-lg border bg-card p-5 text-card-foreground shadow-sm">

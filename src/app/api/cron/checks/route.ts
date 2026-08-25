@@ -150,9 +150,9 @@ export async function POST(req: Request) {
     if (orgCreated > 0 && emailEnabled() && recipients.length > 0) {
       await sendEmail({
         to: recipients.map((r) => r.email),
-        subject: `ITBox: มีการแจ้งเตือนใหม่ ${orgCreated} รายการ / ${orgCreated} new alerts`,
+        subject: `TECHCORE: มีการแจ้งเตือนใหม่ ${orgCreated} รายการ / ${orgCreated} new alerts`,
         text:
-          `ระบบ ITBox ตรวจพบรายการที่ต้องติดตาม ${orgCreated} รายการ ` +
+          `ระบบ TECHCORE ตรวจพบรายการที่ต้องติดตาม ${orgCreated} รายการ ` +
           `(ประกัน/ไลเซนส์/บริการใกล้หมดอายุ หรือถึงรอบเปลี่ยนรหัสผ่าน)\n\n` +
           `เข้าสู่ระบบเพื่อดูรายละเอียด: ${process.env.AUTH_URL ?? ""}/notifications`,
       });
@@ -169,7 +169,7 @@ export async function POST(req: Request) {
 
   if (created > 0) {
     await pushLineMessage(
-      `ITBox: มีการแจ้งเตือนใหม่ ${created} รายการ (ประกัน/ไลเซนส์/รอบเปลี่ยนรหัสผ่าน) — เข้าสู่ระบบเพื่อตรวจสอบ`
+      `TECHCORE: มีการแจ้งเตือนใหม่ ${created} รายการ (ประกัน/ไลเซนส์/รอบเปลี่ยนรหัสผ่าน) — เข้าสู่ระบบเพื่อตรวจสอบ`
     );
   }
 

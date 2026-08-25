@@ -547,7 +547,7 @@ export async function requestEmergencyAccess(
     if (emailEnabled()) {
       await sendEmail({
         to: managers.map((m) => m.email),
-        subject: "ITBox: คำขอเข้าถึงฉุกเฉิน / Emergency access request",
+        subject: "TECHCORE: คำขอเข้าถึงฉุกเฉิน / Emergency access request",
         text:
           `${user.name} ขอสิทธิ์เข้าถึงฉุกเฉินสำหรับ "${item.name}"\n` +
           `เหตุผล: ${reason}\n\nอนุมัติ/ปฏิเสธได้ที่: ${process.env.AUTH_URL ?? ""}/vault/emergency`,
@@ -605,7 +605,7 @@ export async function decideEmergencyAccess(
     if (emailEnabled()) {
       await sendEmail({
         to: requester.email,
-        subject: `ITBox: คำขอเข้าถึงฉุกเฉิน${decision === "APPROVED" ? "ได้รับอนุมัติ" : "ถูกปฏิเสธ"} / Emergency access ${decision.toLowerCase()}`,
+        subject: `TECHCORE: คำขอเข้าถึงฉุกเฉิน${decision === "APPROVED" ? "ได้รับอนุมัติ" : "ถูกปฏิเสธ"} / Emergency access ${decision.toLowerCase()}`,
         text:
           `คำขอเข้าถึง "${req.vaultItem.name}" ของคุณ${decision === "APPROVED" ? "ได้รับอนุมัติ" : "ถูกปฏิเสธ"}\n` +
           `${decision === "APPROVED" ? `ใช้ได้ถึง: ${validHours} ชั่วโมงจากนี้\n` : ""}` +

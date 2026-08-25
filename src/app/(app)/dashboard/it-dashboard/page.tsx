@@ -360,7 +360,7 @@ export default async function ItDashboardPage() {
             ))}
           </div>
           <p className="mt-3 flex items-center gap-1.5 text-[11px] text-muted-foreground">
-            <Clock className="h-3.5 w-3.5" /> อัปเดตล่าสุด {now.toLocaleString("th-TH")} · ข้อมูลจริงจากระบบ ITBox
+            <Clock className="h-3.5 w-3.5" /> อัปเดตล่าสุด {now.toLocaleString("th-TH")} · ข้อมูลจริงจากระบบ TECHCORE
             {failedLogins > 0 && ` · Login ล้มเหลวปีนี้ ${failedLogins} ครั้ง`}
           </p>
         </CardContent>

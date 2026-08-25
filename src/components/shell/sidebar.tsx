@@ -8,6 +8,7 @@ import {
   ShieldAlert, Settings, UserMinus, Boxes, LifeBuoy,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { BrandLogo } from "@/components/brand-logo";
 
 export interface NavItem {
   href: string;
@@ -68,9 +69,7 @@ export function Sidebar({
         )}
       >
         <div className="flex h-14 items-center gap-2 border-b px-4">
-          <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary text-primary-foreground">
-            <Boxes className="h-5 w-5" />
-          </div>
+          <BrandLogo className="h-8 w-8" />
           <span className="text-lg font-bold tracking-tight">{appName}</span>
         </div>
         <nav className="flex-1 space-y-0.5 overflow-y-auto p-2">

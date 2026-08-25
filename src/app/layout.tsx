@@ -3,7 +3,7 @@ import { getLocale } from "@/lib/i18n";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: { default: "ITBox — Enterprise IT Management", template: "%s | ITBox" },
+  title: { default: "TECHCORE — Enterprise IT Management", template: "%s | TECHCORE" },
   description:
     "Enterprise IT Management System: assets, password vault, licenses, procurement",
 };

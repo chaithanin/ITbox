@@ -4,7 +4,7 @@ export type Locale = "th" | "en";
 
 const dict = {
   th: {
-    appName: "ITBox",
+    appName: "TECHCORE",
     tagline: "ระบบบริหารจัดการไอทีองค์กร",
     // Navigation
     dashboard: "แดชบอร์ด",
@@ -93,7 +93,7 @@ const dict = {
     criticalRevealWarning: "คุณกำลังเปิดเผยข้อมูลลับระดับ Critical",
   },
   en: {
-    appName: "ITBox",
+    appName: "TECHCORE",
     tagline: "Enterprise IT Management System",
     dashboard: "Dashboard",
     overview: "Overview",

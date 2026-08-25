@@ -3,7 +3,8 @@
 import { useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { signIn } from "next-auth/react";
-import { Boxes, ShieldCheck } from "lucide-react";
+import { ShieldCheck } from "lucide-react";
+import { BrandLogo } from "@/components/brand-logo";
 import styles from "./login.module.css";
 
 const ERROR_MESSAGES: Record<string, string> = {
@@ -60,9 +61,9 @@ function LoginForm() {
       <form className={styles.form} onSubmit={submit}>
         <div className={styles.brand}>
           <div className={styles.logo}>
-            <Boxes size={28} />
+            <BrandLogo className="h-11 w-11" />
           </div>
-          <div className={styles.heading}>ITBox</div>
+          <div className={styles.heading}>TECHCORE</div>
           <div className={styles.subheading}>
             ระบบบริหารจัดการไอทีองค์กร · Enterprise IT Management
           </div>

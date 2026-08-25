@@ -46,7 +46,7 @@ export default async function AssetStickerPage({
         <p className="text-lg font-bold tracking-wide">{asset.assetTag}</p>
         <p className="text-sm">{asset.name}</p>
         {asset.serialNumber && <p className="text-xs text-neutral-500">S/N: {asset.serialNumber}</p>}
-        <p className="text-[10px] uppercase tracking-widest text-neutral-400">ITBox Asset</p>
+        <p className="text-[10px] uppercase tracking-widest text-neutral-400">TECHCORE Asset</p>
       </div>
     </div>
   );

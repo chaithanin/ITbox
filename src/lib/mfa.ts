@@ -6,7 +6,7 @@ import type { User } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { encryptSecret, decryptSecret } from "@/lib/crypto/envelope";
 
-const ISSUER = "ITBox";
+const ISSUER = "TECHCORE";
 
 export function generateTotpSecret(): string {
   return new OTPAuth.Secret({ size: 20 }).base32;

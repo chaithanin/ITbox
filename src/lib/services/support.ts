@@ -450,7 +450,7 @@ export async function createCase(user: CurrentUser, input: CreateCaseInput) {
     link: `/support/${created.id}`,
   });
   if (priority === "P1") {
-    await pushLineMessage(`ITBox: เคสวิกฤต ${caseNumber} — ${input.subject}`);
+    await pushLineMessage(`TECHCORE: เคสวิกฤต ${caseNumber} — ${input.subject}`);
   }
 
   return created;
@@ -563,7 +563,7 @@ export async function createPublicCase(
     link: `/support/${created.id}`,
   });
   if (priority === "P1") {
-    await pushLineMessage(`ITBox: เคสวิกฤต (เว็บ) ${caseNumber} — ${input.subject}`);
+    await pushLineMessage(`TECHCORE: เคสวิกฤต (เว็บ) ${caseNumber} — ${input.subject}`);
   }
 
   return created;
