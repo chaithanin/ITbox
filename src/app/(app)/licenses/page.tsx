@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Plus } from "lucide-react";
+import { Plus, Upload } from "lucide-react";
 import { getCurrentUser } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import { PageHeader } from "@/components/page-header";
@@ -96,11 +96,18 @@ export default async function LicensesPage({
         description="จัดการลิขสิทธิ์และการมอบหมายที่นั่ง / Manage licenses and seat assignments"
       >
         {canManage && (
-          <Button asChild>
-            <Link href="/licenses/new">
-              <Plus className="h-4 w-4" /> เพิ่มลิขสิทธิ์ / New License
-            </Link>
-          </Button>
+          <>
+            <Button variant="outline" asChild>
+              <Link href="/licenses/import">
+                <Upload className="h-4 w-4" /> นำเข้า / Import
+              </Link>
+            </Button>
+            <Button asChild>
+              <Link href="/licenses/new">
+                <Plus className="h-4 w-4" /> เพิ่มลิขสิทธิ์ / New License
+              </Link>
+            </Button>
+          </>
         )}
       </PageHeader>
 
