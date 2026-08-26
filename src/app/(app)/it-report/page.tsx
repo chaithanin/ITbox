@@ -1,7 +1,7 @@
 import Link from "next/link";
 import {
   Activity, AlertTriangle, ShieldCheck, ClipboardCheck, ListChecks,
-  Server, Database, HardDrive, Cctv, Smartphone, Navigation, ScrollText, LogIn, MonitorCog, CheckCircle2, Circle, ChevronRight, Upload, FileText, Download,
+  Server, Database, HardDrive, Cctv, Smartphone, Navigation, ScrollText, LogIn, MonitorCog, ChevronRight, Upload, FileText, Download,
 } from "lucide-react";
 import type { CaseStatus } from "@prisma/client";
 import { requirePermission, getCurrentUser } from "@/lib/session";
@@ -19,6 +19,7 @@ import {
 import { Sparkline } from "../dashboard/it-dashboard/charts";
 import { RecordCheckForm } from "./record-form";
 import { EvidenceControl } from "./evidence-control";
+import { ChecklistPanel, type ChecklistRow } from "./checklist-panel";
 import { verifyCheckAction } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -136,6 +137,33 @@ export default async function ItReportPage({
   const rollupByCat = new Map(rollups.map((r) => [r.category, r]));
   const attention = exceptions(checks);
   const hColor = healthColor(kpis.healthPercent);
+
+  // ---- Daily checklist rows (expandable: per-category detail + inline add) ----
+  const checksByCat = new Map<string, typeof rawChecks>();
+  for (const c of rawChecks) {
+    const arr = checksByCat.get(c.category) ?? [];
+    arr.push(c);
+    checksByCat.set(c.category, arr);
+  }
+  const checklistRows: ChecklistRow[] = CHECKLIST.map((item) => {
+    const r = rollupByCat.get(item.key);
+    const catChecks = checksByCat.get(item.key) ?? [];
+    return {
+      key: item.key,
+      label: item.label,
+      done: !!r && r.notChecked === 0,
+      auto: catChecks.some((c) => c.mode === "AUTO"),
+      hasData: !!r,
+      checks: catChecks.map((c) => ({
+        id: c.id,
+        name: c.name,
+        status: c.status,
+        note: c.note,
+        healthPercent: c.healthPercent,
+        mode: c.mode,
+      })),
+    };
+  });
 
   return (
     <div className="space-y-5">
@@ -325,20 +353,8 @@ export default async function ItReportPage({
 
         <Card>
           <CardHeader className="pb-2"><CardTitle className="flex items-center gap-2 text-sm"><ListChecks className="h-4 w-4 text-violet-600" /> Daily IT Checklist</CardTitle></CardHeader>
-          <CardContent className="space-y-1.5">
-            {CHECKLIST.map((item) => {
-              const r = rollupByCat.get(item.key);
-              const auto = checks.some((c) => c.category === item.key && c.mode === "AUTO");
-              const done = !!r && r.notChecked === 0;
-              return (
-                <div key={item.key} className="flex items-center gap-2.5 text-sm">
-                  {done ? <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" /> : <Circle className="h-4 w-4 shrink-0 text-muted-foreground" />}
-                  <span className={`flex-1 ${done ? "" : "text-muted-foreground"}`}>{item.label}</span>
-                  {auto && <span className="text-[10px] font-medium text-emerald-600">✓ Auto</span>}
-                  {!r && <span className="text-[10px] text-muted-foreground">รอตรวจ</span>}
-                </div>
-              );
-            })}
+          <CardContent>
+            <ChecklistPanel rows={checklistRows} canRecord={canRecord} />
           </CardContent>
         </Card>
       </div>
