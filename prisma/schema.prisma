@@ -1619,9 +1619,27 @@ model ItHealthCheck {
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   location     Location?    @relation(fields: [locationId], references: [id])
+  evidence     ItHealthEvidence[]
 
   @@unique([organizationId, checkDate, category, name])
   @@index([organizationId, checkDate])
   @@index([organizationId, category, status])
   @@map("it_health_checks")
+}
+
+model ItHealthEvidence {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @db.Uuid
+  checkId        String   @db.Uuid
+  name           String
+  storagePath    String
+  contentType    String?
+  sizeBytes      Int?
+  uploadedById   String?  @db.Uuid
+  createdAt      DateTime @default(now())
+
+  check ItHealthCheck @relation(fields: [checkId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, checkId])
+  @@map("it_health_evidence")
 }

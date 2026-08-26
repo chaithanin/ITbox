@@ -18,6 +18,7 @@ import {
 } from "@/lib/services/it-report";
 import { Sparkline } from "../dashboard/it-dashboard/charts";
 import { RecordCheckForm } from "./record-form";
+import { EvidenceControl } from "./evidence-control";
 import { verifyCheckAction } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -64,7 +65,13 @@ export default async function ItReportPage({
   const [rawChecks, openIssues, openCount, overdueCount, locations, history] = await Promise.all([
     prisma.itHealthCheck.findMany({
       where: { organizationId: orgId, deletedAt: null, checkDate: reportDate },
-      include: { location: { select: { name: true } } },
+      include: {
+        location: { select: { name: true } },
+        evidence: {
+          select: { id: true, name: true, contentType: true },
+          orderBy: { createdAt: "asc" },
+        },
+      },
       orderBy: [{ category: "asc" }, { name: "asc" }],
     }),
     prisma.supportCase.findMany({
@@ -383,6 +390,11 @@ export default async function ItReportPage({
                   ) : canRecord ? (
                     <form action={verify}><Button size="sm" variant="ghost" className="h-7 text-xs">ยืนยัน / Verify</Button></form>
                   ) : null}
+                  {(canRecord || c.evidence.length > 0) && (
+                    <div className="basis-full pl-6">
+                      <EvidenceControl checkId={c.id} items={c.evidence} canEdit={canRecord} />
+                    </div>
+                  )}
                 </div>
               );
             })}
