@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Users, ShieldCheck, UserCog, Building2, LifeBuoy } from "lucide-react";
+import { Users, ShieldCheck, UserCog, Building2, LifeBuoy, PlugZap } from "lucide-react";
 import { requireUser } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import { PageHeader } from "@/components/page-header";
@@ -17,6 +17,13 @@ export default async function SettingsPage() {
       icon: Building2,
       title: "ข้อมูลองค์กร / Organization",
       desc: "ชื่อบริษัท เลขผู้เสียภาษี ที่อยู่ และโลโก้",
+      show: user.permissions.has("settings:manage"),
+    },
+    {
+      href: "/settings/integrations",
+      icon: PlugZap,
+      title: "การเชื่อมต่อ / Integrations",
+      desc: "API key + Synology collector สำหรับดึงสถานะ Backup/Storage อัตโนมัติ",
       show: user.permissions.has("settings:manage"),
     },
     {

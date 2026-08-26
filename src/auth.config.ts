@@ -18,6 +18,7 @@ export const authConfig = {
         pathname.startsWith("/api/auth") ||
         pathname.startsWith("/scan") ||
         pathname.startsWith("/report") || // public web-intake case form
+        pathname.startsWith("/api/it-report/ingest") || // API-key-authed collector push
         pathname.startsWith("/_next") ||
         pathname === "/favicon.ico";
       if (isPublic) return true;
