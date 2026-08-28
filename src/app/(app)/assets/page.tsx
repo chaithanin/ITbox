@@ -245,13 +245,13 @@ export default async function AssetsPage({
           <TableRow>
             <TableHead>แท็ก / Tag</TableHead>
             <TableHead>ชื่อ / Name</TableHead>
-            <TableHead>หมวดหมู่ / Category</TableHead>
+            <TableHead className="hidden md:table-cell">หมวดหมู่ / Category</TableHead>
             <TableHead>สถานะ / Status</TableHead>
-            <TableHead>สภาพ / Condition</TableHead>
-            <TableHead>แผนก / Department</TableHead>
-            <TableHead>สถานที่ / Location</TableHead>
+            <TableHead className="hidden lg:table-cell">สภาพ / Condition</TableHead>
+            <TableHead className="hidden lg:table-cell">แผนก / Department</TableHead>
+            <TableHead className="hidden md:table-cell">สถานที่ / Location</TableHead>
             <TableHead>ผู้ถือครอง / Assigned To</TableHead>
-            <TableHead>หมดประกัน / Warranty End</TableHead>
+            <TableHead className="hidden sm:table-cell">หมดประกัน / Warranty End</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -273,16 +273,17 @@ export default async function AssetsPage({
                   </Link>
                 </TableCell>
                 <TableCell>{a.name}</TableCell>
-                <TableCell>{a.category?.name ?? "-"}</TableCell>
+                <TableCell className="hidden md:table-cell">{a.category?.name ?? "-"}</TableCell>
                 <TableCell>
                   <StatusBadge status={a.status} />
                 </TableCell>
-                <TableCell>{a.condition}</TableCell>
-                <TableCell>{a.department?.name ?? "-"}</TableCell>
-                <TableCell>{a.location?.name ?? "-"}</TableCell>
+                <TableCell className="hidden lg:table-cell">{a.condition}</TableCell>
+                <TableCell className="hidden lg:table-cell">{a.department?.name ?? "-"}</TableCell>
+                <TableCell className="hidden md:table-cell">{a.location?.name ?? "-"}</TableCell>
                 <TableCell>{holder ? `${holder.firstName} ${holder.lastName}` : "-"}</TableCell>
                 <TableCell
                   className={cn(
+                    "hidden sm:table-cell",
                     d !== null && d < 0 && "text-destructive",
                     d !== null && d >= 0 && d < 30 && "text-amber-600 dark:text-amber-400"
                   )}

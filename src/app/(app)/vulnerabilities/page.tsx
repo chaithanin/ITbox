@@ -76,7 +76,6 @@ export default async function VulnerabilitiesPage({ searchParams }: { searchPara
         </Card>
       )}
 
-      <div className="overflow-x-auto rounded-lg border">
         <Table>
           <TableHeader><TableRow>
             <TableHead>หัวข้อ / Title</TableHead><TableHead>CVE</TableHead><TableHead>ความรุนแรง</TableHead><TableHead>ทรัพย์สิน</TableHead><TableHead>Patch</TableHead><TableHead>กำหนดแก้</TableHead><TableHead>สถานะ</TableHead>{canManage && <TableHead></TableHead>}
@@ -107,7 +106,6 @@ export default async function VulnerabilitiesPage({ searchParams }: { searchPara
             })}
           </TableBody>
         </Table>
-      </div>
     </div>
   );
 }

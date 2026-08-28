@@ -58,6 +58,9 @@ export function Topbar({
       <Button variant="ghost" size="icon" className="lg:hidden" onClick={onMenuClick}>
         <Menu className="h-5 w-5" />
       </Button>
+      <Button variant="ghost" size="icon" className="sm:hidden" asChild>
+        <Link href="/search" aria-label={labels.search}><Search className="h-5 w-5" /></Link>
+      </Button>
       <form onSubmit={onSearch} className="relative hidden max-w-sm flex-1 sm:block">
         <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
         <Input

@@ -73,7 +73,6 @@ export default async function BackupPage({ searchParams }: { searchParams: Promi
         </Card>
       )}
 
-      <div className="overflow-x-auto rounded-lg border">
         <Table>
           <TableHeader><TableRow>
             <TableHead>ระบบ / System</TableHead><TableHead>ชนิด</TableHead><TableHead>รันล่าสุด</TableHead><TableHead>สถานะ</TableHead>
@@ -111,7 +110,6 @@ export default async function BackupPage({ searchParams }: { searchParams: Promi
             })}
           </TableBody>
         </Table>
-      </div>
     </div>
   );
 }

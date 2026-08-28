@@ -66,7 +66,6 @@ export default async function MonitoringPage() {
       )}
 
       {hosts.length > 0 && (
-        <div className="overflow-x-auto rounded-lg border">
           <Table>
             <TableHeader><TableRow>
               <TableHead>เครื่อง / Host</TableHead><TableHead>สถานะ</TableHead><TableHead>ทรัพยากร / Resources</TableHead><TableHead>Uptime</TableHead><TableHead>Last seen</TableHead>
@@ -86,7 +85,6 @@ export default async function MonitoringPage() {
               })}
             </TableBody>
           </Table>
-        </div>
       )}
     </div>
   );

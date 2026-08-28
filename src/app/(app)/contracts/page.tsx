@@ -69,7 +69,6 @@ export default async function ContractsPage({ searchParams }: { searchParams: Pr
         </Card>
       )}
 
-      <div className="overflow-x-auto rounded-lg border">
         <Table>
           <TableHeader><TableRow>
             <TableHead>เลขที่</TableHead><TableHead>ชื่อสัญญา</TableHead><TableHead>Vendor</TableHead><TableHead>เริ่ม–สิ้นสุด</TableHead><TableHead>ต่ออายุ</TableHead><TableHead>มูลค่า</TableHead><TableHead>สถานะ</TableHead>{canManage && <TableHead></TableHead>}
@@ -90,7 +89,6 @@ export default async function ContractsPage({ searchParams }: { searchParams: Pr
             ))}
           </TableBody>
         </Table>
-      </div>
     </div>
   );
 }

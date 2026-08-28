@@ -56,7 +56,6 @@ export default async function EndpointsPage() {
       )}
 
       {hosts.length > 0 && (
-        <div className="overflow-x-auto rounded-lg border">
           <Table>
             <TableHeader><TableRow>
               <TableHead>เครื่อง / Host</TableHead><TableHead>สถานะ</TableHead><TableHead>Threats</TableHead><TableHead>Isolated</TableHead><TableHead>Agent</TableHead><TableHead>Last scan</TableHead><TableHead>Last seen</TableHead>
@@ -79,7 +78,6 @@ export default async function EndpointsPage() {
               })}
             </TableBody>
           </Table>
-        </div>
       )}
     </div>
   );
