@@ -55,3 +55,16 @@ next-env.d.ts
 # playwright
 test-results/
 playwright-report/
+
+# CCTV device master — contains live NVR credentials, never commit
+device.xml
+**/device.xml
+*.device.xml
+
+# CCTV collector real credentials — never commit
+scripts/cctv_targets.json
+cctv_targets.json
+snapshots/
+
+__pycache__/
+*.pyc

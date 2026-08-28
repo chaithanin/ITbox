@@ -7,7 +7,7 @@ import {
   RefreshCcw, Wrench, ShoppingCart, Store, BarChart3, Bell, ScrollText,
   ShieldAlert, Settings, UserMinus, Boxes, LifeBuoy,
   Router, GitPullRequest, DatabaseBackup, FileText, Bug, BookOpen, ShieldX, Network,
-  UserPlus, LayoutGrid, Activity, MonitorSmartphone,
+  UserPlus, LayoutGrid, Activity, MonitorSmartphone, Cctv,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { BrandLogo } from "@/components/brand-logo";
@@ -51,6 +51,7 @@ const ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   catalog: LayoutGrid,
   monitoring: Activity,
   endpoints: MonitorSmartphone,
+  cctv: Cctv,
   default: Boxes,
 };
 

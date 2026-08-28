@@ -1,0 +1,8 @@
+{
+  "_comment": "Real read-only credentials + LAN address per recorder serial. NEVER commit the filled-in version. Passwords here are NOT the encrypted device.xml blobs — use a real cctv_monitor account.",
+  "defaults": { "username": "cctv_monitor", "password": "CHANGE_ME", "httpPort": 80 },
+  "targets": {
+    "AA0C276PAZ5B1AC": { "host": "192.168.2.11" },
+    "9J05936PAZC710E": { "host": "192.168.10.5", "username": "admin", "password": "CHANGE_ME" }
+  }
+}

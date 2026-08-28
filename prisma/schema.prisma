@@ -70,6 +70,11 @@ model Organization {
   serviceCatalog    ServiceCatalogItem[]
   endpointPostures  EndpointPosture[]
   monitoringHosts   MonitoringHost[]
+  cctvRecorders     CctvRecorder[]
+  cctvCameras       CctvCamera[]
+  cctvHealthLogs    CctvHealthLog[]
+  cctvStorageLogs   CctvStorageLog[]
+  cctvIncidents     CctvIncident[]
 
   @@map("organizations")
 }
@@ -367,6 +372,7 @@ model Location {
   networkDevices NetworkDevice[]
   vlans        Vlan[]
   subnets      Subnet[]
+  cctvRecorders CctvRecorder[]
 
   @@unique([organizationId, code])
   @@map("locations")
@@ -470,6 +476,7 @@ model Asset {
   vulnerabilities Vulnerability[]
   configItems ConfigurationItem[]
   endpointPostures EndpointPosture[]
+  cctvRecorders CctvRecorder[]
 
   @@unique([organizationId, assetTag])
   supportCases SupportCase[]  @relation("CaseAsset")
@@ -2252,4 +2259,248 @@ model MonitoringHost {
   @@unique([organizationId, hostname])
   @@index([organizationId, status])
   @@map("monitoring_hosts")
+}
+
+// ============================ CCTV Monitoring ============================
+// Read-only monitoring of Dahua (and, later, other-brand) NVR/XVR recorders and
+// their camera channels. The device-facing engine runs as an on-prem collector
+// that pushes health/recording/storage data to /api/cctv/ingest. Credentials are
+// stored envelope-encrypted (never in plaintext, logs, UI, or API responses).
+
+enum CctvDeviceStatus {
+  ONLINE
+  OFFLINE
+  AUTH_ERROR
+  NETWORK_ERROR
+  TIMEOUT
+  UNKNOWN
+}
+
+enum CctvCameraStatus {
+  ONLINE
+  OFFLINE
+  VIDEO_LOSS
+  NO_RECORDING
+  STREAM_ERROR
+  AUTH_ERROR
+  NETWORK_ERROR
+  DEGRADED
+  UNKNOWN
+}
+
+enum CctvRecordingStatus {
+  RECORDING
+  NOT_RECORDING
+  NO_RECORDING_FOUND
+  UNKNOWN
+}
+
+enum CctvStorageStatus {
+  NORMAL
+  WARNING
+  CRITICAL
+  FAILED
+  UNKNOWN
+}
+
+enum CctvIncidentType {
+  RECORDER_OFFLINE
+  CAMERA_OFFLINE
+  VIDEO_LOSS
+  NO_RECORDING
+  RECORDING_GAP
+  HDD_ERROR
+  HDD_FULL
+  LOW_RETENTION
+  AUTH_FAILURE
+  MONITORING_FAILURE
+}
+
+enum CctvIncidentStatus {
+  OPEN
+  ACKNOWLEDGED
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+enum CctvSeverity {
+  INFO
+  WARNING
+  CRITICAL
+}
+
+model CctvRecorder {
+  id             String           @id @default(uuid()) @db.Uuid
+  organizationId String           @db.Uuid
+  name           String
+  serial         String // Dahua device serial / P2P id (the device.xml `domain`)
+  project        String?
+  site           String?
+  building       String?
+  floor          String?
+  area           String?
+  localIp        String?
+  deviceType     String?
+  model          String?
+  firmware       String?
+  tcpPort        Int              @default(37777)
+  httpPort       Int?
+  httpsPort      Int?
+  rtspPort       Int?
+  protocol       String?
+  username       String?
+  // Envelope-encrypted credential (AES-256-GCM + KMS-wrapped DEK). Never revealed.
+  credentialEnc     String?
+  credentialIv      String?
+  credentialTag     String?
+  credentialDekEnc  String?
+  credentialKeyVer  String?
+  channelCount   Int?
+  capabilities   Json?
+  status         CctvDeviceStatus @default(UNKNOWN)
+  lastSeenAt     DateTime?
+  lastOnlineAt   DateTime?
+  offlineSince   DateTime?
+  failureCount   Int              @default(0)
+  errorMessage   String?
+  assetId        String?          @db.Uuid
+  locationId     String?          @db.Uuid
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  asset        Asset?       @relation(fields: [assetId], references: [id])
+  location     Location?    @relation(fields: [locationId], references: [id])
+  cameras      CctvCamera[]
+  healthLogs   CctvHealthLog[]
+  storageLogs  CctvStorageLog[]
+  incidents    CctvIncident[]
+
+  @@unique([organizationId, serial])
+  @@index([organizationId, status])
+  @@index([organizationId, project])
+  @@map("cctv_recorders")
+}
+
+model CctvCamera {
+  id             String              @id @default(uuid()) @db.Uuid
+  organizationId String              @db.Uuid
+  recorderId     String              @db.Uuid
+  channel        Int
+  name           String?
+  cameraIp       String?
+  model          String?
+  serial         String?
+  status         CctvCameraStatus    @default(UNKNOWN)
+  streamStatus   String?
+  recordingStatus CctvRecordingStatus @default(UNKNOWN)
+  latestRecordingAt   DateTime?
+  earliestRecordingAt DateTime?
+  recordingGapSeconds Int?
+  retentionDays  Float?
+  retentionEstimated  Boolean         @default(false)
+  lastSnapshotAt   DateTime?
+  lastSnapshotPath String?
+  lastSnapshotW    Int?
+  lastSnapshotH    Int?
+  lastOnlineAt   DateTime?
+  offlineSince   DateTime?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  organization Organization    @relation(fields: [organizationId], references: [id])
+  recorder     CctvRecorder    @relation(fields: [recorderId], references: [id], onDelete: Cascade)
+  healthLogs   CctvHealthLog[]
+  incidents    CctvIncident[]
+
+  @@unique([recorderId, channel])
+  @@index([organizationId, status])
+  @@map("cctv_cameras")
+}
+
+model CctvHealthLog {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @db.Uuid
+  recorderId     String   @db.Uuid
+  cameraId       String?  @db.Uuid
+  checkedAt      DateTime @default(now())
+  deviceStatus   CctvDeviceStatus?
+  cameraStatus   CctvCameraStatus?
+  streamStatus   String?
+  recordingStatus CctvRecordingStatus?
+  latestRecordingAt   DateTime?
+  recordingGapSeconds Int?
+  snapshotStatus String?
+  snapshotPath   String?
+  latencyMs      Int?
+  errorCode      String?
+  errorMessage   String?
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  recorder     CctvRecorder @relation(fields: [recorderId], references: [id], onDelete: Cascade)
+  camera       CctvCamera?  @relation(fields: [cameraId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, checkedAt])
+  @@index([recorderId, checkedAt])
+  @@index([cameraId, checkedAt])
+  @@map("cctv_health_logs")
+}
+
+model CctvStorageLog {
+  id             String            @id @default(uuid()) @db.Uuid
+  organizationId String            @db.Uuid
+  recorderId     String            @db.Uuid
+  checkedAt      DateTime          @default(now())
+  hddIndex       Int
+  hddModel       String?
+  status         CctvStorageStatus @default(UNKNOWN)
+  capacityBytes  BigInt?
+  usedBytes      BigInt?
+  freeBytes      BigInt?
+  temperatureC   Int?
+  smartStatus    String?
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  recorder     CctvRecorder @relation(fields: [recorderId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, checkedAt])
+  @@index([recorderId, checkedAt])
+  @@map("cctv_storage_logs")
+}
+
+model CctvIncident {
+  id             String             @id @default(uuid()) @db.Uuid
+  organizationId String             @db.Uuid
+  recorderId     String?            @db.Uuid
+  cameraId       String?            @db.Uuid
+  type           CctvIncidentType
+  severity       CctvSeverity       @default(WARNING)
+  status         CctvIncidentStatus @default(OPEN)
+  title          String
+  detail         String?
+  startedAt      DateTime           @default(now())
+  detectedAt     DateTime           @default(now())
+  acknowledgedAt DateTime?
+  resolvedAt     DateTime?
+  downtimeMinutes Int?
+  rootCause      String?
+  resolution     String?
+  responsiblePerson String?
+  ticketNumber   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization Organization  @relation(fields: [organizationId], references: [id])
+  recorder     CctvRecorder? @relation(fields: [recorderId], references: [id], onDelete: SetNull)
+  camera       CctvCamera?   @relation(fields: [cameraId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, status])
+  @@index([organizationId, type])
+  @@map("cctv_incidents")
 }

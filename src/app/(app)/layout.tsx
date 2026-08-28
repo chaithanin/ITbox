@@ -86,6 +86,18 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     ...(has("cmdb:read") ? [{ href: "/cmdb", label: "CMDB", icon: "cmdb" }] : []),
     ...(has("monitoring:read") ? [{ href: "/monitoring", label: "Monitoring", icon: "monitoring" }] : []),
     ...(has("monitoring:read") ? [{ href: "/endpoints", label: "Endpoint Security", icon: "endpoints" }] : []),
+    ...(has("cctv:view")
+      ? [{
+          href: "/cctv", label: "CCTV Monitoring", icon: "cctv",
+          children: [
+            { href: "/cctv", label: "ภาพรวม / Overview" },
+            { href: "/cctv/devices", label: "เครื่องบันทึก / Recorders" },
+            { href: "/cctv/cameras", label: "กล้อง / Cameras" },
+            { href: "/cctv/incidents", label: "เหตุการณ์ / Incidents" },
+            ...(has("cctv:manage") ? [{ href: "/cctv/import", label: "นำเข้า device.xml / Import" }] : []),
+          ],
+        }]
+      : []),
     ...(has("catalog:read") ? [{ href: "/catalog", label: "Service Catalog", icon: "catalog" }] : []),
     ...(has("backup:read") ? [{ href: "/backup", label: "Backup & DR", icon: "backup" }] : []),
     ...(has("contract:read") ? [{ href: "/contracts", label: "สัญญา / Contracts", icon: "contracts" }] : []),

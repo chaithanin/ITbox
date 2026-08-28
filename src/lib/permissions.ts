@@ -47,6 +47,8 @@ export const PERMISSIONS = [
   "onboarding:read", "onboarding:manage",
   "catalog:read", "catalog:manage",
   "monitoring:read",
+  // CCTV monitoring
+  "cctv:view", "cctv:manage",
   // Admin
   "user:manage", "role:manage", "settings:manage",
   "offboarding:read", "offboarding:manage",
@@ -62,7 +64,7 @@ const READ_ONLY: PermissionKey[] = [
   "procurement:read", "report:read",
   "network:read", "change:read", "backup:read", "contract:read",
   "problem:read", "kb:read", "vuln:read", "cmdb:read",
-  "onboarding:read", "catalog:read", "monitoring:read",
+  "onboarding:read", "catalog:read", "monitoring:read", "cctv:view",
 ];
 
 /** Default permission sets per system role key. */
@@ -87,6 +89,7 @@ export const ROLE_PERMISSIONS: Record<string, PermissionKey[]> = {
     "problem:read", "problem:manage", "kb:read", "kb:manage", "vuln:read", "vuln:manage",
     "cmdb:read", "cmdb:manage",
     "onboarding:read", "onboarding:manage", "catalog:read", "catalog:manage", "monitoring:read",
+    "cctv:view", "cctv:manage",
   ],
   IT_STAFF: [
     "asset:read", "asset:create", "asset:update",
@@ -103,6 +106,7 @@ export const ROLE_PERMISSIONS: Record<string, PermissionKey[]> = {
     "problem:read", "problem:manage", "kb:read", "kb:manage", "vuln:read", "vuln:manage",
     "cmdb:read", "cmdb:manage",
     "onboarding:read", "onboarding:manage", "catalog:read", "monitoring:read",
+    "cctv:view", "cctv:manage",
   ],
   SECURITY_ADMIN: [
     "asset:read", "employee:read", "department:read", "location:read",
@@ -110,7 +114,7 @@ export const ROLE_PERMISSIONS: Record<string, PermissionKey[]> = {
     "audit:read", "security:read", "report:read", "report:export",
     "support:read", "support:work",
     "user:manage", "role:manage",
-    "monitoring:read",
+    "monitoring:read", "cctv:view",
   ],
   HR: [
     "employee:read", "employee:create", "employee:update", "employee:delete",

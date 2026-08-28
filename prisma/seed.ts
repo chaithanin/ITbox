@@ -95,6 +95,7 @@ const PERMISSIONS = [
   "problem:read","problem:manage","kb:read","kb:manage","vuln:read","vuln:manage",
   "cmdb:read","cmdb:manage",
   "onboarding:read","onboarding:manage","catalog:read","catalog:manage","monitoring:read",
+  "cctv:view","cctv:manage",
   "user:manage","role:manage","settings:manage","offboarding:read","offboarding:manage",
 ];
 
@@ -103,7 +104,7 @@ const READ_ONLY = [
   "subscription:read","vendor:read","maintenance:read","procurement:read","report:read",
   "network:read","change:read","backup:read","contract:read",
   "problem:read","kb:read","vuln:read","cmdb:read",
-  "onboarding:read","catalog:read","monitoring:read",
+  "onboarding:read","catalog:read","monitoring:read","cctv:view",
 ];
 
 const ROLE_PERMISSIONS: Record<string, string[]> = {
@@ -123,6 +124,7 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
     "problem:read","problem:manage","kb:read","kb:manage","vuln:read","vuln:manage",
     "cmdb:read","cmdb:manage",
     "onboarding:read","onboarding:manage","catalog:read","catalog:manage","monitoring:read",
+    "cctv:view","cctv:manage",
   ],
   IT_STAFF: [
     "asset:read","asset:create","asset:update","asset:assign","asset:return","asset:transfer",
@@ -135,13 +137,14 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
     "problem:read","problem:manage","kb:read","kb:manage","vuln:read","vuln:manage",
     "cmdb:read","cmdb:manage",
     "onboarding:read","onboarding:manage","catalog:read","catalog:manage","monitoring:read",
+    "cctv:view","cctv:manage",
   ],
   SECURITY_ADMIN: [
     "asset:read","employee:read","department:read","location:read",
     "vault:read","vault:reveal","vault:manage","vault:emergency","vault:audit",
     "audit:read","security:read","report:read","report:export","user:manage","role:manage",
     "support:read","support:work",
-    "vuln:read","vuln:manage","kb:read",
+    "vuln:read","vuln:manage","kb:read","monitoring:read","cctv:view",
   ],
   HR: [
     "employee:read","employee:create","employee:update","employee:delete",
