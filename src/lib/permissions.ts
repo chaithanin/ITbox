@@ -37,6 +37,10 @@ export const PERMISSIONS = [
   "backup:read", "backup:manage",
   // Contracts
   "contract:read", "contract:manage",
+  // Problem / Knowledge base / Vulnerability
+  "problem:read", "problem:manage",
+  "kb:read", "kb:manage",
+  "vuln:read", "vuln:manage",
   // Admin
   "user:manage", "role:manage", "settings:manage",
   "offboarding:read", "offboarding:manage",
@@ -51,6 +55,7 @@ const READ_ONLY: PermissionKey[] = [
   "license:read", "subscription:read", "vendor:read", "maintenance:read",
   "procurement:read", "report:read",
   "network:read", "change:read", "backup:read", "contract:read",
+  "problem:read", "kb:read", "vuln:read",
 ];
 
 /** Default permission sets per system role key. */
@@ -72,6 +77,7 @@ export const ROLE_PERMISSIONS: Record<string, PermissionKey[]> = {
     "offboarding:read", "offboarding:manage",
     "network:read", "network:manage", "change:read", "change:manage", "change:approve",
     "backup:read", "backup:manage", "contract:read", "contract:manage",
+    "problem:read", "problem:manage", "kb:read", "kb:manage", "vuln:read", "vuln:manage",
   ],
   IT_STAFF: [
     "asset:read", "asset:create", "asset:update",
@@ -85,6 +91,7 @@ export const ROLE_PERMISSIONS: Record<string, PermissionKey[]> = {
     "report:read", "offboarding:read",
     "network:read", "network:manage", "change:read", "change:manage",
     "backup:read", "backup:manage", "contract:read",
+    "problem:read", "problem:manage", "kb:read", "kb:manage", "vuln:read", "vuln:manage",
   ],
   SECURITY_ADMIN: [
     "asset:read", "employee:read", "department:read", "location:read",

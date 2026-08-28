@@ -92,6 +92,7 @@ const PERMISSIONS = [
   "support:create","support:read","support:work","support:manage","support:settings",
   "network:read","network:manage","change:read","change:manage","change:approve",
   "backup:read","backup:manage","contract:read","contract:manage",
+  "problem:read","problem:manage","kb:read","kb:manage","vuln:read","vuln:manage",
   "user:manage","role:manage","settings:manage","offboarding:read","offboarding:manage",
 ];
 
@@ -99,6 +100,7 @@ const READ_ONLY = [
   "asset:read","employee:read","department:read","location:read","license:read",
   "subscription:read","vendor:read","maintenance:read","procurement:read","report:read",
   "network:read","change:read","backup:read","contract:read",
+  "problem:read","kb:read","vuln:read",
 ];
 
 const ROLE_PERMISSIONS: Record<string, string[]> = {
@@ -115,6 +117,7 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
     "support:create","support:read","support:work","support:manage","support:settings",
     "network:read","network:manage","change:read","change:manage","change:approve",
     "backup:read","backup:manage","contract:read","contract:manage",
+    "problem:read","problem:manage","kb:read","kb:manage","vuln:read","vuln:manage",
   ],
   IT_STAFF: [
     "asset:read","asset:create","asset:update","asset:assign","asset:return","asset:transfer",
@@ -124,12 +127,14 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
     "procurement:read","procurement:create","report:read","offboarding:read",
     "support:create","support:read","support:work",
     "network:read","network:manage","change:read","change:manage","backup:read","backup:manage","contract:read",
+    "problem:read","problem:manage","kb:read","kb:manage","vuln:read","vuln:manage",
   ],
   SECURITY_ADMIN: [
     "asset:read","employee:read","department:read","location:read",
     "vault:read","vault:reveal","vault:manage","vault:emergency","vault:audit",
     "audit:read","security:read","report:read","report:export","user:manage","role:manage",
     "support:read","support:work",
+    "vuln:read","vuln:manage","kb:read",
   ],
   HR: [
     "employee:read","employee:create","employee:update","employee:delete",

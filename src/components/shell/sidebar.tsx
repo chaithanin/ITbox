@@ -6,7 +6,7 @@ import {
   LayoutDashboard, Monitor, Users, Building2, MapPin, KeyRound, AppWindow,
   RefreshCcw, Wrench, ShoppingCart, Store, BarChart3, Bell, ScrollText,
   ShieldAlert, Settings, UserMinus, Boxes, LifeBuoy,
-  Router, GitPullRequest, DatabaseBackup, FileText,
+  Router, GitPullRequest, DatabaseBackup, FileText, Bug, BookOpen, ShieldX,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { BrandLogo } from "@/components/brand-logo";
@@ -42,6 +42,9 @@ const ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   changes: GitPullRequest,
   backup: DatabaseBackup,
   contracts: FileText,
+  problems: Bug,
+  kb: BookOpen,
+  vulnerabilities: ShieldX,
   default: Boxes,
 };
 

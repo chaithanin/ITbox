@@ -61,6 +61,9 @@ model Organization {
   changeRequests    ChangeRequest[]
   backupJobs        BackupJob[]
   contracts         Contract[]
+  problems          Problem[]
+  kbArticles        KbArticle[]
+  vulnerabilities   Vulnerability[]
 
   @@map("organizations")
 }
@@ -454,6 +457,7 @@ model Asset {
   documents   AssetDocument[]
   maintenance MaintenanceTicket[]
   vaultLinks  AssetVaultLink[]
+  vulnerabilities Vulnerability[]
 
   @@unique([organizationId, assetTag])
   supportCases SupportCase[]  @relation("CaseAsset")
@@ -1413,6 +1417,8 @@ model SupportCase {
   asset        Asset?        @relation("CaseAsset", fields: [assetId], references: [id])
   assignedTeam SupportTeam?  @relation(fields: [assignedTeamId], references: [id])
   assignedUser User?         @relation("CaseAssignee", fields: [assignedUserId], references: [id])
+  problemId    String?       @db.Uuid
+  problem      Problem?      @relation(fields: [problemId], references: [id])
 
   comments     CaseComment[]
   attachments  CaseAttachment[]
@@ -1922,4 +1928,115 @@ model Contract {
   @@index([organizationId, status])
   @@index([organizationId, renewalDate])
   @@map("contracts")
+}
+
+// ============================ Problem Management ============================
+
+enum ProblemStatus {
+  OPEN
+  INVESTIGATING
+  KNOWN_ERROR
+  RESOLVED
+  CLOSED
+}
+
+model Problem {
+  id             String        @id @default(uuid()) @db.Uuid
+  organizationId String        @db.Uuid
+  problemNumber  String
+  title          String
+  description    String?
+  status         ProblemStatus @default(OPEN)
+  priority       CasePriority  @default(P3)
+  rootCause      String?
+  workaround     String?
+  knownError     Boolean       @default(false)
+  assignedToId   String?       @db.Uuid
+  resolvedAt     DateTime?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  organization Organization  @relation(fields: [organizationId], references: [id])
+  cases        SupportCase[]
+
+  @@unique([organizationId, problemNumber])
+  @@index([organizationId, status])
+  @@map("problems")
+}
+
+// ============================ Knowledge Base ============================
+
+enum KbStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+model KbArticle {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @db.Uuid
+  title          String
+  category       String?
+  body           String
+  tags           String?
+  status         KbStatus @default(DRAFT)
+  authorId       String?  @db.Uuid
+  views          Int      @default(0)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId, status])
+  @@map("kb_articles")
+}
+
+// ============================ Vulnerability & Patch ============================
+
+enum VulnSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum VulnStatus {
+  OPEN
+  IN_PROGRESS
+  REMEDIATED
+  ACCEPTED
+  FALSE_POSITIVE
+}
+
+model Vulnerability {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @db.Uuid
+  title          String
+  cveId          String?
+  severity       VulnSeverity @default(MEDIUM)
+  status         VulnStatus   @default(OPEN)
+  assetId        String?      @db.Uuid
+  affectedSystem String?
+  description    String?
+  remediation    String?
+  patchAvailable Boolean      @default(false)
+  patchVersion   String?
+  dueDate        DateTime?    @db.Date
+  assignedToId   String?      @db.Uuid
+  remediatedAt   DateTime?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  asset        Asset?       @relation(fields: [assetId], references: [id])
+
+  @@index([organizationId, status])
+  @@index([organizationId, severity])
+  @@map("vulnerabilities")
 }
