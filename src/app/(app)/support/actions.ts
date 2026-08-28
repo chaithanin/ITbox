@@ -7,6 +7,7 @@ import { revalidatePath } from "next/cache";
 import { requireUser, requirePermission } from "@/lib/session";
 import { AuthError } from "@/lib/errors";
 import { prisma } from "@/lib/prisma";
+import { auditLog } from "@/lib/audit";
 import {
   getStorageProvider, ALLOWED_UPLOAD_TYPES, MAX_UPLOAD_BYTES, verifyMagicBytes,
 } from "@/lib/storage";
@@ -144,6 +145,38 @@ export async function submitSatisfactionAction(caseId: string, formData: FormDat
   const rating = z.coerce.number().int().min(1).max(5).parse(formData.get("rating"));
   const comment = z.string().max(1000).optional().parse(formData.get("comment") || undefined);
   await submitSatisfaction(user, caseId, rating, comment);
+  revalidatePath(`/support/${caseId}`);
+}
+
+/**
+ * Declare / stand down a Major Incident and update its comms log. A major
+ * incident forces P1, records an incident commander, and keeps a timeline.
+ */
+export async function majorIncidentAction(caseId: string, formData: FormData) {
+  const user = await requirePermission("support:work");
+  const op = z.enum(["declare", "standdown", "comms"]).parse(formData.get("op"));
+  const c = await prisma.supportCase.findFirst({
+    where: { id: caseId, organizationId: user.organizationId, deletedAt: null },
+    select: { id: true, commsLog: true },
+  });
+  if (!c) redirect("/support");
+
+  if (op === "declare") {
+    await prisma.supportCase.update({
+      where: { id: caseId },
+      data: { isMajorIncident: true, incidentCommanderId: user.id, priority: "P1", priorityOverridden: true },
+    });
+    await prisma.caseEvent.create({ data: { caseId, actorId: user.id, action: "ESCALATED", detail: { majorIncident: true } } });
+  } else if (op === "standdown") {
+    await prisma.supportCase.update({ where: { id: caseId }, data: { isMajorIncident: false } });
+    await prisma.caseEvent.create({ data: { caseId, actorId: user.id, action: "STATUS_CHANGE", detail: { majorIncidentStoodDown: true } } });
+  } else {
+    const entry = z.string().min(1).max(1000).parse(formData.get("entry"));
+    const stamp = new Date().toISOString().slice(0, 16).replace("T", " ");
+    const line = `[${stamp}] ${user.name ?? "IT"}: ${entry}`;
+    await prisma.supportCase.update({ where: { id: caseId }, data: { commsLog: c.commsLog ? `${c.commsLog}\n${line}` : line } });
+  }
+  await auditLog(user, { action: "UPDATE", entityType: "SUPPORT_CASE", entityId: caseId, detail: { majorIncident: op } });
   revalidatePath(`/support/${caseId}`);
 }
 

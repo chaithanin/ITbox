@@ -24,7 +24,11 @@ export function totpUri(email: string, secretB32: string): string {
   return totp.toString();
 }
 
-export function verifyTotpCode(secretB32: string, code: string): boolean {
+/**
+ * Validate a code and return the absolute TOTP time-step it matched (for replay
+ * protection), or null if invalid. period=30s, ±1 window.
+ */
+export function verifyTotpCode(secretB32: string, code: string): number | null {
   const totp = new OTPAuth.TOTP({
     issuer: ISSUER,
     algorithm: "SHA1",
@@ -32,7 +36,9 @@ export function verifyTotpCode(secretB32: string, code: string): boolean {
     period: 30,
     secret: OTPAuth.Secret.fromBase32(secretB32),
   });
-  return totp.validate({ token: code.replace(/\s/g, ""), window: 1 }) !== null;
+  const delta = totp.validate({ token: code.replace(/\s/g, ""), window: 1 });
+  if (delta === null) return null;
+  return Math.floor(Date.now() / 1000 / 30) + delta;
 }
 
 /** Persist an (encrypted) TOTP secret for a user. */
@@ -51,9 +57,13 @@ export async function storeTotpSecret(userId: string, secretB32: string) {
   });
 }
 
-/** Verify a TOTP code for a user whose secret is stored encrypted. */
+/**
+ * Verify a TOTP code for a user whose secret is stored encrypted, with replay
+ * protection: a time-step is accepted at most once (records the last-used step
+ * and rejects any code from that step or earlier).
+ */
 export async function verifyTotp(
-  user: Pick<User, "totpSecretEnc" | "totpSecretDekEnc">,
+  user: Pick<User, "id" | "totpSecretEnc" | "totpSecretDekEnc" | "totpLastStep">,
   code: string
 ): Promise<boolean> {
   if (!user.totpSecretEnc || !user.totpSecretDekEnc) return false;
@@ -64,7 +74,12 @@ export async function verifyTotp(
       authTag: string;
     };
     const secret = await decryptSecret({ ...parsed, dekEnc: user.totpSecretDekEnc });
-    return verifyTotpCode(secret, code);
+    const step = verifyTotpCode(secret, code);
+    if (step === null) return false;
+    // Reject replay of an already-used (or older) code.
+    if (user.totpLastStep != null && BigInt(step) <= user.totpLastStep) return false;
+    await prisma.user.update({ where: { id: user.id }, data: { totpLastStep: BigInt(step) } });
+    return true;
   } catch {
     return false;
   }

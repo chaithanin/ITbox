@@ -27,6 +27,7 @@ import {
   transitionAction,
   assignToMeAction,
   overridePriorityAction,
+  majorIncidentAction,
 } from "../actions";
 
 const ALL_STATUSES: CaseStatus[] = [
@@ -101,6 +102,7 @@ export default async function CaseDetailPage({
       asset: { select: { id: true, assetTag: true, name: true, warrantyEnd: true } },
       assignedUser: { select: { name: true } },
       assignedTeam: { select: { name: true, nameTh: true } },
+      incidentCommander: { select: { name: true } },
       comments: {
         orderBy: { createdAt: "asc" },
         include: {
@@ -143,6 +145,35 @@ export default async function CaseDetailPage({
           <Link href="/support">กลับ / Back</Link>
         </Button>
       </PageHeader>
+
+      {/* ---- Major Incident ---- */}
+      {c.isMajorIncident ? (
+        <div className="mb-4 rounded-lg border-2 border-red-500/50 bg-red-500/5 p-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 rounded-md bg-red-600 px-2 py-1 text-xs font-bold text-white">🚨 MAJOR INCIDENT</span>
+            <span className="text-sm text-muted-foreground">Incident Commander: {c.incidentCommander?.name ?? "—"}</span>
+            {canWork && (
+              <form action={majorIncidentAction.bind(null, c.id)} className="ml-auto">
+                <input type="hidden" name="op" value="standdown" />
+                <Button type="submit" size="sm" variant="outline">Stand down</Button>
+              </form>
+            )}
+          </div>
+          {c.commsLog && <pre className="mt-3 max-h-40 overflow-y-auto whitespace-pre-wrap rounded-md bg-muted/60 p-2 font-mono text-xs">{c.commsLog}</pre>}
+          {canWork && (
+            <form action={majorIncidentAction.bind(null, c.id)} className="mt-2 flex gap-2">
+              <input type="hidden" name="op" value="comms" />
+              <input name="entry" required maxLength={1000} placeholder="อัปเดตสถานการณ์ / Comms update…" className="h-8 flex-1 rounded-md border bg-background px-2 text-xs" />
+              <Button type="submit" size="sm" variant="outline" className="h-8">บันทึก timeline</Button>
+            </form>
+          )}
+        </div>
+      ) : canWork ? (
+        <form action={majorIncidentAction.bind(null, c.id)} className="mb-4">
+          <input type="hidden" name="op" value="declare" />
+          <Button type="submit" variant="outline" size="sm" className="text-red-600">🚨 ประกาศเป็น Major Incident</Button>
+        </form>
+      ) : null}
 
       {sp.created === "1" && (
         <div className="mb-4 rounded-lg border border-emerald-500/40 bg-emerald-500/10 p-4 text-sm">

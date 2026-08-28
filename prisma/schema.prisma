@@ -66,6 +66,10 @@ model Organization {
   vulnerabilities   Vulnerability[]
   configItems       ConfigurationItem[]
   ciRelationships   CiRelationship[]
+  onboardings       Onboarding[]
+  serviceCatalog    ServiceCatalogItem[]
+  endpointPostures  EndpointPosture[]
+  monitoringHosts   MonitoringHost[]
 
   @@map("organizations")
 }
@@ -93,6 +97,8 @@ model User {
   // MFA (TOTP). Secret is encrypted with the org KMS envelope, never plaintext.
   mfaEnabled       Boolean @default(false)
   totpSecretEnc    String?
+  // Last accepted TOTP time-step, to reject code replay within its window
+  totpLastStep     BigInt?
   totpSecretDekEnc String?
 
   // Login protection
@@ -127,6 +133,7 @@ model User {
   casesRequested     SupportCase[]   @relation("CaseRequester")
   casesCreated       SupportCase[]   @relation("CaseCreatedBy")
   casesAssigned      SupportCase[]   @relation("CaseAssignee")
+  casesCommanded     SupportCase[]   @relation("CaseCommander")
   caseComments       CaseComment[]
   supportTeamMemberships SupportTeamMember[]
   signatureProfile   SignatureProfile?
@@ -305,6 +312,7 @@ model Employee {
   assetAssignments   AssetAssignment[]
   licenseAssignments LicenseAssignment[]
   offboardings       Offboarding[]
+  onboardings        Onboarding[]
   supportCases       SupportCase[]  @relation("CaseRequesterEmployee")
 
   @@unique([organizationId, employeeCode])
@@ -461,6 +469,7 @@ model Asset {
   vaultLinks  AssetVaultLink[]
   vulnerabilities Vulnerability[]
   configItems ConfigurationItem[]
+  endpointPostures EndpointPosture[]
 
   @@unique([organizationId, assetTag])
   supportCases SupportCase[]  @relation("CaseAsset")
@@ -1372,6 +1381,9 @@ model SupportCase {
   priorityOverridden Boolean      @default(false)
   impact             CaseImpact?
   urgency            CaseUrgency?
+  isMajorIncident    Boolean     @default(false)
+  incidentCommanderId String?    @db.Uuid
+  commsLog           String?
   status             CaseStatus   @default(NEW)
   source             CaseSource   @default(WEB)
 
@@ -1427,6 +1439,7 @@ model SupportCase {
   asset        Asset?        @relation("CaseAsset", fields: [assetId], references: [id])
   assignedTeam SupportTeam?  @relation(fields: [assignedTeamId], references: [id])
   assignedUser User?         @relation("CaseAssignee", fields: [assignedUserId], references: [id])
+  incidentCommander User?    @relation("CaseCommander", fields: [incidentCommanderId], references: [id])
   problemId    String?       @db.Uuid
   problem      Problem?      @relation(fields: [problemId], references: [id])
 
@@ -2119,4 +2132,124 @@ model CiRelationship {
   @@index([organizationId, sourceId])
   @@index([organizationId, targetId])
   @@map("ci_relationships")
+}
+
+// ============================ Onboarding (Joiner) ============================
+
+enum OnboardingStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+}
+
+model Onboarding {
+  id             String           @id @default(uuid()) @db.Uuid
+  organizationId String           @db.Uuid
+  employeeId     String           @db.Uuid
+  status         OnboardingStatus @default(PENDING)
+  accountCreated   Boolean @default(false)
+  emailCreated     Boolean @default(false)
+  assetAssigned    Boolean @default(false)
+  softwareAssigned Boolean @default(false)
+  accessGranted    Boolean @default(false)
+  inductionDone    Boolean @default(false)
+  note           String?
+  startedById    String?   @db.Uuid
+  completedAt    DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  employee     Employee     @relation(fields: [employeeId], references: [id])
+
+  @@index([organizationId, status])
+  @@map("onboardings")
+}
+
+// ============================ Service Catalog ============================
+
+model ServiceCatalogItem {
+  id               String  @id @default(uuid()) @db.Uuid
+  organizationId   String  @db.Uuid
+  name             String
+  category         String?
+  description      String?
+  requiresApproval Boolean @default(false)
+  slaHours         Int?
+  fulfillmentTeam  String?
+  active           Boolean @default(true)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@unique([organizationId, name])
+  @@map("service_catalog_items")
+}
+
+// ============================ EDR / Endpoint posture ============================
+
+enum ProtectionStatus {
+  PROTECTED
+  AT_RISK
+  OFFLINE
+  UNKNOWN
+}
+
+model EndpointPosture {
+  id               String           @id @default(uuid()) @db.Uuid
+  organizationId   String           @db.Uuid
+  hostname         String
+  assetId          String?          @db.Uuid
+  protectionStatus ProtectionStatus @default(UNKNOWN)
+  agentVersion     String?
+  osVersion        String?
+  lastScanAt       DateTime?
+  threatsFound     Int              @default(0)
+  isolated         Boolean          @default(false)
+  lastSeenAt       DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  asset        Asset?       @relation(fields: [assetId], references: [id])
+
+  @@unique([organizationId, hostname])
+  @@index([organizationId, protectionStatus])
+  @@map("endpoint_posture")
+}
+
+// ============================ Monitoring ============================
+
+enum MonitorStatus {
+  UP
+  WARNING
+  DOWN
+  UNKNOWN
+}
+
+model MonitoringHost {
+  id             String        @id @default(uuid()) @db.Uuid
+  organizationId String        @db.Uuid
+  hostname       String
+  status         MonitorStatus @default(UNKNOWN)
+  cpuPercent     Int?
+  memPercent     Int?
+  diskPercent    Int?
+  uptimeSeconds  BigInt?
+  note           String?
+  lastSeenAt     DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@unique([organizationId, hostname])
+  @@index([organizationId, status])
+  @@map("monitoring_hosts")
 }

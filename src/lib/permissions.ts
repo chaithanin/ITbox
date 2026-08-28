@@ -43,6 +43,10 @@ export const PERMISSIONS = [
   "vuln:read", "vuln:manage",
   // CMDB
   "cmdb:read", "cmdb:manage",
+  // Onboarding / Service catalog / Monitoring & EDR
+  "onboarding:read", "onboarding:manage",
+  "catalog:read", "catalog:manage",
+  "monitoring:read",
   // Admin
   "user:manage", "role:manage", "settings:manage",
   "offboarding:read", "offboarding:manage",
@@ -58,6 +62,7 @@ const READ_ONLY: PermissionKey[] = [
   "procurement:read", "report:read",
   "network:read", "change:read", "backup:read", "contract:read",
   "problem:read", "kb:read", "vuln:read", "cmdb:read",
+  "onboarding:read", "catalog:read", "monitoring:read",
 ];
 
 /** Default permission sets per system role key. */
@@ -81,6 +86,7 @@ export const ROLE_PERMISSIONS: Record<string, PermissionKey[]> = {
     "backup:read", "backup:manage", "contract:read", "contract:manage",
     "problem:read", "problem:manage", "kb:read", "kb:manage", "vuln:read", "vuln:manage",
     "cmdb:read", "cmdb:manage",
+    "onboarding:read", "onboarding:manage", "catalog:read", "catalog:manage", "monitoring:read",
   ],
   IT_STAFF: [
     "asset:read", "asset:create", "asset:update",
@@ -96,6 +102,7 @@ export const ROLE_PERMISSIONS: Record<string, PermissionKey[]> = {
     "backup:read", "backup:manage", "contract:read",
     "problem:read", "problem:manage", "kb:read", "kb:manage", "vuln:read", "vuln:manage",
     "cmdb:read", "cmdb:manage",
+    "onboarding:read", "onboarding:manage", "catalog:read", "monitoring:read",
   ],
   SECURITY_ADMIN: [
     "asset:read", "employee:read", "department:read", "location:read",
@@ -103,11 +110,13 @@ export const ROLE_PERMISSIONS: Record<string, PermissionKey[]> = {
     "audit:read", "security:read", "report:read", "report:export",
     "support:read", "support:work",
     "user:manage", "role:manage",
+    "monitoring:read",
   ],
   HR: [
     "employee:read", "employee:create", "employee:update", "employee:delete",
     "department:read", "location:read", "asset:read",
     "offboarding:read", "offboarding:manage", "report:read", "support:create",
+    "onboarding:read", "onboarding:manage", "catalog:read",
   ],
   FINANCE: [
     ...READ_ONLY, "procurement:approve", "report:export", "support:create",
