@@ -8,7 +8,7 @@ import { requirePermission } from "@/lib/session";
 import { auditLog } from "@/lib/audit";
 import { AuthError } from "@/lib/errors";
 import {
-  getStorageProvider, ALLOWED_UPLOAD_TYPES, MAX_UPLOAD_BYTES,
+  getStorageProvider, ALLOWED_UPLOAD_TYPES, MAX_UPLOAD_BYTES, verifyMagicBytes,
 } from "@/lib/storage";
 
 const DOC_TYPES = ["INVOICE", "WARRANTY", "MANUAL", "PHOTO", "OTHER"] as const;
@@ -32,9 +32,10 @@ export async function uploadAssetDocumentAction(assetId: string, formData: FormD
     throw new AuthError("IMAGE_TYPE_REQUIRED", 400);
   }
 
+  const buffer = Buffer.from(await file.arrayBuffer());
+  if (!verifyMagicBytes(buffer, file.type)) throw new AuthError("FILE_CONTENT_MISMATCH", 400);
   // Server-generated object path — user input never becomes a path
   const objectPath = `${user.organizationId}/assets/${asset.id}/${crypto.randomUUID()}.${ext}`;
-  const buffer = Buffer.from(await file.arrayBuffer());
   await getStorageProvider().put(objectPath, buffer, file.type);
 
   const safeName = file.name.slice(0, 200).replace(/[\r\n]/g, " ");

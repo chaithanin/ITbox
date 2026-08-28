@@ -295,6 +295,26 @@ export default async function NewCasePage({
               </div>
 
               <div className="mt-4">
+                <Label>ความเร่งด่วน / Urgency</Label>
+                <p className="mb-2 text-xs text-muted-foreground">รอได้แค่ไหน — รวมกับผลกระทบเพื่อคำนวณ Priority (Impact × Urgency)</p>
+                <div className="grid grid-cols-3 gap-2">
+                  {([
+                    { v: "HIGH", th: "ด่วนมาก", desc: "ต้องแก้ทันที" },
+                    { v: "MEDIUM", th: "ปกติ", desc: "ภายในวันนี้" },
+                    { v: "LOW", th: "รอได้", desc: "ไม่เร่ง" },
+                  ] as const).map((u) => (
+                    <label key={u.v} className="cursor-pointer">
+                      <input type="radio" name="urgency" value={u.v} defaultChecked={u.v === "MEDIUM"} className="peer sr-only" />
+                      <div className="rounded-lg border bg-card p-2 text-center transition-colors hover:border-primary/50 peer-checked:border-primary peer-checked:bg-primary/5 peer-checked:ring-2 peer-checked:ring-primary/30">
+                        <p className="text-sm font-medium">{u.th}</p>
+                        <p className="text-[11px] text-muted-foreground">{u.desc}</p>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              <div className="mt-4">
                 <Label htmlFor="file" className="flex items-center gap-1.5">
                   <Paperclip className="h-3.5 w-3.5" />
                   แนบไฟล์ / Attachment

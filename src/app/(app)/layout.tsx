@@ -83,6 +83,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     ...(has("problem:read") ? [{ href: "/problems", label: "Problem Management", icon: "problems" }] : []),
     ...(has("kb:read") ? [{ href: "/kb", label: "Knowledge Base", icon: "kb" }] : []),
     ...(has("vuln:read") ? [{ href: "/vulnerabilities", label: "ช่องโหว่ / Vulnerabilities", icon: "vulnerabilities" }] : []),
+    ...(has("cmdb:read") ? [{ href: "/cmdb", label: "CMDB", icon: "cmdb" }] : []),
     ...(has("backup:read") ? [{ href: "/backup", label: "Backup & DR", icon: "backup" }] : []),
     ...(has("contract:read") ? [{ href: "/contracts", label: "สัญญา / Contracts", icon: "contracts" }] : []),
     ...(has("procurement:read") ? [{ href: "/procurement", label: t("procurement"), icon: "procurement" }] : []),

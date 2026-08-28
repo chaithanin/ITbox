@@ -64,6 +64,8 @@ model Organization {
   problems          Problem[]
   kbArticles        KbArticle[]
   vulnerabilities   Vulnerability[]
+  configItems       ConfigurationItem[]
+  ciRelationships   CiRelationship[]
 
   @@map("organizations")
 }
@@ -458,6 +460,7 @@ model Asset {
   maintenance MaintenanceTicket[]
   vaultLinks  AssetVaultLink[]
   vulnerabilities Vulnerability[]
+  configItems ConfigurationItem[]
 
   @@unique([organizationId, assetTag])
   supportCases SupportCase[]  @relation("CaseAsset")
@@ -1199,6 +1202,12 @@ enum CaseImpact {
   GENERAL  // ขอความช่วยเหลือทั่วไป
 }
 
+enum CaseUrgency {
+  HIGH   // ต้องแก้ทันที
+  MEDIUM // ปกติ
+  LOW    // รอได้
+}
+
 enum CaseStatus {
   NEW
   TRIAGE
@@ -1362,6 +1371,7 @@ model SupportCase {
   priority           CasePriority @default(P3)
   priorityOverridden Boolean      @default(false)
   impact             CaseImpact?
+  urgency            CaseUrgency?
   status             CaseStatus   @default(NEW)
   source             CaseSource   @default(WEB)
 
@@ -2039,4 +2049,74 @@ model Vulnerability {
   @@index([organizationId, status])
   @@index([organizationId, severity])
   @@map("vulnerabilities")
+}
+
+// ============================ CMDB ============================
+
+enum CiType {
+  APPLICATION
+  SERVICE
+  SERVER
+  DATABASE
+  NETWORK
+  STORAGE
+  OTHER
+}
+
+enum CiStatus {
+  ACTIVE
+  DEGRADED
+  OFFLINE
+  RETIRED
+}
+
+enum CiRelationType {
+  DEPENDS_ON
+  RUNS_ON
+  CONNECTS_TO
+  HOSTS
+  USES
+}
+
+model ConfigurationItem {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @db.Uuid
+  name           String
+  ciType         CiType   @default(SERVICE)
+  status         CiStatus @default(ACTIVE)
+  description    String?
+  owner          String?
+  assetId        String?  @db.Uuid
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  organization Organization     @relation(fields: [organizationId], references: [id])
+  asset        Asset?           @relation(fields: [assetId], references: [id])
+  outgoing     CiRelationship[] @relation("CiSource")
+  incoming     CiRelationship[] @relation("CiTarget")
+
+  @@unique([organizationId, name])
+  @@index([organizationId, ciType])
+  @@map("configuration_items")
+}
+
+model CiRelationship {
+  id             String         @id @default(uuid()) @db.Uuid
+  organizationId String         @db.Uuid
+  sourceId       String         @db.Uuid
+  targetId       String         @db.Uuid
+  relType        CiRelationType @default(DEPENDS_ON)
+
+  createdAt DateTime @default(now())
+
+  organization Organization      @relation(fields: [organizationId], references: [id])
+  source       ConfigurationItem @relation("CiSource", fields: [sourceId], references: [id], onDelete: Cascade)
+  target       ConfigurationItem @relation("CiTarget", fields: [targetId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, sourceId, targetId, relType])
+  @@index([organizationId, sourceId])
+  @@index([organizationId, targetId])
+  @@map("ci_relationships")
 }

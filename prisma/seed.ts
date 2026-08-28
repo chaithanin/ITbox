@@ -93,6 +93,7 @@ const PERMISSIONS = [
   "network:read","network:manage","change:read","change:manage","change:approve",
   "backup:read","backup:manage","contract:read","contract:manage",
   "problem:read","problem:manage","kb:read","kb:manage","vuln:read","vuln:manage",
+  "cmdb:read","cmdb:manage",
   "user:manage","role:manage","settings:manage","offboarding:read","offboarding:manage",
 ];
 
@@ -100,7 +101,7 @@ const READ_ONLY = [
   "asset:read","employee:read","department:read","location:read","license:read",
   "subscription:read","vendor:read","maintenance:read","procurement:read","report:read",
   "network:read","change:read","backup:read","contract:read",
-  "problem:read","kb:read","vuln:read",
+  "problem:read","kb:read","vuln:read","cmdb:read",
 ];
 
 const ROLE_PERMISSIONS: Record<string, string[]> = {
@@ -118,6 +119,7 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
     "network:read","network:manage","change:read","change:manage","change:approve",
     "backup:read","backup:manage","contract:read","contract:manage",
     "problem:read","problem:manage","kb:read","kb:manage","vuln:read","vuln:manage",
+    "cmdb:read","cmdb:manage",
   ],
   IT_STAFF: [
     "asset:read","asset:create","asset:update","asset:assign","asset:return","asset:transfer",
@@ -128,6 +130,7 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
     "support:create","support:read","support:work",
     "network:read","network:manage","change:read","change:manage","backup:read","backup:manage","contract:read",
     "problem:read","problem:manage","kb:read","kb:manage","vuln:read","vuln:manage",
+    "cmdb:read","cmdb:manage",
   ],
   SECURITY_ADMIN: [
     "asset:read","employee:read","department:read","location:read",

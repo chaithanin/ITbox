@@ -7,6 +7,7 @@ import {
   getStorageProvider,
   ALLOWED_UPLOAD_TYPES,
   MAX_UPLOAD_BYTES,
+  verifyMagicBytes,
 } from "@/lib/storage";
 
 /**
@@ -37,8 +38,9 @@ export const POST = apiHandler(
       if (file.size > MAX_UPLOAD_BYTES) throw new AuthError("FILE_TOO_LARGE", 400);
       const ext = ALLOWED_UPLOAD_TYPES[file.type];
       if (!ext) throw new AuthError("UNSUPPORTED_FILE_TYPE", 400);
-      const objectPath = `${user.organizationId}/it-health/${check.id}/${crypto.randomUUID()}.${ext}`;
       const buffer = Buffer.from(await file.arrayBuffer());
+      if (!verifyMagicBytes(buffer, file.type)) throw new AuthError("FILE_CONTENT_MISMATCH", 400);
+      const objectPath = `${user.organizationId}/it-health/${check.id}/${crypto.randomUUID()}.${ext}`;
       await storage.put(objectPath, buffer, file.type);
       const row = await prisma.itHealthEvidence.create({
         data: {

@@ -8,7 +8,7 @@ import { requireUser, requirePermission } from "@/lib/session";
 import { AuthError } from "@/lib/errors";
 import { prisma } from "@/lib/prisma";
 import {
-  getStorageProvider, ALLOWED_UPLOAD_TYPES, MAX_UPLOAD_BYTES,
+  getStorageProvider, ALLOWED_UPLOAD_TYPES, MAX_UPLOAD_BYTES, verifyMagicBytes,
 } from "@/lib/storage";
 import {
   createCase, addComment, transitionCase, assignCase, overridePriority,
@@ -28,8 +28,9 @@ async function handleAttachment(
   if (file.size > MAX_UPLOAD_BYTES) throw new AuthError("FILE_TOO_LARGE", 400);
   const ext = ALLOWED_UPLOAD_TYPES[file.type];
   if (!ext) throw new AuthError("UNSUPPORTED_FILE_TYPE", 400);
-  const objectPath = `${organizationId}/support/${caseId}/${crypto.randomUUID()}.${ext}`;
   const buffer = Buffer.from(await file.arrayBuffer());
+  if (!verifyMagicBytes(buffer, file.type)) throw new AuthError("FILE_CONTENT_MISMATCH", 400);
+  const objectPath = `${organizationId}/support/${caseId}/${crypto.randomUUID()}.${ext}`;
   await getStorageProvider().put(objectPath, buffer, file.type);
   return {
     name: file.name.slice(0, 200).replace(/[\r\n]/g, " ") || `file.${ext}`,
@@ -46,6 +47,7 @@ const createSchema = z.object({
   categoryId: z.preprocess(emptyNull, z.string().uuid().nullable()),
   subcategoryId: z.preprocess(emptyNull, z.string().uuid().nullable()),
   impact: z.preprocess(emptyNull, z.enum(["UNUSABLE", "MAJOR", "PARTIAL", "GENERAL"]).nullable()),
+  urgency: z.preprocess(emptyNull, z.enum(["HIGH", "MEDIUM", "LOW"]).nullable()),
   locationId: z.preprocess(emptyNull, z.string().uuid().nullable()),
   assetId: z.preprocess(emptyNull, z.string().uuid().nullable()),
   requesterUserId: z.preprocess(emptyNull, z.string().uuid().nullable()),

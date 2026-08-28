@@ -149,7 +149,6 @@ export async function updateAsset(formData: FormData) {
 
   const existing = await prisma.asset.findFirst({
     where: { id, organizationId: user.organizationId, deletedAt: null },
-    select: { id: true },
   });
   if (!existing) throw new Error("Asset not found");
 
@@ -165,6 +164,20 @@ export async function updateAsset(formData: FormData) {
   if (dup) throw new Error(`Asset tag "${data.assetTag}" already exists`);
   await assertNoDuplicateIdentifiers(user.organizationId, data, id);
 
+  // Capture a before/after diff of only the fields that actually changed, for a
+  // forensic audit trail (never store secret-bearing fields — assets have none).
+  const before: Record<string, unknown> = {};
+  const after: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(data)) {
+    const prev = (existing as Record<string, unknown>)[k];
+    const prevCmp = prev instanceof Date ? prev.getTime() : prev;
+    const nextCmp = v instanceof Date ? v.getTime() : v;
+    if (prevCmp !== nextCmp) {
+      before[k] = prev instanceof Date ? prev.toISOString() : prev;
+      after[k] = v instanceof Date ? v.toISOString() : v;
+    }
+  }
+
   const asset = await prisma.asset.update({ where: { id }, data });
   await prisma.assetHistory.create({
     data: {
@@ -179,7 +192,7 @@ export async function updateAsset(formData: FormData) {
     action: "UPDATE",
     entityType: "ASSET",
     entityId: asset.id,
-    detail: { assetTag: asset.assetTag, name: asset.name },
+    detail: { assetTag: asset.assetTag, name: asset.name, changed: Object.keys(after), before, after },
   });
   revalidatePath("/assets");
   revalidatePath(`/assets/${asset.id}`);

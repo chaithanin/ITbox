@@ -17,7 +17,7 @@ import type { CurrentUser } from "@/lib/session";
 import { pushLineMessage } from "@/lib/services/notify";
 import { sendEmail, emailEnabled } from "@/lib/services/email";
 import type {
-  CasePriority, CaseImpact, CaseStatus, CaseSource, SupportCase, Prisma,
+  CasePriority, CaseImpact, CaseUrgency, CaseStatus, CaseSource, SupportCase, Prisma,
 } from "@prisma/client";
 
 // ---------------- Case number ----------------
@@ -63,18 +63,25 @@ function raise(p: CasePriority, steps: number): CasePriority {
   const i = Math.max(0, ORDER.indexOf(p) - steps);
   return ORDER[i];
 }
+function lower(p: CasePriority, steps: number): CasePriority {
+  const i = Math.min(ORDER.length - 1, ORDER.indexOf(p) + steps);
+  return ORDER[i];
+}
 
 /**
- * Compute priority from user-reported impact, nudged by category signals
- * (Security/Network categories escalate one level). A category's explicit
- * defaultPriority wins when set. IT can still override afterwards.
+ * Compute priority from the ITIL Impact × Urgency matrix, then nudged by
+ * category signals (Security/Network escalate one level). Impact sets the base
+ * (UNUSABLE→P1 … GENERAL→P4); HIGH urgency raises one level, LOW urgency lowers
+ * one. A category's explicit defaultPriority wins; IT can override afterwards.
  */
 export function computePriority(
   impact: CaseImpact | null | undefined,
-  opts: { categoryName?: string | null; categoryDefault?: CasePriority | null }
+  opts: { categoryName?: string | null; categoryDefault?: CasePriority | null; urgency?: CaseUrgency | null }
 ): CasePriority {
   if (opts.categoryDefault) return opts.categoryDefault;
   let p = impact ? IMPACT_BASE[impact] : "P3";
+  if (opts.urgency === "HIGH") p = raise(p, 1);
+  else if (opts.urgency === "LOW") p = lower(p, 1);
   const name = (opts.categoryName ?? "").toLowerCase();
   if (/security|phishing|malware|virus|ransom|compromise/.test(name)) p = raise(p, 1);
   if (/network|internet|firewall|server/.test(name)) p = raise(p, 1);
@@ -313,6 +320,7 @@ export interface CreateCaseInput {
   categoryId?: string | null;
   subcategoryId?: string | null;
   impact?: CaseImpact | null;
+  urgency?: CaseUrgency | null;
   locationId?: string | null;
   assetId?: string | null;
   source?: CaseSource;
@@ -370,6 +378,7 @@ export async function createCase(user: CurrentUser, input: CreateCaseInput) {
   const priority = computePriority(input.impact, {
     categoryName: category?.name,
     categoryDefault: category?.defaultPriority ?? null,
+    urgency: input.urgency ?? null,
   });
 
   // SLA due dates from creation time
@@ -417,6 +426,7 @@ export async function createCase(user: CurrentUser, input: CreateCaseInput) {
       categoryId: category?.id ?? null,
       subcategoryId: input.subcategoryId ?? null,
       impact: input.impact ?? null,
+      urgency: input.urgency ?? null,
       priority,
       status: assignedUserId ? "ASSIGNED" : "NEW",
       source: input.source ?? "WEB",

@@ -126,3 +126,32 @@ export const ALLOWED_UPLOAD_TYPES: Record<string, string> = {
 };
 
 export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024; // 10 MB
+
+/**
+ * Defense-in-depth: verify the file's magic bytes match its declared MIME type,
+ * so a client can't smuggle (e.g.) HTML under an image/png content-type. Text
+ * formats (csv/txt) have no reliable signature and are allowed through.
+ * Returns true if the bytes are consistent with (or unverifiable for) the type.
+ */
+export function verifyMagicBytes(data: Buffer, declaredType: string): boolean {
+  const b = data.subarray(0, 16);
+  const startsWith = (...sig: number[]) => sig.every((v, i) => b[i] === v);
+  switch (declaredType) {
+    case "image/png":
+      return startsWith(0x89, 0x50, 0x4e, 0x47);
+    case "image/jpeg":
+      return startsWith(0xff, 0xd8, 0xff);
+    case "image/webp":
+      return startsWith(0x52, 0x49, 0x46, 0x46) && b[8] === 0x57 && b[9] === 0x45 && b[10] === 0x42 && b[11] === 0x50;
+    case "application/pdf":
+      return startsWith(0x25, 0x50, 0x44, 0x46); // %PDF
+    case "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
+    case "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet":
+      return startsWith(0x50, 0x4b, 0x03, 0x04) || startsWith(0x50, 0x4b, 0x05, 0x06); // PK zip
+    case "text/csv":
+    case "text/plain":
+      return true; // no reliable signature
+    default:
+      return true; // unknown-but-allowlisted types: don't block
+  }
+}

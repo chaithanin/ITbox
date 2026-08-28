@@ -6,7 +6,7 @@ import {
   LayoutDashboard, Monitor, Users, Building2, MapPin, KeyRound, AppWindow,
   RefreshCcw, Wrench, ShoppingCart, Store, BarChart3, Bell, ScrollText,
   ShieldAlert, Settings, UserMinus, Boxes, LifeBuoy,
-  Router, GitPullRequest, DatabaseBackup, FileText, Bug, BookOpen, ShieldX,
+  Router, GitPullRequest, DatabaseBackup, FileText, Bug, BookOpen, ShieldX, Network,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { BrandLogo } from "@/components/brand-logo";
@@ -45,6 +45,7 @@ const ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   problems: Bug,
   kb: BookOpen,
   vulnerabilities: ShieldX,
+  cmdb: Network,
   default: Boxes,
 };
 
