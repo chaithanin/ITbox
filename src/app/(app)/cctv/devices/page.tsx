@@ -3,7 +3,9 @@ import { prisma } from "@/lib/prisma";
 import { PageHeader } from "@/components/page-header";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { StatusBadge, timeAgo } from "../_status";
+import { requestRecheck } from "../actions";
 
 export const dynamic = "force-dynamic";
 
@@ -14,6 +16,7 @@ export default async function CctvDevicesPage({ searchParams }: { searchParams: 
     return <div className="rounded-lg border bg-card p-6 text-sm text-muted-foreground">ไม่มีสิทธิ์เข้าถึงหน้านี้ / No access.</div>;
   }
   const orgId = user.organizationId;
+  const canManage = user.permissions.has("cctv:manage");
   const recorders = await prisma.cctvRecorder.findMany({
     where: { organizationId: orgId, deletedAt: null },
     orderBy: [{ project: "asc" }, { name: "asc" }],
@@ -41,6 +44,7 @@ export default async function CctvDevicesPage({ searchParams }: { searchParams: 
               <TableHead>สถานะ</TableHead>
               <TableHead className="hidden md:table-cell">เห็นล่าสุด</TableHead>
               <TableHead className="hidden xl:table-cell">ทรัพย์สิน</TableHead>
+              {canManage && <TableHead className="text-right">Check Now</TableHead>}
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -54,10 +58,22 @@ export default async function CctvDevicesPage({ searchParams }: { searchParams: 
                 <TableCell><StatusBadge status={r.status} /></TableCell>
                 <TableCell className="hidden md:table-cell text-xs text-muted-foreground">{timeAgo(r.lastSeenAt)}</TableCell>
                 <TableCell className="hidden xl:table-cell">{r.asset ? <Badge variant="outline">{r.asset.assetTag}</Badge> : <span className="text-xs text-muted-foreground">—</span>}</TableCell>
+                {canManage && (
+                  <TableCell className="text-right">
+                    {r.recheckRequestedAt ? (
+                      <span className="text-xs text-amber-600 dark:text-amber-400">รอตรวจ…</span>
+                    ) : (
+                      <form action={requestRecheck}>
+                        <input type="hidden" name="recorderId" value={r.id} />
+                        <Button type="submit" size="sm" variant="outline">Check Now</Button>
+                      </form>
+                    )}
+                  </TableCell>
+                )}
               </TableRow>
             ))}
             {recorders.length === 0 && (
-              <TableRow><TableCell colSpan={8} className="text-center text-sm text-muted-foreground">ยังไม่มีเครื่องบันทึก — นำเข้า device.xml เพื่อเริ่มต้น</TableCell></TableRow>
+              <TableRow><TableCell colSpan={canManage ? 9 : 8} className="text-center text-sm text-muted-foreground">ยังไม่มีเครื่องบันทึก — นำเข้า device.xml เพื่อเริ่มต้น</TableCell></TableRow>
             )}
           </TableBody>
         </Table>

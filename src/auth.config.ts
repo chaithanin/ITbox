@@ -24,6 +24,8 @@ export const authConfig = {
         pathname.startsWith("/api/hr/employees/sync") || // API-key-authed HR/ATS employee sync
         pathname.startsWith("/api/inventory/ingest") || // API-key-authed asset/license inventory push
         pathname.startsWith("/api/cctv/ingest") || // API-key-authed CCTV collector push
+        pathname === "/api/cctv/snapshot" || // API-key-authed snapshot upload (exact: serve route stays session-gated)
+        pathname === "/api/cctv/commands" || // API-key-authed collector command poll
         pathname.startsWith("/api/kb/import") || // API-key-authed KB bulk import
         pathname.startsWith("/_next") ||
         pathname === "/favicon.ico";

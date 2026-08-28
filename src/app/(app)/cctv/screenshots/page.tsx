@@ -35,7 +35,10 @@ export default async function ScreenshotGrid() {
           return (
             <Link key={c.id} href={`/cctv/cameras/${c.id}`} className="group rounded-lg border overflow-hidden hover:border-primary">
               <div className="flex aspect-video items-center justify-center bg-muted text-muted-foreground">
-                {fresh ? <Camera className="h-8 w-8 opacity-60" /> : <ImageOff className="h-8 w-8 opacity-40" />}
+                {c.snapshotObjectKey ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={`/api/cctv/snapshot/${c.id}`} alt={c.name ?? `ch${c.channel}`} className="h-full w-full object-cover" />
+                ) : fresh ? <Camera className="h-8 w-8 opacity-60" /> : <ImageOff className="h-8 w-8 opacity-40" />}
               </div>
               <div className="space-y-1 p-2">
                 <div className="truncate text-sm font-medium">{c.name ?? `Ch ${c.channel}`}</div>

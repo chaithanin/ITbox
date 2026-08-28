@@ -72,6 +72,10 @@ export default async function CameraDetail({ params }: { params: Promise<{ id: s
         <Card>
           <CardHeader><CardTitle className="text-base">Snapshot & Uptime</CardTitle></CardHeader>
           <CardContent>
+            {cam.snapshotObjectKey && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={`/api/cctv/snapshot/${cam.id}`} alt="snapshot" className="mb-3 w-full rounded-md border" />
+            )}
             <Row label="Snapshot ล่าสุด">{timeAgo(cam.lastSnapshotAt)}</Row>
             <Row label="ขนาดภาพ">{cam.lastSnapshotW && cam.lastSnapshotH ? `${cam.lastSnapshotW}×${cam.lastSnapshotH}` : "—"}</Row>
             <Row label="Uptime 24 ชม.">{uptimePct(logs24)}</Row>

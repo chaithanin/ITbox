@@ -68,3 +68,16 @@ export async function updateCctvIncident(formData: FormData) {
   revalidatePath("/cctv/incidents");
   redirect("/cctv/incidents?updated=1");
 }
+
+/** "Check Now" — flag a recorder for an immediate re-poll by the collector. */
+export async function requestRecheck(formData: FormData) {
+  const user = await requirePermission("cctv:manage");
+  const recorderId = z.string().uuid().parse(formData.get("recorderId"));
+  await prisma.cctvRecorder.updateMany({
+    where: { id: recorderId, organizationId: user.organizationId },
+    data: { recheckRequestedAt: new Date() },
+  });
+  await auditLog(user, { action: "UPDATE", entityType: "CCTV_RECORDER", entityId: recorderId, detail: { recheck: true } });
+  revalidatePath("/cctv/devices");
+  redirect("/cctv/devices?recheck=1");
+}

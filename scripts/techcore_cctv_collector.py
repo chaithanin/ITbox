@@ -223,18 +223,39 @@ def validate_and_save_snapshot(img, snapshot_dir, serial, channel):
     elif img[:2] != b"\xff\xd8":  # JPEG SOI
         status = "NOT_JPEG"
     out = {"status": status, "bytes": len(img) if img else 0}
-    if status == "OK" and snapshot_dir:
-        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-        d = os.path.join(snapshot_dir, datetime.now().strftime("%Y/%m/%d"), serial)
-        os.makedirs(d, exist_ok=True)
-        path = os.path.join(d, f"{serial}_CAM{channel:02d}_{ts}.jpg")
-        with open(path, "wb") as f:
-            f.write(img)
-        out["path"] = path
+    if status == "OK":
         wh = jpeg_dimensions(img)
         if wh:
             out["w"], out["h"] = wh
+        out["_image"] = img  # kept in-memory for optional upload; stripped before JSON push
+        if snapshot_dir:
+            ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+            d = os.path.join(snapshot_dir, datetime.now().strftime("%Y/%m/%d"), serial)
+            os.makedirs(d, exist_ok=True)
+            path = os.path.join(d, f"{serial}_CAM{channel:02d}_{ts}.jpg")
+            with open(path, "wb") as f:
+                f.write(img)
+            out["path"] = path
     return out
+
+
+def upload_snapshot(base_url, key, serial, channel, img, verbose):
+    """POST one JPEG to /api/cctv/snapshot as multipart/form-data (stdlib only)."""
+    url = base_url.rsplit("/api/", 1)[0] + "/api/cctv/snapshot"
+    boundary = "----techcore" + os.urandom(8).hex()
+    def part(name, value):
+        return (f'--{boundary}\r\nContent-Disposition: form-data; name="{name}"\r\n\r\n{value}\r\n').encode()
+    body = part("serial", serial) + part("channel", str(channel))
+    body += (f'--{boundary}\r\nContent-Disposition: form-data; name="file"; filename="s.jpg"\r\n'
+             f'Content-Type: image/jpeg\r\n\r\n').encode() + img + f"\r\n--{boundary}--\r\n".encode()
+    req = urllib.request.Request(url, data=body, method="POST", headers={
+        "Content-Type": f"multipart/form-data; boundary={boundary}", "Authorization": f"Bearer {key}"})
+    try:
+        with urllib.request.urlopen(req, timeout=30):
+            return True
+    except Exception as e:
+        log(verbose, "snapshot upload failed", serial, channel, e)
+        return False
 
 
 def jpeg_dimensions(data):
@@ -340,6 +361,33 @@ def _to_int(v):
 
 
 # --------------------------- push ---------------------------
+def fetch_recheck_serials(base_url, key, verbose):
+    """GET /api/cctv/commands — serials an operator flagged for immediate re-check."""
+    url = base_url.rsplit("/api/", 1)[0] + "/api/cctv/commands"
+    req = urllib.request.Request(url, headers={"Authorization": f"Bearer {key}"})
+    try:
+        with urllib.request.urlopen(req, timeout=15) as r:
+            return set(json.loads(r.read().decode("utf-8")).get("recheckSerials", []))
+    except Exception as e:
+        log(verbose, "commands poll failed", e)
+        return set()
+
+
+def upload_pending_snapshots(base_url, key, recorders, verbose):
+    """Upload each camera's JPEG (kept under snapshot._image) then strip it for JSON."""
+    uploaded = 0
+    for rec in recorders:
+        for cam in rec.get("cameras", []):
+            snap = cam.get("snapshot")
+            if not isinstance(snap, dict):
+                continue
+            img = snap.pop("_image", None)
+            if img and rec.get("serial"):
+                if upload_snapshot(base_url, key, rec["serial"], cam["channel"], img, verbose):
+                    uploaded += 1
+    return uploaded
+
+
 def push(url, key, recorders, verbose):
     body = json.dumps({"recorders": recorders}).encode("utf-8")
     req = urllib.request.Request(url, data=body, method="POST",
@@ -363,6 +411,7 @@ def main():
     ap.add_argument("--snapshot-dir", default=os.environ.get("SNAPSHOT_DIR", "./snapshots"))
     ap.add_argument("--interval", type=int, default=int(os.environ.get("INTERVAL_SECONDS", "300")))
     ap.add_argument("--once", action="store_true", help="run a single cycle and exit")
+    ap.add_argument("--no-upload-snapshots", action="store_true", help="do not upload JPEGs to TECHCORE (metadata only)")
     ap.add_argument("--verbose", action="store_true")
     args = ap.parse_args()
 
@@ -378,6 +427,9 @@ def main():
     print(f"[collector] {len(devices)} devices from {args.devices}; {len(tmap)} targets mapped")
 
     while True:
+        rechecks = fetch_recheck_serials(url, key, args.verbose)
+        if rechecks:
+            print(f"[collector] Check-Now requested for: {', '.join(sorted(rechecks))}")
         payload = []
         for dev in devices:
             conn = {**defaults, **tmap.get(dev["serial"], {})}
@@ -385,6 +437,15 @@ def main():
             payload.append(rec)
             print(f"[collector] {dev['serial']} {dev['name']}: {rec['status']} "
                   f"({len(rec['cameras'])} cams, {len(rec['storage'])} hdd)")
+        if not args.no_upload_snapshots:
+            n = upload_pending_snapshots(url, key, payload, args.verbose)
+            print(f"[collector] uploaded {n} snapshots")
+        else:
+            # strip in-memory images so the JSON push stays serializable
+            for rec in payload:
+                for cam in rec.get("cameras", []):
+                    if isinstance(cam.get("snapshot"), dict):
+                        cam["snapshot"].pop("_image", None)
         push(url, key, payload, args.verbose)
         if args.once:
             break

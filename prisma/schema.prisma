@@ -2364,6 +2364,7 @@ model CctvRecorder {
   offlineSince   DateTime?
   failureCount   Int              @default(0)
   errorMessage   String?
+  recheckRequestedAt DateTime? // set by "Check Now"; cleared by the collector on next poll
   assetId        String?          @db.Uuid
   locationId     String?          @db.Uuid
 
@@ -2404,6 +2405,7 @@ model CctvCamera {
   retentionEstimated  Boolean         @default(false)
   lastSnapshotAt   DateTime?
   lastSnapshotPath String?
+  snapshotObjectKey String? // storage object key for the uploaded JPEG (served via API)
   lastSnapshotW    Int?
   lastSnapshotH    Int?
   lastOnlineAt   DateTime?

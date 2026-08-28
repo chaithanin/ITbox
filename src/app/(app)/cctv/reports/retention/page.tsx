@@ -34,7 +34,12 @@ export default async function RetentionReport() {
 
   return (
     <div>
-      <PageHeader title="รายงาน Retention Compliance" description={`เกณฑ์ขั้นต่ำ ${settings.minRetentionDays} วัน · PASS ${counts.PASS} · WARNING ${counts.WARNING} · CRITICAL ${counts.CRITICAL} · UNKNOWN ${counts.UNKNOWN}`} />
+      <PageHeader title="รายงาน Retention Compliance" description={`เกณฑ์ขั้นต่ำ ${settings.minRetentionDays} วัน · PASS ${counts.PASS} · WARNING ${counts.WARNING} · CRITICAL ${counts.CRITICAL} · UNKNOWN ${counts.UNKNOWN}`}>
+        <div className="flex gap-2">
+          <a href="/api/cctv/reports/retention?format=xlsx" className="rounded-md border px-3 py-1.5 text-sm hover:bg-accent">Excel</a>
+          <a href="/api/cctv/reports/retention?format=csv" className="rounded-md border px-3 py-1.5 text-sm hover:bg-accent">CSV</a>
+        </div>
+      </PageHeader>
       <div className="rounded-lg border">
         <Table>
           <TableHeader>

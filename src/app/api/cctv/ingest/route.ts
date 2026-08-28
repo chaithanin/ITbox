@@ -83,6 +83,7 @@ export async function POST(req: Request) {
           lastOnlineAt: isOnline ? now : undefined,
           offlineSince: isOnline ? null : (rec.status === "OFFLINE" ? undefined : now),
           failureCount: isOnline ? 0 : { increment: 1 },
+          recheckRequestedAt: null, // a fresh push satisfies any pending "Check Now"
         },
       });
 

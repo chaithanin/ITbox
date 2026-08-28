@@ -54,7 +54,12 @@ export default async function StorageReport() {
 
   return (
     <div>
-      <PageHeader title="รายงาน Storage / HDD" description={`เกณฑ์ว่าง: เตือน < ${settings.hddWarnFreePercent}% · วิกฤต < ${settings.hddCriticalFreePercent}% · ${rows.length} เครื่องบันทึกมีข้อมูล`} />
+      <PageHeader title="รายงาน Storage / HDD" description={`เกณฑ์ว่าง: เตือน < ${settings.hddWarnFreePercent}% · วิกฤต < ${settings.hddCriticalFreePercent}% · ${rows.length} เครื่องบันทึกมีข้อมูล`}>
+        <div className="flex gap-2">
+          <a href="/api/cctv/reports/storage?format=xlsx" className="rounded-md border px-3 py-1.5 text-sm hover:bg-accent">Excel</a>
+          <a href="/api/cctv/reports/storage?format=csv" className="rounded-md border px-3 py-1.5 text-sm hover:bg-accent">CSV</a>
+        </div>
+      </PageHeader>
       <div className="rounded-lg border">
         <Table>
           <TableHeader>

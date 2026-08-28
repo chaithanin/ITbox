@@ -40,7 +40,12 @@ export default async function GapReport() {
 
   return (
     <div>
-      <PageHeader title="รายงาน Recording Gap" description={`เกณฑ์: เตือน > ${settings.gapWarnMinutes} นาที, วิกฤต > ${settings.gapCriticalMinutes} นาที · พบ ${flagged.length} กล้องผิดปกติ`} />
+      <PageHeader title="รายงาน Recording Gap" description={`เกณฑ์: เตือน > ${settings.gapWarnMinutes} นาที, วิกฤต > ${settings.gapCriticalMinutes} นาที · พบ ${flagged.length} กล้องผิดปกติ`}>
+        <div className="flex gap-2">
+          <a href="/api/cctv/reports/gaps?format=xlsx" className="rounded-md border px-3 py-1.5 text-sm hover:bg-accent">Excel</a>
+          <a href="/api/cctv/reports/gaps?format=csv" className="rounded-md border px-3 py-1.5 text-sm hover:bg-accent">CSV</a>
+        </div>
+      </PageHeader>
       <div className="rounded-lg border">
         <Table>
           <TableHeader>

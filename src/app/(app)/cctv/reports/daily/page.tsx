@@ -47,7 +47,12 @@ export default async function DailyReport({ searchParams }: { searchParams: Prom
 
   return (
     <div>
-      <PageHeader title="รายงานสุขภาพ CCTV ประจำวัน" description={`ประจำวันที่ ${dateLabel} · สร้างเมื่อ ${new Date().toLocaleString("th-TH")}`} />
+      <PageHeader title="รายงานสุขภาพ CCTV ประจำวัน" description={`ประจำวันที่ ${dateLabel} · สร้างเมื่อ ${new Date().toLocaleString("th-TH")}`}>
+        <div className="flex gap-2">
+          <a href="/api/cctv/reports/daily?format=xlsx" className="rounded-md border px-3 py-1.5 text-sm hover:bg-accent">Excel</a>
+          <a href="/api/cctv/reports/daily?format=csv" className="rounded-md border px-3 py-1.5 text-sm hover:bg-accent">CSV</a>
+        </div>
+      </PageHeader>
 
       <Card className="mb-4">
         <CardHeader><CardTitle className="text-base">สรุปภาพรวม / Overall Summary</CardTitle></CardHeader>
