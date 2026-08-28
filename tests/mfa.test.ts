@@ -10,14 +10,16 @@ describe("TOTP MFA", () => {
       secret: OTPAuth.Secret.fromBase32(secret),
     });
     const code = totp.generate();
-    expect(verifyTotpCode(secret, code)).toBe(true);
-    expect(verifyTotpCode(secret, "000000")).toBe(false);
+    // verifyTotpCode returns the matched time-step (a number) for a valid code,
+    // or null for an invalid one — enabling replay detection at the call site.
+    expect(verifyTotpCode(secret, code)).toEqual(expect.any(Number));
+    expect(verifyTotpCode(secret, "000000")).toBeNull();
   });
 
   it("builds an otpauth:// enrollment URI", () => {
     const secret = generateTotpSecret();
     const uri = totpUri("user@example.com", secret);
     expect(uri).toMatch(/^otpauth:\/\/totp\//);
-    expect(uri).toContain("ITBox");
+    expect(uri).toContain("TECHCORE");
   });
 });
