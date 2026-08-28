@@ -1,7 +1,9 @@
 "use server";
 
+import { z } from "zod";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
+import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/session";
 import { auditLog } from "@/lib/audit";
 import { parseDeviceXml, importRecordersFromXml } from "@/lib/services/cctv";
@@ -30,4 +32,39 @@ export async function importDeviceXml(formData: FormData) {
   revalidatePath("/cctv");
   revalidatePath("/cctv/devices");
   redirect(`/cctv/devices?imported=${result.created}&updated=${result.updated}&linked=${result.linkedAssets}`);
+}
+
+/** Acknowledge or resolve a CCTV incident. */
+const incidentSchema = z.object({
+  incidentId: z.string().uuid(),
+  op: z.enum(["ack", "resolve"]),
+  responsiblePerson: z.string().max(200).optional(),
+  resolution: z.string().max(2000).optional(),
+});
+
+export async function updateCctvIncident(formData: FormData) {
+  const user = await requirePermission("cctv:manage");
+  const i = incidentSchema.parse(Object.fromEntries(formData));
+  const incident = await prisma.cctvIncident.findFirst({
+    where: { id: i.incidentId, organizationId: user.organizationId },
+    select: { id: true, startedAt: true, status: true },
+  });
+  if (!incident) redirect("/cctv/incidents?error=notfound");
+  const now = new Date();
+
+  if (i.op === "ack") {
+    await prisma.cctvIncident.update({
+      where: { id: incident.id },
+      data: { status: "ACKNOWLEDGED", acknowledgedAt: now, responsiblePerson: i.responsiblePerson || undefined },
+    });
+  } else {
+    const downtime = Math.max(0, Math.round((now.getTime() - incident.startedAt.getTime()) / 60000));
+    await prisma.cctvIncident.update({
+      where: { id: incident.id },
+      data: { status: "RESOLVED", resolvedAt: now, downtimeMinutes: downtime, resolution: i.resolution || "แก้ไขโดยเจ้าหน้าที่ / Resolved manually" },
+    });
+  }
+  await auditLog(user, { action: "UPDATE", entityType: "CCTV_INCIDENT", entityId: incident.id, detail: { op: i.op } });
+  revalidatePath("/cctv/incidents");
+  redirect("/cctv/incidents?updated=1");
 }

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { getCurrentUser } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@prisma/client";
@@ -52,7 +53,7 @@ export default async function CctvCamerasPage({ searchParams }: { searchParams: 
               <TableRow key={c.id}>
                 <TableCell className="hidden md:table-cell text-sm text-muted-foreground">{c.recorder.project ?? "—"}</TableCell>
                 <TableCell className="text-sm">{c.recorder.name} <span className="text-muted-foreground">/ {c.channel}</span></TableCell>
-                <TableCell className="font-medium">{c.name ?? `Channel ${c.channel}`}</TableCell>
+                <TableCell className="font-medium"><Link href={`/cctv/cameras/${c.id}`} className="text-primary hover:underline">{c.name ?? `Channel ${c.channel}`}</Link></TableCell>
                 <TableCell><StatusBadge status={c.status} /></TableCell>
                 <TableCell className="hidden md:table-cell"><StatusBadge status={c.recordingStatus} /></TableCell>
                 <TableCell className="hidden lg:table-cell text-xs text-muted-foreground">{timeAgo(c.latestRecordingAt)}</TableCell>

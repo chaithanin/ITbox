@@ -26,6 +26,15 @@ export function formatRetention(days?: number | null, estimated?: boolean): stri
   return `${d} วัน ${h} ชม.${estimated ? " (ประมาณ)" : ""}`;
 }
 
+export function formatBytes(n?: bigint | number | null): string {
+  if (n == null) return "—";
+  let v = typeof n === "bigint" ? Number(n) : n;
+  const units = ["B", "KB", "MB", "GB", "TB", "PB"];
+  let i = 0;
+  while (v >= 1024 && i < units.length - 1) { v /= 1024; i++; }
+  return `${v.toFixed(v >= 100 || i === 0 ? 0 : 1)} ${units[i]}`;
+}
+
 export function timeAgo(dt?: Date | null): string {
   if (!dt) return "—";
   const mins = Math.round((Date.now() - new Date(dt).getTime()) / 60000);

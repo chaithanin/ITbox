@@ -122,6 +122,8 @@ export default async function CctvOverviewPage() {
                 <Link href="/cctv/cameras" className="flex items-center gap-2 rounded-md border px-3 py-2 hover:bg-accent"><Video className="h-4 w-4" /> กล้องทั้งหมด</Link>
                 <Link href="/cctv/incidents" className="flex items-center gap-2 rounded-md border px-3 py-2 hover:bg-accent"><AlertTriangle className="h-4 w-4" /> เหตุการณ์</Link>
                 <Link href="/cctv/cameras?filter=offline" className="flex items-center gap-2 rounded-md border px-3 py-2 hover:bg-accent"><VideoOff className="h-4 w-4" /> กล้องมีปัญหา</Link>
+                <Link href="/cctv/reports/retention" className="flex items-center gap-2 rounded-md border px-3 py-2 hover:bg-accent"><Video className="h-4 w-4" /> Retention</Link>
+                <Link href="/cctv/reports/daily" className="flex items-center gap-2 rounded-md border px-3 py-2 hover:bg-accent"><AlertTriangle className="h-4 w-4" /> รายงานประจำวัน</Link>
               </CardContent>
             </Card>
           </div>

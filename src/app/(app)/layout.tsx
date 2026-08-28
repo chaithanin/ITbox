@@ -93,7 +93,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             { href: "/cctv", label: "ภาพรวม / Overview" },
             { href: "/cctv/devices", label: "เครื่องบันทึก / Recorders" },
             { href: "/cctv/cameras", label: "กล้อง / Cameras" },
+            { href: "/cctv/screenshots", label: "ภาพ Snapshot / Screenshots" },
             { href: "/cctv/incidents", label: "เหตุการณ์ / Incidents" },
+            { href: "/cctv/reports", label: "รายงาน / Reports" },
+            ...(has("cctv:manage") ? [{ href: "/cctv/settings", label: "ตั้งค่า / Settings" }] : []),
             ...(has("cctv:manage") ? [{ href: "/cctv/import", label: "นำเข้า device.xml / Import" }] : []),
           ],
         }]
