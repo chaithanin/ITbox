@@ -72,6 +72,16 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         }]
       : []),
     ...(has("maintenance:read") ? [{ href: "/maintenance", label: t("maintenance"), icon: "maintenance" }] : []),
+    ...(has("network:read") ? [{
+      href: "/network", label: "เครือข่าย / Network", icon: "network",
+      children: [
+        { href: "/network", label: "อุปกรณ์ / Devices" },
+        { href: "/network/ipam", label: "IP / Subnet / VLAN" },
+      ],
+    }] : []),
+    ...(has("change:read") ? [{ href: "/changes", label: "Change Management", icon: "changes" }] : []),
+    ...(has("backup:read") ? [{ href: "/backup", label: "Backup & DR", icon: "backup" }] : []),
+    ...(has("contract:read") ? [{ href: "/contracts", label: "สัญญา / Contracts", icon: "contracts" }] : []),
     ...(has("procurement:read") ? [{ href: "/procurement", label: t("procurement"), icon: "procurement" }] : []),
     ...(has("vendor:read") ? [{ href: "/vendors", label: t("vendors"), icon: "vendors" }] : []),
     ...(has("offboarding:read") ? [{ href: "/offboarding", label: t("offboarding"), icon: "offboarding" }] : []),

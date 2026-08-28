@@ -105,6 +105,25 @@ export async function POST(req: Request) {
       );
     }
 
+    // Contracts renewing in 30 days
+    const contracts = await prisma.contract.findMany({
+      where: {
+        organizationId: org.id, deletedAt: null,
+        status: { not: "TERMINATED" },
+        renewalDate: { not: null, gte: startOfDay, lt: inDays(30) },
+      },
+      select: { id: true, contractNumber: true, title: true, renewalDate: true },
+      take: 100,
+    });
+    for (const c of contracts) {
+      await notify(
+        "CONTRACT_RENEWAL", c.id, "WARNING",
+        "สัญญาใกล้ครบกำหนดต่ออายุ / Contract renewal due",
+        `${c.contractNumber} ${c.title} — ต่ออายุ ${c.renewalDate?.toISOString().slice(0, 10)}`,
+        `/contracts`
+      );
+    }
+
     // Licenses expiring in 30 days
     const licenses = await prisma.license.findMany({
       where: {

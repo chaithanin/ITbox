@@ -54,6 +54,13 @@ model Organization {
   signatureTemplates SignatureTemplate[]
   itHealthChecks    ItHealthCheck[]
   signatureProfiles  SignatureProfile[]
+  networkDevices    NetworkDevice[]
+  vlans             Vlan[]
+  subnets           Subnet[]
+  ipAddresses       IpAddress[]
+  changeRequests    ChangeRequest[]
+  backupJobs        BackupJob[]
+  contracts         Contract[]
 
   @@map("organizations")
 }
@@ -344,6 +351,9 @@ model Location {
   assets       Asset[]
   supportCases SupportCase[] @relation("CaseLocation")
   itHealthChecks ItHealthCheck[]
+  networkDevices NetworkDevice[]
+  vlans        Vlan[]
+  subnets      Subnet[]
 
   @@unique([organizationId, code])
   @@map("locations")
@@ -916,6 +926,8 @@ model Vendor {
   subscriptions Subscription[]
   maintenance  MaintenanceTicket[]
   purchaseRequests PurchaseRequest[]
+  networkDevices NetworkDevice[]
+  contracts    Contract[]
 
   @@index([organizationId])
   @@map("vendors")
@@ -1655,4 +1667,259 @@ model ItHealthEvidence {
 
   @@index([organizationId, checkId])
   @@map("it_health_evidence")
+}
+
+// ============================ Network & IPAM ============================
+
+enum NetworkDeviceType {
+  ROUTER
+  SWITCH
+  FIREWALL
+  ACCESS_POINT
+  LOAD_BALANCER
+  CONTROLLER
+  GATEWAY
+  OTHER
+}
+
+enum NetworkDeviceStatus {
+  ONLINE
+  OFFLINE
+  MAINTENANCE
+  UNKNOWN
+}
+
+model NetworkDevice {
+  id             String              @id @default(uuid()) @db.Uuid
+  organizationId String              @db.Uuid
+  name           String
+  deviceType     NetworkDeviceType   @default(SWITCH)
+  hostname       String?
+  mgmtIp         String?
+  macAddress     String?
+  vendorId       String?             @db.Uuid
+  model          String?
+  firmware       String?
+  locationId     String?             @db.Uuid
+  status         NetworkDeviceStatus @default(UNKNOWN)
+  owner          String?
+  notes          String?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  vendor       Vendor?      @relation(fields: [vendorId], references: [id])
+  location     Location?    @relation(fields: [locationId], references: [id])
+
+  @@unique([organizationId, name])
+  @@index([organizationId, status])
+  @@map("network_devices")
+}
+
+model Vlan {
+  id             String  @id @default(uuid()) @db.Uuid
+  organizationId String  @db.Uuid
+  vlanId         Int
+  name           String
+  purpose        String?
+  locationId     String? @db.Uuid
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  location     Location?    @relation(fields: [locationId], references: [id])
+  subnets      Subnet[]
+
+  @@unique([organizationId, vlanId])
+  @@map("vlans")
+}
+
+model Subnet {
+  id             String  @id @default(uuid()) @db.Uuid
+  organizationId String  @db.Uuid
+  cidr           String
+  gateway        String?
+  dns            String?
+  vlanRef        String? @db.Uuid
+  purpose        String?
+  locationId     String? @db.Uuid
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  location     Location?    @relation(fields: [locationId], references: [id])
+  vlan         Vlan?        @relation(fields: [vlanRef], references: [id])
+  ips          IpAddress[]
+
+  @@unique([organizationId, cidr])
+  @@map("subnets")
+}
+
+enum IpStatus {
+  AVAILABLE
+  ASSIGNED
+  RESERVED
+}
+
+model IpAddress {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @db.Uuid
+  address        String
+  status         IpStatus @default(ASSIGNED)
+  subnetId       String?  @db.Uuid
+  hostname       String?
+  macAddress     String?
+  assignedTo     String?
+  notes          String?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  subnet       Subnet?      @relation(fields: [subnetId], references: [id])
+
+  @@unique([organizationId, address])
+  @@index([organizationId, status])
+  @@map("ip_addresses")
+}
+
+// ============================ Change Management ============================
+
+enum ChangeStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  REJECTED
+  SCHEDULED
+  IMPLEMENTED
+  FAILED
+  ROLLED_BACK
+  CLOSED
+}
+
+enum ChangeRisk {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+model ChangeRequest {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @db.Uuid
+  changeNumber   String
+  title          String
+  description    String?
+  risk           ChangeRisk   @default(LOW)
+  impact         String?
+  status         ChangeStatus @default(DRAFT)
+  rollbackPlan   String?
+  testPlan       String?
+  scheduledStart DateTime?
+  scheduledEnd   DateTime?
+  requestedById  String?      @db.Uuid
+  approvedById   String?      @db.Uuid
+  approvedAt     DateTime?
+  rejectReason   String?
+  implementedAt  DateTime?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@unique([organizationId, changeNumber])
+  @@index([organizationId, status])
+  @@index([organizationId, scheduledStart])
+  @@map("change_requests")
+}
+
+// ============================ Backup & DR ============================
+
+enum BackupType {
+  FULL
+  INCREMENTAL
+  DIFFERENTIAL
+  SNAPSHOT
+}
+
+enum BackupStatus {
+  OK
+  WARNING
+  FAILED
+  NOT_RUN
+}
+
+model BackupJob {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @db.Uuid
+  system         String
+  backupType     BackupType   @default(FULL)
+  schedule       String?
+  storageTarget  String?
+  retentionDays  Int?
+  owner          String?
+  lastRunAt      DateTime?
+  lastStatus     BackupStatus @default(NOT_RUN)
+  rpoHours       Int?
+  rtoHours       Int?
+  lastRestoreTestAt DateTime?
+  restoreResult  String?
+  notes          String?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@unique([organizationId, system])
+  @@index([organizationId, lastStatus])
+  @@map("backup_jobs")
+}
+
+// ============================ Contracts ============================
+
+enum ContractStatus {
+  ACTIVE
+  EXPIRING
+  EXPIRED
+  TERMINATED
+}
+
+model Contract {
+  id             String         @id @default(uuid()) @db.Uuid
+  organizationId String         @db.Uuid
+  contractNumber String
+  title          String
+  vendorId       String?        @db.Uuid
+  service        String?
+  startDate      DateTime?      @db.Date
+  endDate        DateTime?      @db.Date
+  renewalDate    DateTime?      @db.Date
+  autoRenew      Boolean        @default(false)
+  cost           Decimal?       @db.Decimal(14, 2)
+  slaTerms       String?
+  owner          String?
+  status         ContractStatus @default(ACTIVE)
+  notes          String?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  vendor       Vendor?      @relation(fields: [vendorId], references: [id])
+
+  @@unique([organizationId, contractNumber])
+  @@index([organizationId, status])
+  @@index([organizationId, renewalDate])
+  @@map("contracts")
 }

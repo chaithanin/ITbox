@@ -29,6 +29,14 @@ export const PERMISSIONS = [
   // IT Support / ITSM
   "support:create", "support:read", "support:work",
   "support:manage", "support:settings",
+  // Network & IPAM
+  "network:read", "network:manage",
+  // Change management
+  "change:read", "change:manage", "change:approve",
+  // Backup & DR
+  "backup:read", "backup:manage",
+  // Contracts
+  "contract:read", "contract:manage",
   // Admin
   "user:manage", "role:manage", "settings:manage",
   "offboarding:read", "offboarding:manage",
@@ -42,6 +50,7 @@ const READ_ONLY: PermissionKey[] = [
   "asset:read", "employee:read", "department:read", "location:read",
   "license:read", "subscription:read", "vendor:read", "maintenance:read",
   "procurement:read", "report:read",
+  "network:read", "change:read", "backup:read", "contract:read",
 ];
 
 /** Default permission sets per system role key. */
@@ -61,6 +70,8 @@ export const ROLE_PERMISSIONS: Record<string, PermissionKey[]> = {
     "report:read", "report:export", "audit:read", "security:read",
     "support:create", "support:read", "support:work", "support:manage", "support:settings",
     "offboarding:read", "offboarding:manage",
+    "network:read", "network:manage", "change:read", "change:manage", "change:approve",
+    "backup:read", "backup:manage", "contract:read", "contract:manage",
   ],
   IT_STAFF: [
     "asset:read", "asset:create", "asset:update",
@@ -72,6 +83,8 @@ export const ROLE_PERMISSIONS: Record<string, PermissionKey[]> = {
     "procurement:read", "procurement:create",
     "support:create", "support:read", "support:work",
     "report:read", "offboarding:read",
+    "network:read", "network:manage", "change:read", "change:manage",
+    "backup:read", "backup:manage", "contract:read",
   ],
   SECURITY_ADMIN: [
     "asset:read", "employee:read", "department:read", "location:read",
