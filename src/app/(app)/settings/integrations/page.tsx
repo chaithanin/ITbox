@@ -105,6 +105,26 @@ export default async function IntegrationsPage({
             </ol>
           </CardContent>
         </Card>
+
+        <Card className="lg:col-span-2">
+          <CardHeader><CardTitle className="flex items-center gap-2 text-sm"><PlugZap className="h-4 w-4 text-emerald-600" /> เชื่อมข้อมูลพนักงานจาก HR / ATS (Push)</CardTitle></CardHeader>
+          <CardContent className="space-y-3 text-sm">
+            <p className="text-xs text-muted-foreground">
+              ระบบ HR Intelligence &amp; ATS เป็นแหล่งข้อมูลหลักของพนักงาน — ให้ HR ยิงรายชื่อพนักงานปัจจุบันเข้ามา TECHCORE จะ upsert ให้อัตโนมัติ (คนเข้าใหม่ → สร้าง, ย้ายแผนก/ตำแหน่ง → อัปเดต + แจ้งทบทวนสิทธิ์, ลาออก → ตั้งสถานะ RESIGNED). ใช้ API key เดียวกับ Collector
+            </p>
+            <div>
+              <p className="text-xs font-medium text-muted-foreground">Endpoint</p>
+              <code className="mt-1 block break-all rounded-md bg-muted p-2 font-mono text-xs">POST https://&lt;โดเมน&gt;/api/hr/employees/sync · Authorization: Bearer &lt;API_KEY&gt;</code>
+            </div>
+            <div>
+              <p className="text-xs font-medium text-muted-foreground">ตัวอย่าง body</p>
+              <code className="mt-1 block whitespace-pre-wrap break-all rounded-md bg-muted p-2 font-mono text-xs">{`{ "employees": [ { "employeeCode": "EMP001", "firstName": "สมชาย", "lastName": "ใจดี", "email": "somchai@...", "position": "Software Engineer", "department": "IT", "location": "HQ", "managerCode": "EMP000", "status": "ACTIVE", "hireDate": "2024-01-15", "terminationDate": null } ] }`}</code>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              สคริปต์พร้อมใช้ (รันในโปรเจกต์ HR-ATS): <span className="font-mono">scripts/hr_ats_to_techcore_sync.mjs</span> — ดึงจาก Prisma ของ HR แล้ว push เข้ามา · แผนก/ตำแหน่ง/หัวหน้า map ให้อัตโนมัติ (แผนกใหม่สร้างให้), สถานะ TERMINATED → RESIGNED
+            </p>
+          </CardContent>
+        </Card>
       </div>
     </div>
   );
