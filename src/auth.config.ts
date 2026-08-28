@@ -22,6 +22,7 @@ export const authConfig = {
         pathname.startsWith("/api/edr/ingest") || // API-key-authed endpoint agent push
         pathname.startsWith("/api/monitoring/ingest") || // API-key-authed monitoring push
         pathname.startsWith("/api/hr/employees/sync") || // API-key-authed HR/ATS employee sync
+        pathname.startsWith("/api/inventory/ingest") || // API-key-authed asset/license inventory push
         pathname.startsWith("/_next") ||
         pathname === "/favicon.ico";
       if (isPublic) return true;
