@@ -72,8 +72,16 @@ def parse_device_list(path):
 def load_targets(path):
     if not path or not os.path.exists(path):
         return {"defaults": {}, "targets": {}}
-    with open(path, "r", encoding="utf-8") as f:
-        return json.load(f)
+    # utf-8-sig tolerates a UTF-8 BOM (Windows Notepad adds one), which plain
+    # json.load would reject with "Expecting value: line 1 column 1".
+    with open(path, "r", encoding="utf-8-sig") as f:
+        text = f.read().strip()
+    if not text:
+        return {"defaults": {}, "targets": {}}
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError as e:
+        raise SystemExit(f"ERROR: {path} is not valid JSON ({e}). Fix it and re-run.")
 
 
 # --------------------------- Dahua CGI client ---------------------------
