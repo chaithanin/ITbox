@@ -68,3 +68,6 @@ snapshots/
 
 __pycache__/
 *.pyc
+
+# Local deliverables / mapped data (personal data — never commit)
+scratch-import/
