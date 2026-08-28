@@ -173,7 +173,7 @@ export function renderSignatureHtml(data: SignatureData, cfg: TemplateConfig): s
 
   const web = safeUrl(data.website);
   if (web)
-    rows.push(contactRow("Website", `<a href="${escapeHtml(web)}" style="color:${textColor};text-decoration:none;">${escapeHtml(data.website!.replace(/^https?:\/\//i, "").replace(/\/$/, ""))}</a>`));
+    rows.push(contactRow("Website", `<a href="${escapeHtml(web)}" target="_blank" rel="noopener noreferrer" style="color:${textColor};text-decoration:none;">${escapeHtml(data.website!.replace(/^https?:\/\//i, "").replace(/\/$/, ""))}</a>`));
 
   if (data.address) {
     const addr = cleanAddress(data.address);
@@ -213,7 +213,7 @@ export function renderSignatureHtml(data: SignatureData, cfg: TemplateConfig): s
     const label = escapeHtml(shortLabel(l.name));
     const style = `display:block;padding:8px 5px;color:#ffffff;font-family:${serif};font-size:10px;line-height:13px;font-weight:bold;text-decoration:none;text-align:center;`;
     const inner = l.url
-      ? `<a href="${escapeHtml(l.url)}" style="${style}">${label}</a>`
+      ? `<a href="${escapeHtml(l.url)}" target="_blank" rel="noopener noreferrer" style="${style}">${label}</a>`
       : `<span style="${style}">${label}</span>`;
     return `<td width="${w}%" valign="middle" style="width:${w}%;background-color:${shade};border-radius:5px;text-align:center;">${inner}</td>`;
   };

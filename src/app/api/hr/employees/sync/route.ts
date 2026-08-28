@@ -86,6 +86,9 @@ export async function POST(req: Request) {
   const managerLinks: { code: string; managerCode: string }[] = [];
   // Track dept/position changes to feed the Mover access-review control.
   const movers: { name: string; what: string; employeeId: string }[] = [];
+  // Track lifecycle transitions to raise Onboarding (Joiner) / Offboarding (Leaver).
+  const joiners: { name: string; employeeId: string }[] = [];
+  const leavers: { name: string; employeeId: string; lastWorkDate: Date | null }[] = [];
 
   for (const raw of payload.employees) {
     const e = raw as Record<string, unknown>;
@@ -101,7 +104,7 @@ export async function POST(req: Request) {
     try {
       const existing = await prisma.employee.findFirst({
         where: { organizationId: orgId, employeeCode },
-        select: { id: true, departmentId: true, position: true, firstName: true, lastName: true },
+        select: { id: true, departmentId: true, position: true, firstName: true, lastName: true, status: true },
       });
       const data = {
         firstName, lastName,
@@ -123,9 +126,16 @@ export async function POST(req: Request) {
             employeeId: empId,
           });
         }
+        // Leaver: employment transitioned into RESIGNED from a working state.
+        if (status === "RESIGNED" && existing.status !== "RESIGNED") {
+          leavers.push({ name: `${firstName} ${lastName}`.trim(), employeeId: empId, lastWorkDate: date(e.terminationDate) });
+        }
       } else {
         const created = await prisma.employee.create({ data: { organizationId: orgId, employeeCode, ...data } });
         empId = created.id;
+        // Joiner: a brand-new active employee from HR — raise IT onboarding.
+        if (status === "ACTIVE") joiners.push({ name: `${firstName} ${lastName}`.trim(), employeeId: empId });
+        else if (status === "RESIGNED") leavers.push({ name: `${firstName} ${lastName}`.trim(), employeeId: empId, lastWorkDate: date(e.terminationDate) });
       }
       const managerCode = str(e.managerCode, 50);
       if (managerCode && managerCode !== employeeCode) managerLinks.push({ code: employeeCode, managerCode });
@@ -146,27 +156,60 @@ export async function POST(req: Request) {
     }
   }
 
-  // Mover control: notify IT managers to review access for dept/position changes.
-  if (movers.length > 0) {
-    const managers = await prisma.user.findMany({
-      where: { organizationId: orgId, deletedAt: null, status: "ACTIVE", userRoles: { some: { role: { key: { in: ["SUPER_ADMIN", "ADMIN", "IT_MANAGER"] } } } } },
+  // Recipients for JML popups: IT managers/admins (and HR, who also action JML).
+  let itManagers: { id: string }[] = [];
+  if (movers.length > 0 || joiners.length > 0 || leavers.length > 0) {
+    itManagers = await prisma.user.findMany({
+      where: { organizationId: orgId, deletedAt: null, status: "ACTIVE", userRoles: { some: { role: { key: { in: ["SUPER_ADMIN", "ADMIN", "IT_MANAGER", "IT_STAFF", "HR"] } } } } },
       select: { id: true },
     });
-    if (managers.length > 0) {
-      await prisma.notification.createMany({
-        data: movers.flatMap((m) => managers.map((u) => ({
-          organizationId: orgId, userId: u.id, type: "ACCESS_REVIEW", level: "WARNING" as const,
-          title: "ต้องทบทวนสิทธิ์ (Mover) / Access review needed",
-          body: `${m.name} เปลี่ยน ${m.what} (จาก HR sync) — โปรดทบทวนทรัพย์สิน สิทธิ์ และการเข้าถึง`,
-          link: `/employees/${m.employeeId}`,
-        }))),
-      }).catch(() => {});
-    }
+  }
+  const notify = async (users: { id: string }[], rows: { type: string; level: "INFO" | "WARNING"; title: string; body: string; link: string }[]) => {
+    if (users.length === 0 || rows.length === 0) return;
+    await prisma.notification.createMany({
+      data: rows.flatMap((r) => users.map((u) => ({ organizationId: orgId, userId: u.id, type: r.type, level: r.level, title: r.title, body: r.body, link: r.link }))),
+    }).catch(() => {});
+  };
+
+  // Mover control: notify IT managers to review access for dept/position changes.
+  if (movers.length > 0) {
+    await notify(itManagers, movers.map((m) => ({
+      type: "ACCESS_REVIEW", level: "WARNING" as const,
+      title: "ต้องทบทวนสิทธิ์ (Mover) / Access review needed",
+      body: `${m.name} เปลี่ยน ${m.what} (จาก HR sync) — โปรดทบทวนทรัพย์สิน สิทธิ์ และการเข้าถึง`,
+      link: `/employees/${m.employeeId}`,
+    })));
   }
 
+  // Joiner: raise an IT onboarding checklist (idempotent) and pop a notification.
+  let onboardingsCreated = 0;
+  for (const j of joiners) {
+    const exists = await prisma.onboarding.findFirst({ where: { organizationId: orgId, employeeId: j.employeeId }, select: { id: true } });
+    if (!exists) { await prisma.onboarding.create({ data: { organizationId: orgId, employeeId: j.employeeId, status: "PENDING" } }).catch(() => {}); onboardingsCreated++; }
+  }
+  await notify(itManagers, joiners.map((j) => ({
+    type: "ONBOARDING", level: "INFO" as const,
+    title: "พนักงานใหม่ (Joiner) / New hire — เริ่ม IT Onboarding",
+    body: `${j.name} เข้าใหม่จาก HR — เปิดเครื่อง/บัญชี/อีเมล/สิทธิ์ ตามเช็กลิสต์ Onboarding`,
+    link: "/onboarding",
+  })));
+
+  // Leaver: raise an IT offboarding case (idempotent — skip if one is already open).
+  let offboardingsCreated = 0;
+  for (const l of leavers) {
+    const open = await prisma.offboarding.findFirst({ where: { organizationId: orgId, employeeId: l.employeeId, status: { in: ["OPEN", "IN_PROGRESS"] } }, select: { id: true } });
+    if (!open) { await prisma.offboarding.create({ data: { organizationId: orgId, employeeId: l.employeeId, status: "OPEN", lastWorkDate: l.lastWorkDate } }).catch(() => {}); offboardingsCreated++; }
+  }
+  await notify(itManagers, leavers.map((l) => ({
+    type: "OFFBOARDING", level: "WARNING" as const,
+    title: "พนักงานลาออก (Leaver) / Offboarding — เริ่มคืนทรัพย์สิน/ปิดสิทธิ์",
+    body: `${l.name} สิ้นสุดการทำงาน (จาก HR) — คืนอุปกรณ์ ปิดบัญชี เพิกถอนสิทธิ์/รหัสตามเช็กลิสต์ Offboarding`,
+    link: "/offboarding",
+  })));
+
   await prisma.auditLog.create({
-    data: { organizationId: orgId, action: "IMPORT", entityType: "EMPLOYEE", detail: { via: "hr-sync", ok, failed: errors.length, movers: movers.length } },
+    data: { organizationId: orgId, action: "IMPORT", entityType: "EMPLOYEE", detail: { via: "hr-sync", ok, failed: errors.length, movers: movers.length, joiners: joiners.length, leavers: leavers.length, onboardingsCreated, offboardingsCreated } },
   }).catch(() => {});
 
-  return NextResponse.json({ ok, failed: errors.length, movers: movers.length, errors: errors.slice(0, 100) });
+  return NextResponse.json({ ok, failed: errors.length, movers: movers.length, joiners: joiners.length, leavers: leavers.length, onboardingsCreated, offboardingsCreated, errors: errors.slice(0, 100) });
 }
