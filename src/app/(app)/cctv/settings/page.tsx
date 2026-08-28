@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { getCctvSettings } from "@/lib/services/cctv-settings";
-import { saveCctvSettingsAction } from "./actions";
+import { saveCctvSettingsAction, sendCctvDailyTest } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -32,6 +32,9 @@ export default async function CctvSettingsPage({ searchParams }: { searchParams:
     <div>
       <PageHeader title="ตั้งค่า CCTV / Settings" description="เกณฑ์การแจ้งเตือน ความถี่การตรวจสอบ และการเก็บข้อมูล (ใช้ทั่วทั้งระบบ CCTV)" />
       {sp.saved && <div className="mb-4 rounded-lg border border-emerald-300 bg-emerald-50 p-3 text-sm text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300">บันทึกแล้ว / Saved.</div>}
+      {sp.report === "sent" && <div className="mb-4 rounded-lg border border-emerald-300 bg-emerald-50 p-3 text-sm text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300">ส่งรายงานทดสอบแล้ว / Test report sent.</div>}
+      {sp.report === "failed" && <div className="mb-4 rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300">ส่งไม่สำเร็จ — ตรวจสอบการตั้งค่า SMTP</div>}
+      {sp.report === "norecipients" && <div className="mb-4 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-700 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300">ยังไม่ได้ตั้งอีเมลผู้รับรายงาน</div>}
 
       <form action={saveCctvSettingsAction} className="space-y-4">
         <Card>
@@ -67,6 +70,18 @@ export default async function CctvSettingsPage({ searchParams }: { searchParams:
 
         <Button type="submit"><Save className="mr-2 h-4 w-4" /> บันทึก / Save</Button>
       </form>
+
+      <Card className="mt-4">
+        <CardHeader><CardTitle className="text-base">รายงานประจำวันทางอีเมล / Daily email report</CardTitle></CardHeader>
+        <CardContent className="flex flex-wrap items-center justify-between gap-3">
+          <p className="text-sm text-muted-foreground">
+            ระบบจะส่งสรุปสุขภาพ CCTV ให้ผู้รับที่ตั้งไว้ทุกวัน (ตั้งเวลาผ่าน Cloud Scheduler → <code>/api/cron/cctv-daily</code>). กดปุ่มเพื่อทดสอบส่งทันที
+          </p>
+          <form action={sendCctvDailyTest}>
+            <Button type="submit" variant="outline">ส่งทดสอบตอนนี้ / Send test now</Button>
+          </form>
+        </CardContent>
+      </Card>
     </div>
   );
 }
