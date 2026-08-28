@@ -111,7 +111,7 @@ export default async function ItDashboardPage() {
     prisma.asset.count({ where: { ...orgWhere, status: "IN_REPAIR" } }),
     prisma.asset.count({ where: { ...orgWhere, warrantyEnd: { lt: now }, status: { in: ["IN_USE", "ASSIGNED"] } } }),
     prisma.asset.count({ where: { ...orgWhere, purchaseDate: { lt: fourYearsAgo }, status: { notIn: ["RETIRED", "DISPOSED"] } } }),
-    prisma.auditLog.count({ where: { organizationId: orgId, action: "LOGIN_FAILED", createdAt: { gte: yearStart } } }).catch(() => 0),
+    prisma.auditLog.count({ where: { organizationId: orgId, action: "LOGIN", result: { in: ["FAILED", "DENIED"] }, createdAt: { gte: yearStart } } }).catch(() => 0),
   ]);
 
   // ---- Tickets ----

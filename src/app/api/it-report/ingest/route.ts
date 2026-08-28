@@ -1,6 +1,12 @@
 import { NextResponse } from "next/server";
 import crypto from "node:crypto";
 import { prisma } from "@/lib/prisma";
+import { checkRateLimit } from "@/lib/rate-limit";
+
+function clientIp(req: Request): string {
+  const xff = req.headers.get("x-forwarded-for");
+  return (xff ? xff.split(",")[0] : "").trim() || "unknown";
+}
 
 /**
  * Machine ingest endpoint for on-prem collectors (Synology, etc.).
@@ -34,6 +40,11 @@ function utcDay(input?: string): Date {
 }
 
 export async function POST(req: Request) {
+  // Per-IP throttle BEFORE any DB work — caps key brute-force + bulk-write abuse.
+  if (!checkRateLimit(`ingest:ip:${clientIp(req)}`, 60, 60_000)) {
+    return NextResponse.json({ error: "rate_limited" }, { status: 429 });
+  }
+
   const key = bearer(req);
   if (!key) return NextResponse.json({ error: "missing_api_key" }, { status: 401 });
 
@@ -43,6 +54,11 @@ export async function POST(req: Request) {
   });
   if (!setting) return NextResponse.json({ error: "invalid_api_key" }, { status: 401 });
   const orgId = setting.organizationId;
+
+  // Per-org throttle — a valid key still can't hammer the write path.
+  if (!checkRateLimit(`ingest:org:${orgId}`, 120, 60_000)) {
+    return NextResponse.json({ error: "rate_limited" }, { status: 429 });
+  }
 
   let body: unknown;
   try {

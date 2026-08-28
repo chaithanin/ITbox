@@ -30,6 +30,8 @@ const assetSchema = z.object({
   costCenter: z.string().optional(),
   project: z.string().optional(),
   ipAddress: z.string().optional(),
+  macAddress: z.string().optional(),
+  imei: z.string().optional(),
   notes: z.string().optional(),
 });
 
@@ -73,8 +75,36 @@ function assetData(input: z.infer<typeof assetSchema>) {
     costCenter: optStr(input.costCenter),
     project: optStr(input.project),
     ipAddress: optStr(input.ipAddress),
+    macAddress: optStr(input.macAddress),
+    imei: optStr(input.imei),
     notes: optStr(input.notes),
   };
+}
+
+/** Flag duplicate hardware identifiers (serial / MAC / IMEI) within the org. */
+async function assertNoDuplicateIdentifiers(
+  organizationId: string,
+  data: { serialNumber: string | null; macAddress: string | null; imei: string | null },
+  excludeId?: string
+) {
+  const checks: { field: "serialNumber" | "macAddress" | "imei"; value: string | null; label: string }[] = [
+    { field: "serialNumber", value: data.serialNumber, label: "Serial number" },
+    { field: "macAddress", value: data.macAddress, label: "MAC address" },
+    { field: "imei", value: data.imei, label: "IMEI" },
+  ];
+  for (const c of checks) {
+    if (!c.value) continue;
+    const dup = await prisma.asset.findFirst({
+      where: {
+        organizationId,
+        deletedAt: null,
+        [c.field]: c.value,
+        ...(excludeId ? { NOT: { id: excludeId } } : {}),
+      },
+      select: { id: true, assetTag: true },
+    });
+    if (dup) throw new Error(`${c.label} "${c.value}" already exists on asset ${dup.assetTag}`);
+  }
 }
 
 export async function createAsset(formData: FormData) {
@@ -87,6 +117,7 @@ export async function createAsset(formData: FormData) {
     select: { id: true },
   });
   if (dup) throw new Error(`Asset tag "${data.assetTag}" already exists`);
+  await assertNoDuplicateIdentifiers(user.organizationId, data);
 
   const asset = await prisma.asset.create({
     data: { ...data, organizationId: user.organizationId },
@@ -132,6 +163,7 @@ export async function updateAsset(formData: FormData) {
     select: { id: true },
   });
   if (dup) throw new Error(`Asset tag "${data.assetTag}" already exists`);
+  await assertNoDuplicateIdentifiers(user.organizationId, data, id);
 
   const asset = await prisma.asset.update({ where: { id }, data });
   await prisma.assetHistory.create({
@@ -162,31 +194,47 @@ async function setLifecycleStatus(
 ) {
   const user = await requirePermission("asset:dispose");
   const id = z.string().uuid().parse(formData.get("id"));
-  const asset = await prisma.asset.findFirst({
-    where: { id, organizationId: user.organizationId, deletedAt: null },
-    select: { id: true, assetTag: true, status: true },
-  });
-  if (!asset) throw new Error("Asset not found");
-  if (asset.status === "DISPOSED") throw new Error("Asset is already disposed");
+  // Optional disposal evidence: a data-wipe confirmation and a free-text note.
+  const wipeConfirmed = formData.get("wipeConfirmed") === "on" || formData.get("wipeConfirmed") === "true";
+  const disposalNote = optStr((formData.get("disposalNote") as string | null) ?? undefined);
 
-  await prisma.asset.update({
-    where: { id },
-    data: { status, assignedToId: null },
+  const asset = await prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM assets WHERE id = ${id}::uuid FOR UPDATE`;
+    const a = await tx.asset.findFirst({
+      where: { id, organizationId: user.organizationId, deletedAt: null },
+      select: { id: true, assetTag: true, status: true },
+    });
+    if (!a) throw new Error("Asset not found");
+    if (a.status === "DISPOSED") throw new Error("Asset is already disposed");
+
+    // Force-close any still-open assignment so a retired/disposed asset can
+    // never remain "held" by a former custodian.
+    await tx.assetAssignment.updateMany({
+      where: { organizationId: user.organizationId, assetId: id, status: "CHECKED_OUT" },
+      data: { status: "RETURNED", returnedAt: new Date(), returnedById: user.id, remark: `Closed by ${historyAction.toLowerCase()}` },
+    });
+    await tx.asset.update({
+      where: { id },
+      data: { status, assignedToId: null },
+    });
+    const wipeText = status === "DISPOSED" ? ` · data wipe: ${wipeConfirmed ? "confirmed" : "NOT confirmed"}` : "";
+    await tx.assetHistory.create({
+      data: {
+        organizationId: user.organizationId,
+        assetId: id,
+        action: historyAction,
+        detail: `${detailText} ${a.assetTag}${wipeText}${disposalNote ? ` · ${disposalNote}` : ""}`,
+        actorId: user.id,
+      },
+    });
+    return a;
   });
-  await prisma.assetHistory.create({
-    data: {
-      organizationId: user.organizationId,
-      assetId: id,
-      action: historyAction,
-      detail: `${detailText} ${asset.assetTag}`,
-      actorId: user.id,
-    },
-  });
+
   await auditLog(user, {
     action: historyAction,
     entityType: "ASSET",
     entityId: id,
-    detail: { assetTag: asset.assetTag, fromStatus: asset.status, toStatus: status },
+    detail: { assetTag: asset.assetTag, fromStatus: asset.status, toStatus: status, wipeConfirmed: status === "DISPOSED" ? wipeConfirmed : undefined, disposalNote },
   });
   revalidatePath("/assets");
   revalidatePath(`/assets/${id}`);
@@ -233,13 +281,6 @@ export async function assignAsset(formData: FormData) {
   const user = await requirePermission("asset:assign");
   const input = assignSchema.parse(Object.fromEntries(formData));
 
-  const asset = await prisma.asset.findFirst({
-    where: { id: input.assetId, organizationId: user.organizationId, deletedAt: null },
-    select: { id: true, assetTag: true, name: true, status: true },
-  });
-  if (!asset) throw new Error("Asset not found");
-  if (asset.status !== "AVAILABLE") throw new Error("Asset is not available for assignment");
-
   const employee = await prisma.employee.findFirst({
     where: {
       id: input.employeeId,
@@ -251,32 +292,46 @@ export async function assignAsset(formData: FormData) {
   });
   if (!employee) throw new Error("Employee not found or not active");
 
-  await prisma.assetAssignment.create({
-    data: {
-      organizationId: user.organizationId,
-      assetId: asset.id,
-      employeeId: employee.id,
-      status: "CHECKED_OUT",
-      assignedById: user.id,
-      purpose: optStr(input.purpose),
-      expectedReturnDate: optDate(input.expectedReturnDate),
-      conditionBefore: input.conditionBefore ?? null,
-      remark: optStr(input.remark),
-    },
+  // Serialize concurrent assigns on the same asset: lock the asset row, then
+  // check-and-write inside one transaction so two agents cannot double-assign.
+  const asset = await prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM assets WHERE id = ${input.assetId}::uuid FOR UPDATE`;
+    const a = await tx.asset.findFirst({
+      where: { id: input.assetId, organizationId: user.organizationId, deletedAt: null },
+      select: { id: true, assetTag: true, name: true, status: true },
+    });
+    if (!a) throw new Error("Asset not found");
+    if (a.status !== "AVAILABLE") throw new Error("Asset is not available for assignment");
+
+    await tx.assetAssignment.create({
+      data: {
+        organizationId: user.organizationId,
+        assetId: a.id,
+        employeeId: employee.id,
+        status: "CHECKED_OUT",
+        assignedById: user.id,
+        purpose: optStr(input.purpose),
+        expectedReturnDate: optDate(input.expectedReturnDate),
+        conditionBefore: input.conditionBefore ?? null,
+        remark: optStr(input.remark),
+      },
+    });
+    await tx.asset.update({
+      where: { id: a.id },
+      data: { status: "ASSIGNED", assignedToId: employee.id },
+    });
+    await tx.assetHistory.create({
+      data: {
+        organizationId: user.organizationId,
+        assetId: a.id,
+        action: "ASSIGN",
+        detail: `มอบหมายให้ / Assigned to ${employee.firstName} ${employee.lastName}`,
+        actorId: user.id,
+      },
+    });
+    return a;
   });
-  await prisma.asset.update({
-    where: { id: asset.id },
-    data: { status: "ASSIGNED", assignedToId: employee.id },
-  });
-  await prisma.assetHistory.create({
-    data: {
-      organizationId: user.organizationId,
-      assetId: asset.id,
-      action: "ASSIGN",
-      detail: `มอบหมายให้ / Assigned to ${employee.firstName} ${employee.lastName}`,
-      actorId: user.id,
-    },
-  });
+
   await auditLog(user, {
     action: "ASSIGN",
     entityType: "ASSET",
@@ -314,43 +369,51 @@ export async function returnAsset(formData: FormData) {
   const user = await requirePermission("asset:return");
   const input = returnSchema.parse(Object.fromEntries(formData));
 
-  const asset = await prisma.asset.findFirst({
-    where: { id: input.assetId, organizationId: user.organizationId, deletedAt: null },
-    select: { id: true, assetTag: true },
-  });
-  if (!asset) throw new Error("Asset not found");
+  const asset = await prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM assets WHERE id = ${input.assetId}::uuid FOR UPDATE`;
+    const a = await tx.asset.findFirst({
+      where: { id: input.assetId, organizationId: user.organizationId, deletedAt: null },
+      select: { id: true, assetTag: true },
+    });
+    if (!a) throw new Error("Asset not found");
 
-  const assignment = await prisma.assetAssignment.findFirst({
-    where: { organizationId: user.organizationId, assetId: asset.id, status: "CHECKED_OUT" },
-    orderBy: { assignedAt: "desc" },
-    include: { employee: { select: { firstName: true, lastName: true } } },
-  });
-  if (!assignment) throw new Error("No open assignment for this asset");
+    // Close ALL open assignments for this asset (defensive against any legacy
+    // double-assignment), not just the newest one.
+    const openAssignments = await tx.assetAssignment.findMany({
+      where: { organizationId: user.organizationId, assetId: a.id, status: "CHECKED_OUT" },
+      orderBy: { assignedAt: "desc" },
+      include: { employee: { select: { firstName: true, lastName: true } } },
+    });
+    if (openAssignments.length === 0) throw new Error("No open assignment for this asset");
 
-  await prisma.assetAssignment.update({
-    where: { id: assignment.id },
-    data: {
-      status: "RETURNED",
-      returnedAt: new Date(),
-      returnedById: user.id,
-      conditionAfter: input.conditionAfter,
-      damageNotes: optStr(input.damageNotes),
-      remark: optStr(input.remark) ?? assignment.remark,
-    },
+    await tx.assetAssignment.updateMany({
+      where: { organizationId: user.organizationId, assetId: a.id, status: "CHECKED_OUT" },
+      data: {
+        status: "RETURNED",
+        returnedAt: new Date(),
+        returnedById: user.id,
+        conditionAfter: input.conditionAfter,
+        damageNotes: optStr(input.damageNotes),
+        ...(optStr(input.remark) ? { remark: optStr(input.remark) } : {}),
+      },
+    });
+    await tx.asset.update({
+      where: { id: a.id },
+      data: { status: "AVAILABLE", assignedToId: null, condition: input.conditionAfter },
+    });
+    const holder = openAssignments[0].employee;
+    await tx.assetHistory.create({
+      data: {
+        organizationId: user.organizationId,
+        assetId: a.id,
+        action: "RETURN",
+        detail: `รับคืนจาก / Returned from ${holder.firstName} ${holder.lastName} (สภาพ / condition: ${input.conditionAfter})`,
+        actorId: user.id,
+      },
+    });
+    return a;
   });
-  await prisma.asset.update({
-    where: { id: asset.id },
-    data: { status: "AVAILABLE", assignedToId: null, condition: input.conditionAfter },
-  });
-  await prisma.assetHistory.create({
-    data: {
-      organizationId: user.organizationId,
-      assetId: asset.id,
-      action: "RETURN",
-      detail: `รับคืนจาก / Returned from ${assignment.employee.firstName} ${assignment.employee.lastName} (สภาพ / condition: ${input.conditionAfter})`,
-      actorId: user.id,
-    },
-  });
+
   await auditLog(user, {
     action: "RETURN",
     entityType: "ASSET",
@@ -383,51 +446,80 @@ export async function transferAsset(formData: FormData) {
   const toLocationId = optStr(input.toLocationId);
   const toEmployeeId = optStr(input.toEmployeeId);
 
-  const asset = await prisma.asset.findFirst({
-    where: { id: input.assetId, organizationId: user.organizationId, deletedAt: null },
-    select: {
-      id: true,
-      assetTag: true,
-      departmentId: true,
-      locationId: true,
-      assignedToId: true,
-    },
-  });
-  if (!asset) throw new Error("Asset not found");
+  // Validate the target employee (same org + ACTIVE) BEFORE mutating, mirroring
+  // assignAsset — a transfer must not point custody at a missing/inactive person.
+  if (toEmployeeId) {
+    const target = await prisma.employee.findFirst({
+      where: { id: toEmployeeId, organizationId: user.organizationId, deletedAt: null, status: "ACTIVE" },
+      select: { id: true },
+    });
+    if (!target) throw new Error("Target employee not found or not active");
+  }
 
-  await prisma.assetTransfer.create({
-    data: {
-      organizationId: user.organizationId,
-      assetId: asset.id,
-      fromDepartmentId: asset.departmentId,
-      toDepartmentId,
-      fromLocationId: asset.locationId,
-      toLocationId,
-      fromEmployeeId: asset.assignedToId,
-      toEmployeeId,
-      reason: optStr(input.reason),
-      status: "COMPLETED",
-      requestedById: user.id,
-      completedAt: new Date(),
-    },
+  const asset = await prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM assets WHERE id = ${input.assetId}::uuid FOR UPDATE`;
+    const a = await tx.asset.findFirst({
+      where: { id: input.assetId, organizationId: user.organizationId, deletedAt: null },
+      select: { id: true, assetTag: true, departmentId: true, locationId: true, assignedToId: true, status: true },
+    });
+    if (!a) throw new Error("Asset not found");
+
+    await tx.assetTransfer.create({
+      data: {
+        organizationId: user.organizationId,
+        assetId: a.id,
+        fromDepartmentId: a.departmentId,
+        toDepartmentId,
+        fromLocationId: a.locationId,
+        toLocationId,
+        fromEmployeeId: a.assignedToId,
+        toEmployeeId,
+        reason: optStr(input.reason),
+        status: "COMPLETED",
+        requestedById: user.id,
+        completedAt: new Date(),
+      },
+    });
+
+    // When custody changes, keep the assignment ledger consistent:
+    // close every open assignment, then open a fresh one for the new holder.
+    if (toEmployeeId) {
+      await tx.assetAssignment.updateMany({
+        where: { organizationId: user.organizationId, assetId: a.id, status: "CHECKED_OUT" },
+        data: { status: "RETURNED", returnedAt: new Date(), returnedById: user.id, remark: "Closed by transfer" },
+      });
+      await tx.assetAssignment.create({
+        data: {
+          organizationId: user.organizationId,
+          assetId: a.id,
+          employeeId: toEmployeeId,
+          status: "CHECKED_OUT",
+          assignedById: user.id,
+          purpose: optStr(input.reason) ?? "Transfer",
+        },
+      });
+    }
+
+    await tx.asset.update({
+      where: { id: a.id },
+      data: {
+        ...(toDepartmentId ? { departmentId: toDepartmentId } : {}),
+        ...(toLocationId ? { locationId: toLocationId } : {}),
+        ...(toEmployeeId ? { assignedToId: toEmployeeId, status: "ASSIGNED" } : {}),
+      },
+    });
+    await tx.assetHistory.create({
+      data: {
+        organizationId: user.organizationId,
+        assetId: a.id,
+        action: "TRANSFER",
+        detail: `โอนย้ายทรัพย์สิน / Transferred asset ${a.assetTag}`,
+        actorId: user.id,
+      },
+    });
+    return a;
   });
-  await prisma.asset.update({
-    where: { id: asset.id },
-    data: {
-      ...(toDepartmentId ? { departmentId: toDepartmentId } : {}),
-      ...(toLocationId ? { locationId: toLocationId } : {}),
-      ...(toEmployeeId ? { assignedToId: toEmployeeId } : {}),
-    },
-  });
-  await prisma.assetHistory.create({
-    data: {
-      organizationId: user.organizationId,
-      assetId: asset.id,
-      action: "TRANSFER",
-      detail: `โอนย้ายทรัพย์สิน / Transferred asset ${asset.assetTag}`,
-      actorId: user.id,
-    },
-  });
+
   await auditLog(user, {
     action: "TRANSFER",
     entityType: "ASSET",

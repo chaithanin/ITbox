@@ -364,7 +364,7 @@ export async function createCase(user: CurrentUser, input: CreateCaseInput) {
     : null;
 
   const prefix = type?.prefix ?? "INC";
-  const caseNumber = await nextCaseNumber(user.organizationId, prefix, now.getUTCFullYear());
+  let caseNumber = await nextCaseNumber(user.organizationId, prefix, now.getUTCFullYear());
 
   // Auto-assign by category → team
   let assignedTeamId: string | null = category?.assignTeamId ?? null;
@@ -384,7 +384,10 @@ export async function createCase(user: CurrentUser, input: CreateCaseInput) {
     input.locationId ? undefined : undefined; // placeholder to keep types simple
   void departmentId;
 
-  const created = await prisma.supportCase.create({
+  let created: Awaited<ReturnType<typeof prisma.supportCase.create>> | undefined;
+  for (let attempt = 0; ; attempt++) {
+   try {
+    created = await prisma.supportCase.create({
     data: {
       organizationId: user.organizationId,
       caseNumber,
@@ -424,7 +427,18 @@ export async function createCase(user: CurrentUser, input: CreateCaseInput) {
           }
         : undefined,
     },
-  });
+    });
+    break;
+   } catch (e) {
+    // Race on the (org, caseNumber) unique index: recompute a fresh number and retry.
+    if (attempt < 4 && typeof e === "object" && e !== null && (e as { code?: string }).code === "P2002") {
+      caseNumber = await nextCaseNumber(user.organizationId, prefix, now.getUTCFullYear());
+      continue;
+    }
+    throw e;
+   }
+  }
+  if (!created) throw new AuthError("CASE_NUMBER_CONFLICT", 409);
 
   await recordEvent(created.id, user.id, "CREATED", { toStatus: created.status, detail: { priority, caseNumber } });
   if (assignedUserId) {
@@ -715,10 +729,18 @@ export async function transitionCase(
     data.resolvedAt = null;
     data.closedAt = null;
   }
-  // Pause/resume SLA on waiting states
-  if (PAUSED_STATUSES.includes(to)) {
+  // Pause/resume SLA on waiting states — honor the per-priority policy flags
+  // (pauseOnWaitingUser / pauseOnWaitingVendor) instead of pausing blindly.
+  const slaPolicy = await prisma.slaPolicy.findUnique({
+    where: { organizationId_priority: { organizationId: c.organizationId, priority: c.priority } },
+  });
+  const pauseAllowed = (s: CaseStatus): boolean =>
+    s === "WAITING_USER" ? (slaPolicy?.pauseOnWaitingUser ?? true)
+      : s === "WAITING_VENDOR" ? (slaPolicy?.pauseOnWaitingVendor ?? true)
+        : false;
+  if (PAUSED_STATUSES.includes(to) && pauseAllowed(to)) {
     await pauseSla(c);
-  } else if (PAUSED_STATUSES.includes(c.status) && !PAUSED_STATUSES.includes(to)) {
+  } else if (c.slaPausedAt && !PAUSED_STATUSES.includes(to)) {
     await resumeSla(c);
   }
 
@@ -865,6 +887,7 @@ export async function runSlaSweep(): Promise<number> {
         id: true, caseNumber: true, subject: true, priority: true, assignedUserId: true,
         assignedTeamId: true, resolutionDueAt: true, resolutionBreached: true,
         firstResponseDueAt: true, firstRespondedAt: true, firstResponseBreached: true,
+        slaWarned: true,
       },
       take: 1000,
     });
@@ -877,30 +900,76 @@ export async function runSlaSweep(): Promise<number> {
     });
     const managerIds = managers.map((m) => m.id);
 
+    // SLA policies (warnBeforeMins, escalateToRoleKey) by priority for this org.
+    const policies = await prisma.slaPolicy.findMany({ where: { organizationId: org.id } });
+    const policyByPriority = new Map(policies.map((p) => [p.priority, p]));
+    // Cache of escalation-role → userIds, resolved lazily per role key.
+    const escalationCache = new Map<string, string[]>();
+    const escalationIdsFor = async (roleKey: string | null | undefined): Promise<string[]> => {
+      if (!roleKey) return [];
+      const cached = escalationCache.get(roleKey);
+      if (cached) return cached;
+      const users = await prisma.user.findMany({
+        where: {
+          organizationId: org.id, deletedAt: null, status: "ACTIVE",
+          userRoles: { some: { role: { key: roleKey } } },
+        },
+        select: { id: true },
+      });
+      const ids = users.map((u) => u.id);
+      escalationCache.set(roleKey, ids);
+      return ids;
+    };
+
     for (const c of openCases) {
+      const policy = policyByPriority.get(c.priority);
+      let breachedThisPass = false;
+
       // First response breach
       if (!c.firstRespondedAt && !c.firstResponseBreached && c.firstResponseDueAt && c.firstResponseDueAt < now) {
         await prisma.supportCase.update({ where: { id: c.id }, data: { firstResponseBreached: true } });
         await recordEvent(c.id, null, "SLA_BREACH", { detail: { kind: "first_response" } });
-        const ids = [c.assignedUserId, ...managerIds].filter(Boolean) as string[];
+        const escalationIds = await escalationIdsFor(policy?.escalateToRoleKey);
+        const ids = [c.assignedUserId, ...managerIds, ...escalationIds].filter(Boolean) as string[];
         await notifyUsers(org.id, ids, {
           type: "SLA_BREACH", level: "CRITICAL",
           title: `SLA เกินกำหนด (First Response) — ${c.caseNumber}`, body: c.subject,
           link: `/support/${c.id}`,
         });
         sent += ids.length;
+        breachedThisPass = true;
       }
       // Resolution breach
       if (!c.resolutionBreached && c.resolutionDueAt && c.resolutionDueAt < now) {
         await prisma.supportCase.update({ where: { id: c.id }, data: { resolutionBreached: true } });
         await recordEvent(c.id, null, "SLA_BREACH", { detail: { kind: "resolution" } });
-        const ids = [c.assignedUserId, ...managerIds].filter(Boolean) as string[];
+        const escalationIds = await escalationIdsFor(policy?.escalateToRoleKey);
+        const ids = [c.assignedUserId, ...managerIds, ...escalationIds].filter(Boolean) as string[];
         await notifyUsers(org.id, ids, {
           type: "SLA_BREACH", level: "CRITICAL",
           title: `SLA เกินกำหนด (Resolution) — ${c.caseNumber}`, body: c.subject,
           link: `/support/${c.id}`,
         });
         sent += ids.length;
+        breachedThisPass = true;
+      }
+
+      // "Approaching SLA" warning — fire once, before the resolution due time,
+      // inside the policy's warn window. Skipped once already breached.
+      if (!breachedThisPass && !c.slaWarned && !c.resolutionBreached && c.resolutionDueAt) {
+        const warnMins = policy?.warnBeforeMins ?? 15;
+        const warnAt = new Date(c.resolutionDueAt.getTime() - warnMins * 60_000);
+        if (now >= warnAt && now < c.resolutionDueAt) {
+          await prisma.supportCase.update({ where: { id: c.id }, data: { slaWarned: true } });
+          await recordEvent(c.id, null, "SLA_WARNING", { detail: { warnBeforeMins: warnMins } });
+          const ids = [c.assignedUserId, ...(await teamMemberIds(c.assignedTeamId))].filter(Boolean) as string[];
+          await notifyUsers(org.id, ids, {
+            type: "SLA_WARNING", level: "WARNING",
+            title: `SLA ใกล้ครบกำหนด — ${c.caseNumber}`, body: c.subject,
+            link: `/support/${c.id}`,
+          });
+          sent += ids.length;
+        }
       }
     }
   }

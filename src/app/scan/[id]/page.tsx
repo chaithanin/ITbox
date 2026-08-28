@@ -15,8 +15,10 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
 }
 
 /**
- * PUBLIC asset lookup page (QR scan target). No auth — shows only
- * non-sensitive identification fields. No prices, notes, or vault data.
+ * PUBLIC asset lookup page (QR scan target). No auth, so it must expose only
+ * non-identifying fields. Deliberately NObody's name, department, or physical
+ * location here — that PII is available only to authenticated users on the
+ * internal asset page. Anyone holding the QR URL sees just tag/status/warranty.
  */
 export default async function ScanPage({
   params,
@@ -32,23 +34,12 @@ export default async function ScanPage({
           id: true,
           name: true,
           assetTag: true,
-          serialNumber: true,
           status: true,
           condition: true,
           warrantyEnd: true,
-          department: { select: { name: true } },
-          location: { select: { name: true } },
-          assignments: {
-            where: { status: "CHECKED_OUT" },
-            orderBy: { assignedAt: "desc" },
-            take: 1,
-            select: { employee: { select: { firstName: true, lastName: true } } },
-          },
         },
       })
     : null;
-
-  const holder = asset?.assignments[0]?.employee;
 
   return (
     <main className="flex min-h-screen items-start justify-center bg-muted/40 p-4 pt-10 sm:pt-16">
@@ -73,16 +64,13 @@ export default async function ScanPage({
                 <StatusBadge status={asset.status} />
               </div>
               <div>
-                <Row label="ซีเรียล / Serial" value={asset.serialNumber} />
-                <Row label="แผนก / Department" value={asset.department?.name} />
-                <Row label="สถานที่ / Location" value={asset.location?.name} />
+                <Row label="สถานะ / Status" value={asset.status} />
                 <Row label="สภาพ / Condition" value={asset.condition} />
                 <Row label="หมดประกัน / Warranty End" value={formatDate(asset.warrantyEnd)} />
-                <Row
-                  label="ผู้ถือครอง / Assigned To"
-                  value={holder ? `${holder.firstName} ${holder.lastName}` : null}
-                />
               </div>
+              <p className="mt-3 text-xs text-muted-foreground">
+                เข้าสู่ระบบเพื่อดูผู้ถือครอง แผนก และสถานที่ / Sign in for holder, department &amp; location
+              </p>
             </>
           )}
         </div>

@@ -145,14 +145,6 @@ export async function assignLicense(licenseId: string, formData: FormData) {
   const user = await requirePermission("license:manage");
   const employeeId = z.string().min(1).parse(formData.get("employeeId"));
 
-  const license = await prisma.license.findFirst({
-    where: { id: licenseId, organizationId: user.organizationId, deletedAt: null },
-    include: {
-      _count: { select: { assignments: { where: { revokedAt: null } } } },
-    },
-  });
-  if (!license) redirect("/licenses");
-
   const employee = await prisma.employee.findFirst({
     where: {
       id: employeeId,
@@ -164,20 +156,44 @@ export async function assignLicense(licenseId: string, formData: FormData) {
   });
   if (!employee) redirect(`/licenses/${licenseId}?error=employee`);
 
-  if (license._count.assignments >= license.totalSeats) {
+  // Serialize seat allocation: lock the license row, recount active seats, and
+  // create the assignment inside one transaction so concurrent assigns cannot
+  // both slip past the last free seat.
+  const result = await prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM licenses WHERE id = ${licenseId}::uuid FOR UPDATE`;
+    const license = await tx.license.findFirst({
+      where: { id: licenseId, organizationId: user.organizationId, deletedAt: null },
+      include: { _count: { select: { assignments: { where: { revokedAt: null } } } } },
+    });
+    if (!license) return { ok: false as const, reason: "notfound" as const };
+
+    const dup = await tx.licenseAssignment.findFirst({
+      where: { licenseId, employeeId: employee.id, revokedAt: null },
+      select: { id: true },
+    });
+    if (dup) return { ok: false as const, reason: "dup" as const };
+
+    if (license._count.assignments >= license.totalSeats) {
+      return { ok: false as const, reason: "full" as const };
+    }
+    const assignment = await tx.licenseAssignment.create({
+      data: { licenseId, employeeId: employee.id },
+    });
+    return { ok: true as const, assignmentId: assignment.id };
+  });
+
+  if (!result.ok) {
+    if (result.reason === "notfound") redirect("/licenses");
+    if (result.reason === "dup") redirect(`/licenses/${licenseId}?error=dup`);
     redirect(`/licenses/${licenseId}?error=full`);
   }
-
-  const assignment = await prisma.licenseAssignment.create({
-    data: { licenseId, employeeId: employee.id },
-  });
 
   await auditLog(user, {
     action: "ASSIGN",
     entityType: "LICENSE",
     entityId: licenseId,
     detail: {
-      assignmentId: assignment.id,
+      assignmentId: result.assignmentId,
       employee: `${employee.firstName} ${employee.lastName}`,
     },
   });

@@ -136,9 +136,25 @@ export async function softDeleteEmployee(formData: FormData) {
 
   const existing = await prisma.employee.findFirst({
     where: { id, organizationId: user.organizationId, deletedAt: null },
-    select: { id: true, employeeCode: true, firstName: true, lastName: true },
+    select: { id: true, employeeCode: true, firstName: true, lastName: true, status: true, userId: true },
   });
   if (!existing) throw new Error("Employee not found");
+
+  // Deleting must never be a silent back-door around offboarding: an employee
+  // who still holds assets/licenses or has a live account must go through the
+  // offboarding workflow so access is actually revoked and assets reclaimed.
+  const [openAssignments, activeLicenses] = await Promise.all([
+    prisma.assetAssignment.count({ where: { organizationId: user.organizationId, employeeId: id, status: "CHECKED_OUT" } }),
+    prisma.licenseAssignment.count({ where: { employeeId: id, revokedAt: null, license: { organizationId: user.organizationId } } }),
+  ]);
+  const linkedActiveUser = existing.userId
+    ? await prisma.user.count({ where: { id: existing.userId, status: "ACTIVE" } })
+    : 0;
+  if (existing.status === "ACTIVE" || openAssignments > 0 || activeLicenses > 0 || linkedActiveUser > 0) {
+    throw new Error(
+      "ไม่สามารถลบพนักงานที่ยังมีทรัพย์สิน/สิทธิ์/บัญชีใช้งานอยู่ได้ — กรุณาทำ Offboarding ก่อน / Cannot delete an employee who still holds assets, licenses, or an active account. Run Offboarding first."
+    );
+  }
 
   await prisma.employee.update({ where: { id }, data: { deletedAt: new Date() } });
   await auditLog(user, {

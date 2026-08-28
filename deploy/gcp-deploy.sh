@@ -191,6 +191,17 @@ else
     --headers="Authorization=Bearer $CRON_SECRET_VALUE" >/dev/null
 fi
 
+say "High-frequency SLA sweep via Cloud Scheduler (every 15 min)"
+if gcloud scheduler jobs describe itbox-sla-sweep --location="$REGION" >/dev/null 2>&1; then
+  gcloud scheduler jobs update http itbox-sla-sweep --location="$REGION" \
+    --schedule="*/15 * * * *" --uri="$URL/api/cron/sla" --http-method=POST \
+    --update-headers="Authorization=Bearer $CRON_SECRET_VALUE" >/dev/null
+else
+  gcloud scheduler jobs create http itbox-sla-sweep --location="$REGION" \
+    --schedule="*/15 * * * *" --uri="$URL/api/cron/sla" --http-method=POST \
+    --headers="Authorization=Bearer $CRON_SECRET_VALUE" >/dev/null
+fi
+
 # ------------------------------- Summary ----------------------------------
 printf "\n\033[1;32m════════════════════════════════════════════════════════════\033[0m\n"
 printf "\033[1;32m✅ ITBox deployed successfully\033[0m\n\n"
