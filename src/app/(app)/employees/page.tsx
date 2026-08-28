@@ -15,6 +15,9 @@ import {
   TableCell,
 } from "@/components/ui/table";
 import type { Prisma } from "@prisma/client";
+import { JmlTabs } from "./jml-tabs";
+import { OnboardingBoard } from "../onboarding/board";
+import { OffboardingBoard } from "../offboarding/board";
 
 const STATUS_OPTIONS = ["ACTIVE", "ON_LEAVE", "OFFBOARDING", "RESIGNED"] as const;
 
@@ -26,6 +29,19 @@ export default async function EmployeesPage({
   const user = await requirePermission("employee:read");
   const sp = await searchParams;
   const { page, skip, take } = parsePage(sp.page);
+
+  // People / Joiner / Leaver tabs — Onboarding & Offboarding live here (one page).
+  const show = { onboarding: user.permissions.has("onboarding:read"), offboarding: user.permissions.has("offboarding:read") };
+  const tab = sp.tab === "onboarding" && show.onboarding ? "onboarding" : sp.tab === "offboarding" && show.offboarding ? "offboarding" : "employees";
+  if (tab === "onboarding" || tab === "offboarding") {
+    return (
+      <div>
+        <PageHeader title="พนักงาน / Employees" description="ข้อมูลพนักงาน การรับเข้า (Onboarding) และการพ้นสภาพ (Offboarding)" />
+        <JmlTabs active={tab} show={show} />
+        {tab === "onboarding" ? <OnboardingBoard /> : <OffboardingBoard />}
+      </div>
+    );
+  }
 
   const q = sp.q?.trim() || undefined;
   const departmentId = sp.departmentId || undefined;
@@ -96,6 +112,8 @@ export default async function EmployeesPage({
           </>
         )}
       </PageHeader>
+
+      <JmlTabs active="employees" show={show} />
 
       <SearchFilterBar
         action="/employees"

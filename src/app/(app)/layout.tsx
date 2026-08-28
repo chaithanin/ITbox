@@ -28,7 +28,16 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     ...(has("report:read") ? [{ href: "/dashboard/it-dashboard", label: "IT Dashboard", icon: "reports" }] : []),
     ...(has("report:read") ? [{ href: "/it-report", label: "IT Support Report", icon: "reports" }] : []),
     ...(has("asset:read") ? [{ href: "/assets", label: t("assets"), icon: "assets" }] : []),
-    ...(has("employee:read") ? [{ href: "/employees", label: t("employees"), icon: "employees" }] : []),
+    ...(has("employee:read")
+      ? [{
+          href: "/employees", label: t("employees"), icon: "employees",
+          children: [
+            { href: "/employees", label: t("employees") },
+            ...(has("onboarding:read") ? [{ href: "/employees?tab=onboarding", label: "รับเข้า / Onboarding" }] : []),
+            ...(has("offboarding:read") ? [{ href: "/employees?tab=offboarding", label: "พ้นสภาพ / Offboarding" }] : []),
+          ],
+        }]
+      : []),
     ...(has("department:read") ? [{ href: "/departments", label: t("departments"), icon: "departments" }] : []),
     ...(has("location:read") ? [{ href: "/locations", label: t("locations"), icon: "locations" }] : []),
     ...(has("vault:read")
@@ -106,8 +115,6 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     ...(has("contract:read") ? [{ href: "/contracts", label: "สัญญา / Contracts", icon: "contracts" }] : []),
     ...(has("procurement:read") ? [{ href: "/procurement", label: t("procurement"), icon: "procurement" }] : []),
     ...(has("vendor:read") ? [{ href: "/vendors", label: t("vendors"), icon: "vendors" }] : []),
-    ...(has("onboarding:read") ? [{ href: "/onboarding", label: "รับพนักงานใหม่ / Onboarding", icon: "onboarding" }] : []),
-    ...(has("offboarding:read") ? [{ href: "/offboarding", label: t("offboarding"), icon: "offboarding" }] : []),
     ...(has("report:read") ? [{ href: "/reports", label: t("reports"), icon: "reports" }] : []),
     { href: "/notifications", label: t("notifications"), icon: "notifications" },
     ...(has("audit:read") ? [{ href: "/audit-logs", label: t("auditLogs"), icon: "audit" }] : []),

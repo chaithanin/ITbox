@@ -191,7 +191,7 @@ export async function POST(req: Request) {
     type: "ONBOARDING", level: "INFO" as const,
     title: "พนักงานใหม่ (Joiner) / New hire — เริ่ม IT Onboarding",
     body: `${j.name} เข้าใหม่จาก HR — เปิดเครื่อง/บัญชี/อีเมล/สิทธิ์ ตามเช็กลิสต์ Onboarding`,
-    link: "/onboarding",
+    link: "/employees?tab=onboarding",
   })));
 
   // Leaver: raise an IT offboarding case (idempotent — skip if one is already open).
@@ -204,7 +204,7 @@ export async function POST(req: Request) {
     type: "OFFBOARDING", level: "WARNING" as const,
     title: "พนักงานลาออก (Leaver) / Offboarding — เริ่มคืนทรัพย์สิน/ปิดสิทธิ์",
     body: `${l.name} สิ้นสุดการทำงาน (จาก HR) — คืนอุปกรณ์ ปิดบัญชี เพิกถอนสิทธิ์/รหัสตามเช็กลิสต์ Offboarding`,
-    link: "/offboarding",
+    link: "/employees?tab=offboarding",
   })));
 
   await prisma.auditLog.create({
