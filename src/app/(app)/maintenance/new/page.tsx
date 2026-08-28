@@ -90,6 +90,21 @@ export default async function NewMaintenanceTicketPage({
               </Select>
             </div>
             <div>
+              <Label htmlFor="type">ประเภท / Type *</Label>
+              <Select id="type" name="type" required className="mt-1" defaultValue="CORRECTIVE">
+                <option value="CORRECTIVE">แก้ไข / Corrective (เสียแล้วซ่อม)</option>
+                <option value="PREVENTIVE">เชิงป้องกัน / Preventive (ตามกำหนด)</option>
+              </Select>
+            </div>
+            <div>
+              <Label htmlFor="scheduledDate">วันที่กำหนด (Preventive) / Scheduled date</Label>
+              <Input id="scheduledDate" name="scheduledDate" type="date" className="mt-1" />
+            </div>
+            <div>
+              <Label htmlFor="recurrenceDays">ทำซ้ำทุกกี่วัน / Repeat every (days)</Label>
+              <Input id="recurrenceDays" name="recurrenceDays" type="number" min={1} max={3650} placeholder="เช่น 90, 180, 365" className="mt-1" />
+            </div>
+            <div>
               <Label htmlFor="technicianId">ช่างผู้รับผิดชอบ / Technician</Label>
               <Select id="technicianId" name="technicianId" className="mt-1" defaultValue="">
                 <option value="">— ไม่ระบุ / None —</option>

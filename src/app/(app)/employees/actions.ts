@@ -102,7 +102,7 @@ export async function updateEmployee(formData: FormData) {
 
   const existing = await prisma.employee.findFirst({
     where: { id, organizationId: user.organizationId, deletedAt: null },
-    select: { id: true },
+    select: { id: true, departmentId: true, position: true, firstName: true, lastName: true },
   });
   if (!existing) throw new Error("Employee not found");
   await assertOrgRefs(user, input, id);
@@ -125,6 +125,46 @@ export async function updateEmployee(formData: FormData) {
     entityId: row.id,
     detail: { employeeCode: row.employeeCode, name: `${row.firstName} ${row.lastName}` },
   });
+
+  // Mover control: a department or position change should trigger an access
+  // review — notify IT managers/admins and leave an audit trail so held assets,
+  // licenses, and system access are re-certified for the new role.
+  const deptChanged = (existing.departmentId ?? null) !== (row.departmentId ?? null);
+  const posChanged = (existing.position ?? null) !== (row.position ?? null);
+  if (deptChanged || posChanged) {
+    const managers = await prisma.user.findMany({
+      where: {
+        organizationId: user.organizationId, deletedAt: null, status: "ACTIVE",
+        userRoles: { some: { role: { key: { in: ["SUPER_ADMIN", "ADMIN", "IT_MANAGER"] } } } },
+      },
+      select: { id: true },
+    });
+    if (managers.length > 0) {
+      const what = [deptChanged ? "แผนก/Department" : null, posChanged ? "ตำแหน่ง/Position" : null].filter(Boolean).join(", ");
+      await prisma.notification.createMany({
+        data: managers.map((m) => ({
+          organizationId: user.organizationId,
+          userId: m.id,
+          type: "ACCESS_REVIEW",
+          level: "WARNING" as const,
+          title: "ต้องทบทวนสิทธิ์ (Mover) / Access review needed",
+          body: `${row.firstName} ${row.lastName} เปลี่ยน ${what} — โปรดทบทวนทรัพย์สิน สิทธิ์ และการเข้าถึงระบบ`,
+          link: `/employees/${row.id}`,
+        })),
+      });
+    }
+    await auditLog(user, {
+      action: "UPDATE",
+      entityType: "EMPLOYEE",
+      entityId: row.id,
+      detail: {
+        accessReview: true,
+        departmentFrom: existing.departmentId, departmentTo: row.departmentId,
+        positionFrom: existing.position, positionTo: row.position,
+      },
+    });
+  }
+
   revalidatePath("/employees");
   revalidatePath(`/employees/${id}`);
   redirect(`/employees/${id}`);

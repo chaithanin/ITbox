@@ -15,6 +15,7 @@ import { auditLog } from "@/lib/audit";
 import { AuthError } from "@/lib/errors";
 import type { CurrentUser } from "@/lib/session";
 import { pushLineMessage } from "@/lib/services/notify";
+import { sendEmail, emailEnabled } from "@/lib/services/email";
 import type {
   CasePriority, CaseImpact, CaseStatus, CaseSource, SupportCase, Prisma,
 } from "@prisma/client";
@@ -218,21 +219,40 @@ export async function pickAssignee(
 async function notifyUsers(
   organizationId: string,
   userIds: string[],
-  n: { type: string; level?: "INFO" | "WARNING" | "CRITICAL"; title: string; body: string; link: string }
+  n: { type: string; level?: "INFO" | "WARNING" | "CRITICAL"; title: string; body: string; link: string; email?: boolean }
 ) {
   const ids = [...new Set(userIds)].filter(Boolean);
   if (ids.length === 0) return;
+  const level = n.level ?? "INFO";
   await prisma.notification.createMany({
     data: ids.map((userId) => ({
       organizationId,
       userId,
       type: n.type,
-      level: n.level ?? "INFO",
+      level,
       title: n.title,
       body: n.body,
       link: n.link,
     })),
   });
+
+  // Email delivery — for important events (WARNING/CRITICAL) or when explicitly
+  // requested (assignment, resolution). In-app notifications always fire above;
+  // email is best-effort and a no-op when SMTP is not configured.
+  const shouldEmail = n.email ?? (level === "WARNING" || level === "CRITICAL");
+  if (!shouldEmail || !emailEnabled()) return;
+  const recipients = await prisma.user.findMany({
+    where: { id: { in: ids }, deletedAt: null, status: "ACTIVE" },
+    select: { email: true },
+  });
+  const to = recipients.map((r) => r.email).filter(Boolean);
+  if (to.length === 0) return;
+  const base = process.env.APP_URL ?? process.env.NEXTAUTH_URL ?? "";
+  await sendEmail({
+    to,
+    subject: n.title,
+    text: `${n.body}\n\n${base}${n.link}`,
+  }).catch(() => false);
 }
 
 async function teamMemberIds(teamId: string | null | undefined): Promise<string[]> {
@@ -761,6 +781,7 @@ export async function transitionCase(
         : to === "CLOSED" ? "เคสถูกปิดแล้ว"
         : `สถานะเปลี่ยนเป็น ${to.replaceAll("_", " ")}`,
       link: `/support/${c.id}`,
+      email: to === "RESOLVED" || to === "WAITING_USER",
     });
   }
   return updated;
@@ -795,7 +816,7 @@ export async function assignCase(
   if (input.userId) {
     await notifyUsers(user.organizationId, [input.userId], {
       type: "CASE_ASSIGNED", title: `คุณได้รับมอบหมายเคส ${c.caseNumber}`,
-      body: c.subject, link: `/support/${c.id}`,
+      body: c.subject, link: `/support/${c.id}`, email: true,
     });
   }
   return updated;

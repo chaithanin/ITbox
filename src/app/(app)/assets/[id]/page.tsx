@@ -383,8 +383,18 @@ export default async function AssetDetailPage({
                     </ConfirmButton>
                   </form>
                 )}
-                <form action={disposeAsset}>
+                <form action={disposeAsset} className="flex flex-col gap-1.5 rounded-md border border-dashed p-2.5">
                   <input type="hidden" name="id" value={asset.id} />
+                  <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <input type="checkbox" name="wipeConfirmed" value="on" className="h-3.5 w-3.5" />
+                    ยืนยันล้างข้อมูลแล้ว / Data wiped &amp; confirmed
+                  </label>
+                  <input
+                    name="disposalNote"
+                    maxLength={500}
+                    placeholder="วิธี/หลักฐานการจำหน่าย / Disposal method or evidence"
+                    className="w-full rounded-md border bg-background px-2 py-1 text-xs"
+                  />
                   <ConfirmButton
                     variant="destructive"
                     confirmText="ยืนยันจำหน่ายทรัพย์สินนี้ออก? / Dispose this asset?"

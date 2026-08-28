@@ -27,10 +27,25 @@ const STATUSES = [
   "CANCELLED",
 ] as const;
 
+const TYPES = ["CORRECTIVE", "PREVENTIVE"] as const;
+const optDate = z.preprocess((v) => {
+  const s = emptyToNull(v);
+  if (s == null) return null;
+  const d = new Date(String(s));
+  return Number.isNaN(d.getTime()) ? null : d;
+}, z.date().nullable().optional());
+const optInt = z.preprocess((v) => {
+  const s = emptyToNull(v);
+  return s == null ? null : Math.round(Number(s));
+}, z.number().int().min(1).max(3650).nullable().optional());
+
 const createSchema = z.object({
   assetId: z.string().min(1),
   problem: z.string().min(1).max(5000),
   priority: z.enum(PRIORITIES),
+  type: z.enum(TYPES).default("CORRECTIVE"),
+  scheduledDate: optDate,
+  recurrenceDays: optInt,
   technicianId: optStr,
   vendorId: optStr,
   remark: optStr,
@@ -99,6 +114,10 @@ export async function createTicket(formData: FormData) {
           vendorId: input.vendorId ?? null,
           priority: input.priority,
           status: "OPEN",
+          type: input.type,
+          scheduledDate: input.scheduledDate ?? null,
+          recurrenceDays: input.recurrenceDays ?? null,
+          nextDueAt: input.scheduledDate ?? null,
           remark: input.remark ?? null,
         },
         select: { id: true, ticketNumber: true },
@@ -109,7 +128,13 @@ export async function createTicket(formData: FormData) {
   }
   if (!ticket) throw new Error("Could not allocate ticket number");
 
-  await prisma.asset.update({ where: { id: asset.id }, data: { status: "IN_REPAIR" } });
+  // A future-dated preventive plan does not take the asset out of service yet;
+  // only corrective (or immediate) work flips it to IN_REPAIR.
+  const scheduledFuture =
+    input.type === "PREVENTIVE" && input.scheduledDate && input.scheduledDate.getTime() > Date.now();
+  if (!scheduledFuture) {
+    await prisma.asset.update({ where: { id: asset.id }, data: { status: "IN_REPAIR" } });
+  }
   await prisma.assetHistory.create({
     data: {
       organizationId: user.organizationId,
@@ -144,6 +169,13 @@ export async function updateTicket(id: string, formData: FormData) {
   const statusChanged = ticket.status !== input.status;
   const closing =
     statusChanged && (input.status === "COMPLETED" || input.status === "CANCELLED");
+  const completingNow = statusChanged && input.status === "COMPLETED";
+
+  // For a recurring preventive plan, roll the next-due date forward on completion.
+  const rolledNextDue =
+    completingNow && ticket.recurrenceDays
+      ? new Date(Date.now() + ticket.recurrenceDays * 86_400_000)
+      : undefined;
 
   await prisma.maintenanceTicket.update({
     where: { id },
@@ -156,7 +188,8 @@ export async function updateTicket(id: string, formData: FormData) {
       ...(statusChanged && input.status === "IN_PROGRESS" && !ticket.startedAt
         ? { startedAt: new Date() }
         : {}),
-      ...(statusChanged && input.status === "COMPLETED" ? { completedAt: new Date() } : {}),
+      ...(completingNow ? { completedAt: new Date() } : {}),
+      ...(rolledNextDue ? { nextDueAt: rolledNextDue } : {}),
     },
   });
 

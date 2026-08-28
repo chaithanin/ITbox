@@ -83,6 +83,28 @@ export async function POST(req: Request) {
       }
     }
 
+    // Preventive maintenance due (within 7 days or overdue)
+    const pmDue = await prisma.maintenanceTicket.findMany({
+      where: {
+        organizationId: org.id, deletedAt: null,
+        type: "PREVENTIVE",
+        status: { notIn: ["COMPLETED", "CANCELLED"] },
+        nextDueAt: { not: null, lt: inDays(7) },
+      },
+      select: { id: true, ticketNumber: true, nextDueAt: true, asset: { select: { assetTag: true, name: true } } },
+      take: 200,
+    });
+    for (const t of pmDue) {
+      const due = t.nextDueAt ? t.nextDueAt.toISOString().slice(0, 10) : "";
+      const overdue = t.nextDueAt ? t.nextDueAt.getTime() < now.getTime() : false;
+      await notify(
+        "MAINTENANCE_DUE", t.id, overdue ? "CRITICAL" : "WARNING",
+        overdue ? "บำรุงรักษาเลยกำหนด / Preventive maintenance overdue" : "ถึงกำหนดบำรุงรักษา / Preventive maintenance due",
+        `${t.ticketNumber} · ${t.asset.assetTag} ${t.asset.name} — กำหนด ${due}`,
+        `/maintenance/${t.id}`
+      );
+    }
+
     // Licenses expiring in 30 days
     const licenses = await prisma.license.findMany({
       where: {

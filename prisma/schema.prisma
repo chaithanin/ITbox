@@ -937,6 +937,11 @@ enum MaintenancePriority {
   URGENT
 }
 
+enum MaintenanceType {
+  CORRECTIVE
+  PREVENTIVE
+}
+
 model MaintenanceTicket {
   id             String              @id @default(uuid()) @db.Uuid
   organizationId String              @db.Uuid
@@ -948,6 +953,10 @@ model MaintenanceTicket {
   vendorId       String?             @db.Uuid
   priority       MaintenancePriority @default(MEDIUM)
   status         MaintenanceStatus   @default(OPEN)
+  type           MaintenanceType     @default(CORRECTIVE)
+  scheduledDate  DateTime?           @db.Date
+  recurrenceDays Int?
+  nextDueAt      DateTime?           @db.Date
   diagnosis      String?
   repairCost     Decimal?            @db.Decimal(14, 2)
   parts          String?
