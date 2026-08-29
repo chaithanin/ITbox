@@ -100,14 +100,41 @@ def main():
         return False
 
     # --- 2. try P2P (serial) login with each candidate capability ---
+    # The Dahua docs + device.xml (connect="19") indicate emSpecCap = 19 means P2P.
+    # Different SDK builds may expose that as a named member OR only as the raw value,
+    # so try both: named members that look P2P-ish, plus the raw int 19 (and a couple
+    # of neighbours seen in the wild). Dedupe by the integer cap value.
     print("\n--- P2P login attempts (szIP = serial) ---")
     winners = []
-    # order matters: try the ones most likely to mean 'P2P by serial' first
-    for name in ("P2P", "P2P_LOGIN", "PROXY", "SERVER_CONN", "ANY", "TCP"):
+    candidates = []  # (label, cap_int)
+    seen_caps = set()
+
+    def add_cap(label, cap):
+        try:
+            civ = int(cap)
+        except Exception:
+            return
+        if civ in seen_caps:
+            return
+        seen_caps.add(civ)
+        candidates.append((label, civ))
+
+    for name in ("P2P", "P2P_LOGIN", "PROXY", "SERVER_CONN"):
         if hasattr(EM_LOGIN_SPAC_CAP_TYPE, name):
-            cap = getattr(EM_LOGIN_SPAC_CAP_TYPE, name)
-            if try_login(f"P2P/{name}", args.serial, 0, cap):
-                winners.append(name)
+            add_cap(f"{name}={int(getattr(EM_LOGIN_SPAC_CAP_TYPE, name))}",
+                    getattr(EM_LOGIN_SPAC_CAP_TYPE, name))
+    # documented P2P capability value, tried directly in case it has no named member
+    for raw in (19, 18, 20):
+        add_cap(f"raw:{raw}", raw)
+    # last-resort fallbacks
+    for name in ("ANY", "TCP"):
+        if hasattr(EM_LOGIN_SPAC_CAP_TYPE, name):
+            add_cap(f"{name}={int(getattr(EM_LOGIN_SPAC_CAP_TYPE, name))}",
+                    getattr(EM_LOGIN_SPAC_CAP_TYPE, name))
+
+    for label, cap in candidates:
+        if try_login(f"P2P[{label}]", args.serial, 0, cap):
+            winners.append(label)
 
     # --- 3. optional direct-IP comparison ---
     if args.ip:
