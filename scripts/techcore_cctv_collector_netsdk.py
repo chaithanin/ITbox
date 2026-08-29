@@ -38,17 +38,27 @@ from ctypes import sizeof, POINTER, cast, c_char
 from datetime import datetime, timezone
 from xml.etree import ElementTree as ET
 
-# --- Dahua NetSDK imports (fail loudly with install guidance) ---------------
+# --- Dahua NetSDK imports (tolerate both package layouts) -------------------
+# Official Dahua package: `from NetSDK.NetClient import NetClient` (NetSDK/ folder).
+# Flat layout (what we ship): NetSDK.py + SDK_*.py side-by-side next to this script.
 try:
-    from NetSDK.NetClient import NetClient
-    from NetSDK.SDK_Struct import (
-        NET_IN_LOGIN_WITH_HIGHLEVEL_SECURITY,
-        NET_OUT_LOGIN_WITH_HIGHLEVEL_SECURITY,
-    )
-    from NetSDK.SDK_Enum import EM_LOGIN_SPAC_CAP_TYPE
+    try:
+        from NetSDK.NetClient import NetClient
+        from NetSDK.SDK_Struct import (
+            NET_IN_LOGIN_WITH_HIGHLEVEL_SECURITY,
+            NET_OUT_LOGIN_WITH_HIGHLEVEL_SECURITY,
+        )
+        from NetSDK.SDK_Enum import EM_LOGIN_SPAC_CAP_TYPE
+    except ImportError:
+        from NetSDK import NetClient
+        from SDK_Struct import (
+            NET_IN_LOGIN_WITH_HIGHLEVEL_SECURITY,
+            NET_OUT_LOGIN_WITH_HIGHLEVEL_SECURITY,
+        )
+        from SDK_Enum import EM_LOGIN_SPAC_CAP_TYPE
 except Exception as e:  # noqa: BLE001
     print("ERROR: Dahua Python NetSDK not found on this machine.", file=sys.stderr)
-    print("Install the 'General_NetSDK_Eng_Python' package and put its native libs on PATH.", file=sys.stderr)
+    print("Put NetSDK.py + SDK_Struct.py + SDK_Enum.py + SDK_Callback.py + Libs\\win64\\ next to this script.", file=sys.stderr)
     print("Import error:", e, file=sys.stderr)
     sys.exit(2)
 

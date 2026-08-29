@@ -38,17 +38,27 @@ def main():
     ap.add_argument("--port", type=int, default=37777)
     args = ap.parse_args()
 
-    # --- import the SDK (fail loudly with guidance) ---
+    # --- import the SDK (tolerate both layouts) ---
+    # Official Dahua package: `from NetSDK.NetClient import NetClient` (NetSDK/ folder).
+    # Flat layout (the one we ship): NetSDK.py/SDK_*.py side-by-side in this folder.
     try:
-        from NetSDK.NetClient import NetClient
-        from NetSDK.SDK_Struct import (
-            NET_IN_LOGIN_WITH_HIGHLEVEL_SECURITY,
-            NET_OUT_LOGIN_WITH_HIGHLEVEL_SECURITY,
-        )
-        from NetSDK.SDK_Enum import EM_LOGIN_SPAC_CAP_TYPE
+        try:
+            from NetSDK.NetClient import NetClient
+            from NetSDK.SDK_Struct import (
+                NET_IN_LOGIN_WITH_HIGHLEVEL_SECURITY,
+                NET_OUT_LOGIN_WITH_HIGHLEVEL_SECURITY,
+            )
+            from NetSDK.SDK_Enum import EM_LOGIN_SPAC_CAP_TYPE
+        except ImportError:
+            from NetSDK import NetClient
+            from SDK_Struct import (
+                NET_IN_LOGIN_WITH_HIGHLEVEL_SECURITY,
+                NET_OUT_LOGIN_WITH_HIGHLEVEL_SECURITY,
+            )
+            from SDK_Enum import EM_LOGIN_SPAC_CAP_TYPE
     except Exception as e:  # noqa: BLE001
         print("ERROR: Dahua Python NetSDK not importable.", file=sys.stderr)
-        print("Put the NetSDK package + native libs (dhnetsdk.dll ...) on the path.", file=sys.stderr)
+        print("Put NetSDK.py + SDK_Struct.py + SDK_Enum.py + SDK_Callback.py + Libs\\win64\\ here.", file=sys.stderr)
         print("Import error:", e, file=sys.stderr)
         sys.exit(2)
 
