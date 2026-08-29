@@ -76,6 +76,13 @@ def main():
     sdk = NetClient()
     sdk.InitEx(None)
 
+    # Dahua NetSDK error names for the codes we've seen, so the output is readable.
+    ERR_NAMES = {
+        0x6b: "main connection failed (transport/P2P could not reach device)",
+        0x6c: "connect failed / device offline via this path",
+        0x00: "no error",
+    }
+
     def try_login(label, ip, port, cap):
         inp = NET_IN_LOGIN_WITH_HIGHLEVEL_SECURITY()
         inp.dwSize = sizeof(NET_IN_LOGIN_WITH_HIGHLEVEL_SECURITY)
@@ -105,8 +112,11 @@ def main():
             code = sdk.GetLastError()
         except Exception:
             code = "?"
-        print(f"[{label}] failed: err='{err}' GetLastError=0x{code:08x}" if isinstance(code, int)
-              else f"[{label}] failed: err='{err}' GetLastError={code}")
+        note = ERR_NAMES.get(code, "") if isinstance(code, int) else ""
+        if isinstance(code, int):
+            print(f"[{label}] failed: err='{err}' GetLastError=0x{code:08x} {('('+note+')') if note else ''}")
+        else:
+            print(f"[{label}] failed: err='{err}' GetLastError={code}")
         return False
 
     # --- 2. try P2P (serial) login with each candidate capability ---
@@ -129,22 +139,29 @@ def main():
         seen_caps.add(civ)
         candidates.append((label, civ))
 
-    for name in ("P2P", "P2P_LOGIN", "PROXY", "SERVER_CONN"):
+    # The two capabilities that mean "reach the device through Dahua's cloud":
+    # P2P=19 (web private / P2P) and CLOUD=16 (cloud login). Try each over the
+    # ports NetSDK P2P is known to want: 0 (let the SDK decide) and 37777 (the SDK
+    # service port the tunnel targets). Also try the serial with a trailing nothing.
+    for name in ("P2P", "CLOUD"):
         if hasattr(EM_LOGIN_SPAC_CAP_TYPE, name):
             add_cap(f"{name}={int(getattr(EM_LOGIN_SPAC_CAP_TYPE, name))}",
                     getattr(EM_LOGIN_SPAC_CAP_TYPE, name))
-    # documented P2P capability value, tried directly in case it has no named member
-    for raw in (19, 18, 20):
+    for raw in (19, 16):
         add_cap(f"raw:{raw}", raw)
-    # last-resort fallbacks
-    for name in ("ANY", "TCP"):
-        if hasattr(EM_LOGIN_SPAC_CAP_TYPE, name):
-            add_cap(f"{name}={int(getattr(EM_LOGIN_SPAC_CAP_TYPE, name))}",
-                    getattr(EM_LOGIN_SPAC_CAP_TYPE, name))
 
+    ports_to_try = [0, 37777]
     for label, cap in candidates:
-        if try_login(f"P2P[{label}]", args.serial, 0, cap):
-            winners.append(label)
+        for p in ports_to_try:
+            if try_login(f"P2P[{label} port={p}]", args.serial, p, cap):
+                winners.append(f"{label} port={p}")
+
+    # a couple of last-resort single-port attempts with other caps
+    for name in ("SERVER_CONN", "ANY", "TCP"):
+        if hasattr(EM_LOGIN_SPAC_CAP_TYPE, name):
+            cap = int(getattr(EM_LOGIN_SPAC_CAP_TYPE, name))
+            if try_login(f"P2P[{name}={cap} port=0]", args.serial, 0, cap):
+                winners.append(f"{name} port=0")
 
     # --- 3. optional direct-IP comparison ---
     if args.ip:
