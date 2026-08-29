@@ -276,6 +276,38 @@ def collect_recorder(dev, conn, snapshot_dir, verbose):
     return result
 
 
+def load_p2p_map(path):
+    """Read the runtime tunnel map written by techcore_p2p_supervisor.py.
+    Returns {serial: {"port": int, "status": str, ...}} or {} if missing/invalid."""
+    if not path or not os.path.exists(path):
+        return {}
+    try:
+        with open(path, "r", encoding="utf-8-sig") as f:
+            data = json.load(f)
+        return data.get("tunnels", {}) or {}
+    except Exception:
+        return {}
+
+
+def collect_recorder_via_map(dev, conn, args, p2p_status):
+    """Collect a P2P recorder using a tunnel already held open by the supervisor.
+    Never spawns anything — just points the CGI client at the supervisor's local
+    port when that tunnel is UP; otherwise reports the recorder as unreachable."""
+    serial = dev["serial"]
+    entry = p2p_status.get(serial)
+    if not entry:
+        return {"serial": serial, "status": "UNKNOWN", "cameras": [], "storage": [],
+                "errorMessage": "P2P device not present in tunnel map (supervisor not running or serial not configured)"}
+    if entry.get("status") != "UP":
+        return {"serial": serial, "status": "OFFLINE", "cameras": [], "storage": [],
+                "errorMessage": (entry.get("lastError") or f"P2P tunnel {entry.get('status','DOWN')}")[:200]}
+    tconn = {**conn, "host": "127.0.0.1", "httpPort": int(entry["port"])}
+    rec = collect_recorder(dev, tconn, args.snapshot_dir, args.verbose)
+    caps = rec.setdefault("capabilities", {})
+    caps["via"] = "dh-p2p-supervised"
+    return rec
+
+
 def collect_recorder_p2p(dev, conn, args, slot):
     """Collect one recorder that is reachable only over Dahua P2P: bring up a
     dh-p2p tunnel to its HTTP CGI port, run the normal CGI collection against the
@@ -654,7 +686,10 @@ def main():
     ap.add_argument("--discover-timeout", type=int, default=5, help="seconds to listen for discovery replies")
     ap.add_argument("--write-targets", action="store_true", help="with --discover: fill discovered IPs into the targets file (preserves creds)")
     ap.add_argument("--p2p-bin", default=os.environ.get("DHP2P_BIN"),
-                    help="path to the compiled dh-p2p binary; enables P2P tunnelling for 'mode: p2p' devices")
+                    help="path to the compiled dh-p2p binary; enables per-cycle P2P tunnelling for 'mode: p2p' devices")
+    ap.add_argument("--p2p-map", default=os.environ.get("DHP2P_MAP"),
+                    help="use persistent tunnels from techcore_p2p_supervisor.py (path to p2p_tunnels.json); "
+                         "preferred over --p2p-bin — the collector reuses always-on tunnels instead of spawning per cycle")
     ap.add_argument("--p2p-default", action="store_true",
                     help="treat any device with no LAN host as a P2P device (tunnel by serial) instead of UNKNOWN")
     ap.add_argument("--p2p-remote-port", type=int, default=80,
@@ -685,14 +720,22 @@ def main():
         if rechecks:
             print(f"[collector] Check-Now requested for: {', '.join(sorted(rechecks))}")
         payload = []
-        p2p_slot = 0  # rotates local ports so back-to-back tunnels don't collide
+        p2p_slot = 0  # rotates local ports so back-to-back per-cycle tunnels don't collide
+        p2p_status = load_p2p_map(args.p2p_map) if args.p2p_map else {}
+        p2p_enabled = bool(args.p2p_map or args.p2p_bin)
         for dev in devices:
             conn = {**defaults, **tmap.get(dev["serial"], {})}
             mode = conn.get("mode") or ("ip" if conn.get("host")
-                                        else ("p2p" if (args.p2p_bin and args.p2p_default) else "ip"))
+                                        else ("p2p" if (p2p_enabled and args.p2p_default) else "ip"))
             if mode == "p2p":
-                rec = collect_recorder_p2p(dev, conn, args, p2p_slot)
-                p2p_slot += 1
+                if args.p2p_map:
+                    rec = collect_recorder_via_map(dev, conn, args, p2p_status)
+                elif args.p2p_bin:
+                    rec = collect_recorder_p2p(dev, conn, args, p2p_slot)
+                    p2p_slot += 1
+                else:
+                    rec = {"serial": dev["serial"], "status": "UNKNOWN", "cameras": [], "storage": [],
+                           "errorMessage": "P2P device but neither --p2p-map nor --p2p-bin set"}
             else:
                 rec = collect_recorder(dev, conn, args.snapshot_dir, args.verbose)
             payload.append(rec)
