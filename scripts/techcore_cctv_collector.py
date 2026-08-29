@@ -28,15 +28,34 @@ cctv_targets.json  (serial -> connection):
 A serial with no entry (or no host) is reported to TECHCORE as UNKNOWN/unreachable
 so you can see coverage gaps — it is never guessed.
 
+REMOTE-PROVINCE SITES WITH NO LAN IP (Dahua P2P)
+------------------------------------------------
+Recorders you can only see through SmartPSS/gDMSS (no reachable LAN IP, no port
+forwarding) can be reached from this one machine over Dahua P2P — the same cloud
+path SmartPSS uses — by tunnelling their HTTP CGI port with the third-party Rust
+`dh-p2p` tool. Give `--p2p-bin /path/to/dh-p2p` and mark those devices "p2p" in
+cctv_targets.json (or just leave them host-less and pass --p2p-default). For each
+one the collector spins up `dh-p2p <serial> -p 127.0.0.1:<port>:80`, points the
+CGI client at that local port, collects, then tears the tunnel down. dh-p2p is an
+experimental PoC and can be unstable — the collector degrades gracefully if a
+tunnel won't come up, reporting that recorder as unreachable rather than aborting.
+
+  "targets": {
+    "7B06FEEPAZ8E607": { "mode": "p2p" },                          // remote site, by serial
+    "9J05936PAZC710E": { "mode": "p2p", "p2pArgs": ["-c","amcrest"] }
+  }
+
 Usage:
   TECHCORE_URL=https://<techcore>/api/cctv/ingest \
   TECHCORE_KEY=tck_xxx \
   python3 techcore_cctv_collector.py --devices device.xml --targets cctv_targets.json \
-    [--snapshot-dir ./snapshots] [--once] [--verbose]
+    [--snapshot-dir ./snapshots] [--once] [--verbose] \
+    [--p2p-bin ./dh-p2p] [--p2p-default] [--p2p-remote-port 80]
 
-Requires: Python 3.8+ (standard library only).
+Requires: Python 3.8+ (standard library only). P2P mode additionally needs the
+compiled `dh-p2p` binary on this machine (not bundled).
 """
-import argparse, base64, json, os, socket, sys, time, urllib.request, urllib.error
+import argparse, base64, json, os, socket, subprocess, sys, time, urllib.request, urllib.error
 from datetime import datetime, timezone
 from urllib.parse import quote
 from xml.etree import ElementTree as ET
@@ -45,6 +64,85 @@ HTTP_TIMEOUT = 10
 RETRIES = 3
 RETRY_WAIT = 10  # seconds between recorder retries (per spec §6)
 MIN_SNAPSHOT_BYTES = 3000
+P2P_LOCAL_BASE = 18080      # first local port used for P2P tunnels (incremented per device)
+P2P_READY_TIMEOUT = 25      # seconds to wait for a tunnel's local port to accept connections
+
+
+# --------------------------- Dahua P2P tunnel (dh-p2p) ---------------------------
+def _wait_for_port(host, port, timeout):
+    """Block until (host, port) accepts a TCP connection, or timeout. Returns bool."""
+    end = time.time() + timeout
+    while time.time() < end:
+        try:
+            with socket.create_connection((host, port), timeout=1.5):
+                return True
+        except OSError:
+            time.sleep(0.5)
+    return False
+
+
+class P2PTunnel:
+    """Context manager that spawns the third-party `dh-p2p` binary to forward a
+    local TCP port to a remote Dahua device's HTTP CGI port *over Dahua P2P*, keyed
+    by the device serial — the same cloud path SmartPSS/gDMSS use. This lets ONE
+    central machine reach remote-province NVRs that have no reachable LAN IP and no
+    port-forwarding, with nothing installed at the sites.
+
+    Requires the Rust `dh-p2p` build (github.com/…/dh-p2p): it is the only variant
+    whose `-p [bind:]local:remote` maps an arbitrary remote port (80), whereas the
+    Python PoC hardcodes RTSP 554. dh-p2p is an experimental reverse-engineered PoC
+    and can be unstable; the collector degrades gracefully if a tunnel won't come up.
+
+        dh-p2p <SERIAL> -p 127.0.0.1:<local>:<remote>
+    """
+
+    def __init__(self, bin_path, serial, local_port, remote_port=80, extra_args=None, verbose=False):
+        self.bin_path = bin_path
+        self.serial = serial
+        self.local_port = int(local_port)
+        self.remote_port = int(remote_port)
+        self.extra_args = list(extra_args or [])
+        self.verbose = verbose
+        self.proc = None
+
+    def __enter__(self):
+        cmd = [self.bin_path, self.serial, "-p",
+               f"127.0.0.1:{self.local_port}:{self.remote_port}"] + self.extra_args
+        log(self.verbose, "p2p spawn:", " ".join(cmd))
+        try:
+            self.proc = subprocess.Popen(
+                cmd,
+                stdout=(None if self.verbose else subprocess.DEVNULL),
+                stderr=(None if self.verbose else subprocess.DEVNULL),
+            )
+        except FileNotFoundError as e:
+            raise RuntimeError(f"dh-p2p binary not found: {self.bin_path} ({e})")
+        if not _wait_for_port("127.0.0.1", self.local_port, P2P_READY_TIMEOUT):
+            self._terminate()
+            raise RuntimeError(
+                f"P2P tunnel for {self.serial} did not open 127.0.0.1:{self.local_port} "
+                f"within {P2P_READY_TIMEOUT}s (device offline, wrong serial, or dh-p2p failed)")
+        log(self.verbose, "p2p ready:", self.serial, "->127.0.0.1:%d" % self.local_port)
+        return self
+
+    def __exit__(self, *exc):
+        self._terminate()
+        return False
+
+    def _terminate(self):
+        if not self.proc:
+            return
+        try:
+            self.proc.terminate()
+            try:
+                self.proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                self.proc.kill()
+                self.proc.wait(timeout=5)
+        except Exception as e:  # noqa: BLE001
+            log(self.verbose, "p2p terminate error:", e)
+        finally:
+            self.proc = None
 
 
 def log(verbose, *a):
@@ -176,6 +274,32 @@ def collect_recorder(dev, conn, snapshot_dir, verbose):
     # storage / HDD
     result["storage"] = collect_storage(client, verbose)
     return result
+
+
+def collect_recorder_p2p(dev, conn, args, slot):
+    """Collect one recorder that is reachable only over Dahua P2P: bring up a
+    dh-p2p tunnel to its HTTP CGI port, run the normal CGI collection against the
+    local end of the tunnel, then tear it down. Never raises — a tunnel that won't
+    come up is reported as an unreachable recorder so coverage gaps stay visible."""
+    serial = dev["serial"]
+    if not args.p2p_bin:
+        return {"serial": serial, "status": "UNKNOWN", "cameras": [], "storage": [],
+                "errorMessage": "P2P device but --p2p-bin not set (need dh-p2p for remote sites)"}
+    local_port = args.p2p_local_base + slot
+    extra = conn.get("p2pArgs") or []
+    if not isinstance(extra, list):
+        extra = [str(extra)]
+    try:
+        with P2PTunnel(args.p2p_bin, serial, local_port, args.p2p_remote_port,
+                       [str(a) for a in extra], args.verbose):
+            tconn = {**conn, "host": "127.0.0.1", "httpPort": local_port}
+            rec = collect_recorder(dev, tconn, args.snapshot_dir, args.verbose)
+            caps = rec.setdefault("capabilities", {})
+            caps["via"] = "dh-p2p"
+            return rec
+    except RuntimeError as e:
+        return {"serial": serial, "status": "OFFLINE", "cameras": [], "storage": [],
+                "errorMessage": str(e)[:200]}
 
 
 def discover_channels(client, verbose):
@@ -529,6 +653,14 @@ def main():
     ap.add_argument("--discover", action="store_true", help="scan the local subnet for Dahua NVRs and print serial->IP (no TECHCORE creds needed)")
     ap.add_argument("--discover-timeout", type=int, default=5, help="seconds to listen for discovery replies")
     ap.add_argument("--write-targets", action="store_true", help="with --discover: fill discovered IPs into the targets file (preserves creds)")
+    ap.add_argument("--p2p-bin", default=os.environ.get("DHP2P_BIN"),
+                    help="path to the compiled dh-p2p binary; enables P2P tunnelling for 'mode: p2p' devices")
+    ap.add_argument("--p2p-default", action="store_true",
+                    help="treat any device with no LAN host as a P2P device (tunnel by serial) instead of UNKNOWN")
+    ap.add_argument("--p2p-remote-port", type=int, default=80,
+                    help="device-side port to tunnel to (the HTTP CGI port; default 80)")
+    ap.add_argument("--p2p-local-base", type=int, default=P2P_LOCAL_BASE,
+                    help=f"first local port for P2P tunnels, incremented per device (default {P2P_LOCAL_BASE})")
     ap.add_argument("--verbose", action="store_true")
     args = ap.parse_args()
 
@@ -553,9 +685,16 @@ def main():
         if rechecks:
             print(f"[collector] Check-Now requested for: {', '.join(sorted(rechecks))}")
         payload = []
+        p2p_slot = 0  # rotates local ports so back-to-back tunnels don't collide
         for dev in devices:
             conn = {**defaults, **tmap.get(dev["serial"], {})}
-            rec = collect_recorder(dev, conn, args.snapshot_dir, args.verbose)
+            mode = conn.get("mode") or ("ip" if conn.get("host")
+                                        else ("p2p" if (args.p2p_bin and args.p2p_default) else "ip"))
+            if mode == "p2p":
+                rec = collect_recorder_p2p(dev, conn, args, p2p_slot)
+                p2p_slot += 1
+            else:
+                rec = collect_recorder(dev, conn, args.snapshot_dir, args.verbose)
             payload.append(rec)
             print(f"[collector] {dev['serial']} {dev['name']}: {rec['status']} "
                   f"({len(rec['cameras'])} cams, {len(rec['storage'])} hdd)")
