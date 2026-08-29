@@ -412,6 +412,112 @@ def push(url, key, recorders, verbose):
     return False
 
 
+# --------------------------- LAN discovery (Dahua UDP 37810) ---------------------------
+def _deep_find(obj, keys):
+    """Return the first value whose key matches any of `keys` (case-insensitive), searching nested dicts/lists."""
+    want = {k.lower() for k in keys}
+    stack = [obj]
+    while stack:
+        cur = stack.pop()
+        if isinstance(cur, dict):
+            for k, v in cur.items():
+                if k.lower() in want and isinstance(v, (str, int)):
+                    return v
+                stack.append(v)
+        elif isinstance(cur, list):
+            stack.extend(cur)
+    return None
+
+
+def discover_dahua(timeout=5, verbose=False):
+    """Broadcast the Dahua UDP discovery probe on the local subnet and collect
+    replies. Returns [{serial, ip, type, model, mac}]. Only finds devices on the
+    SAME subnet as this machine (UDP broadcast does not cross routers), so run it
+    once per site. Devices reached only via Dahua P2P (SmartPSS-style) will NOT
+    appear here — those need a per-site collector or inter-site routing."""
+    PORT = 37810
+    MCAST = "239.255.255.251"
+    body = b'{"method":"DHDiscover.search","params":{"mac":"","uni":1}}'
+    probes = [
+        bytes([0xa3, 0x01, 0x00, 0x00]) + bytes(28),                          # legacy 32-byte probe
+        bytes([0xa3, 0x01, 0x00, 0x00]) + len(body).to_bytes(4, "little") + bytes(12) + body,  # JSON probe
+    ]
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+    try:
+        sock.bind(("", PORT))
+    except OSError:
+        sock.bind(("", 0))  # fall back to an ephemeral port if 37810 is taken
+    for p in probes:
+        for dest in ("255.255.255.255", MCAST):
+            try: sock.sendto(p, (dest, PORT))
+            except OSError as e: log(verbose, "send", dest, e)
+    found = {}
+    sock.settimeout(1.0)
+    end = time.time() + timeout
+    while time.time() < end:
+        try:
+            data, addr = sock.recvfrom(65535)
+        except socket.timeout:
+            continue
+        except OSError:
+            break
+        s = data
+        i, j = s.find(b"{"), s.rfind(b"}")
+        if i < 0 or j <= i:
+            continue
+        try:
+            info = json.loads(s[i:j + 1].decode("utf-8", "replace"))
+        except Exception:
+            continue
+        serial = _deep_find(info, ["SerialNo", "serialNo", "SN", "sn"])
+        ip = _deep_find(info, ["IPAddress", "ipAddress", "ip", "IPv4Address"])
+        if isinstance(ip, dict):
+            ip = ip.get("IPAddress")
+        ip = ip or addr[0]
+        dtype = _deep_find(info, ["DeviceType", "deviceType", "machineName", "DeviceClass"])
+        mac = _deep_find(info, ["mac", "MAC", "PhysicalAddress"])
+        key = str(serial or mac or ip)
+        found[key] = {"serial": serial, "ip": ip, "type": dtype, "mac": mac}
+    sock.close()
+    return list(found.values())
+
+
+def run_discover(args):
+    print(f"[discover] scanning local subnet for Dahua devices ({args.discover_timeout}s)...")
+    devs = discover_dahua(args.discover_timeout, args.verbose)
+    if not devs:
+        print("[discover] no devices found on this subnet.")
+        print("           (P2P/remote-site NVRs won't reply to LAN broadcast — run --discover at each site,")
+        print("            or find IPs via Dahua ConfigTool.)")
+        return
+    print(f"[discover] found {len(devs)} device(s):")
+    print(f"  {'SERIAL':<20} {'IP':<16} {'TYPE'}")
+    for d in devs:
+        print(f"  {str(d.get('serial') or '-'):<20} {str(d.get('ip') or '-'):<16} {d.get('type') or ''}")
+    if args.write_targets:
+        # Merge discovered serial->host into the targets file, preserving creds and
+        # only filling empty/missing hosts.
+        cfg = load_targets(args.targets)
+        cfg.setdefault("defaults", {})
+        cfg.setdefault("targets", {})
+        filled = 0
+        for d in devs:
+            sn, ip = d.get("serial"), d.get("ip")
+            if not sn or not ip:
+                continue
+            entry = cfg["targets"].get(sn) or {}
+            if not entry.get("host"):
+                entry["host"] = ip
+                cfg["targets"][sn] = entry
+                filled += 1
+        with open(args.targets, "w", encoding="utf-8") as f:
+            json.dump(cfg, f, indent=2, ensure_ascii=False)
+        print(f"[discover] wrote {filled} host(s) into {args.targets} (existing creds/hosts preserved).")
+        print("           Now set 'defaults.password' (read-only account) and run without --discover.")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--devices", default="device.xml", help="Dahua device.xml (device list)")
@@ -420,8 +526,16 @@ def main():
     ap.add_argument("--interval", type=int, default=int(os.environ.get("INTERVAL_SECONDS", "300")))
     ap.add_argument("--once", action="store_true", help="run a single cycle and exit")
     ap.add_argument("--no-upload-snapshots", action="store_true", help="do not upload JPEGs to TECHCORE (metadata only)")
+    ap.add_argument("--discover", action="store_true", help="scan the local subnet for Dahua NVRs and print serial->IP (no TECHCORE creds needed)")
+    ap.add_argument("--discover-timeout", type=int, default=5, help="seconds to listen for discovery replies")
+    ap.add_argument("--write-targets", action="store_true", help="with --discover: fill discovered IPs into the targets file (preserves creds)")
     ap.add_argument("--verbose", action="store_true")
     args = ap.parse_args()
+
+    # Discovery needs neither TECHCORE creds nor NVR creds — run it first to map serial->IP.
+    if args.discover:
+        run_discover(args)
+        return
 
     url = os.environ.get("TECHCORE_URL")
     key = os.environ.get("TECHCORE_KEY")
