@@ -15,8 +15,9 @@ Whatever it reports as WORKING is the emSpecCap the collector should use — tel
 the output and I'll lock it into techcore_cctv_collector_netsdk.py.
 
 Prereqs (on this one central PC, the same box that runs SmartPSS):
-  - Dahua Python NetSDK ("General_NetSDK_Eng_Python_..."): put its NetSDK\ package
-    and native libs (dhnetsdk.dll, dhconfigsdk.dll, ...) where Python can load them.
+  - Dahua Python NetSDK ("General_NetSDK_Eng_Python_..."): put its NetSDK package
+    (the folder holding NetClient.py) and native libs (dhnetsdk.dll, dhconfigsdk.dll,
+    ...) where Python can load them.
   - This machine must reach the internet (P2P goes out to Dahua's cloud, like SmartPSS).
 
 Usage:
