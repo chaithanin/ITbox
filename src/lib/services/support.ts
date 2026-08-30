@@ -503,13 +503,53 @@ export async function createCase(user: CurrentUser, input: CreateCaseInput) {
 // ---------------- Public (anonymous web) intake ----------------
 
 export interface PublicCaseInput {
-  reporterName: string;
-  reporterEmail: string;
+  /**
+   * Staff ID typed on the public form. When it matches an ACTIVE employee in
+   * this org the case is linked to that employee record (requesterEmployeeId),
+   * and their name/email/department/location fill in the rest — so the reporter
+   * only has to type their staff ID. Callers that identify the reporter by
+   * free-text contact details instead may omit it.
+   */
+  employeeCode?: string | null;
+  reporterName?: string | null;
+  reporterEmail?: string | null;
   reporterPhone?: string | null;
   subject: string;
   description: string;
   typeId?: string | null;
   impact?: CaseImpact | null;
+}
+
+/** Resolve a staff ID to an ACTIVE employee in this org (public-form identity). */
+export async function findEmployeeByCode(organizationId: string, employeeCode: string) {
+  const code = employeeCode.trim();
+  if (!code) return null;
+  return prisma.employee.findFirst({
+    where: {
+      organizationId,
+      employeeCode: { equals: code, mode: "insensitive" },
+      status: "ACTIVE",
+      deletedAt: null,
+    },
+    select: {
+      id: true, employeeCode: true, firstName: true, lastName: true,
+      email: true, phone: true, departmentId: true, locationId: true,
+      department: { select: { name: true } },
+    },
+  });
+}
+
+/**
+ * Partially mask a name for the public confirm step: enough for the person to
+ * recognise themselves, not enough to harvest a staff directory.
+ * "สมชาย ใจดี" -> "สมชาย ใ***"
+ */
+export function maskEmployeeName(firstName: string, lastName: string): string {
+  const first = (firstName ?? "").trim();
+  const last = (lastName ?? "").trim();
+  if (!last) return first;
+  const stars = "*".repeat(Math.min(Math.max(last.length - 1, 2), 4));
+  return `${first} ${last.slice(0, 1)}${stars}`.trim();
 }
 
 /**
@@ -525,6 +565,19 @@ export async function createPublicCase(
   organizationId: string,
   input: PublicCaseInput
 ) {
+  // Identity: a staff ID on the form links the case to the real employee record,
+  // so it shows up under that person exactly like a case they opened themselves.
+  // Their stored contact details win over anything typed on the public form.
+  const employee = input.employeeCode
+    ? await findEmployeeByCode(organizationId, input.employeeCode)
+    : null;
+  const reporterName =
+    (employee ? `${employee.firstName} ${employee.lastName}`.trim() : null) ??
+    input.reporterName?.trim() ??
+    null;
+  const reporterEmail = employee?.email ?? input.reporterEmail?.trim() ?? null;
+  const reporterPhone = employee?.phone ?? input.reporterPhone ?? null;
+
   // Type: caller-chosen (validated to this org) or the org's INCIDENT default.
   const type = input.typeId
     ? await prisma.caseType.findFirst({
@@ -571,9 +624,15 @@ export async function createPublicCase(
       requesterId: null,
       createdById: null,
       onBehalf: false,
-      reporterName: input.reporterName,
-      reporterEmail: input.reporterEmail,
-      reporterPhone: input.reporterPhone ?? null,
+      requesterEmployeeId: employee?.id ?? null,
+      reporterName,
+      reporterEmail,
+      reporterPhone,
+      reporterEmployeeCode: employee?.employeeCode ?? input.employeeCode?.trim() ?? null,
+      // Department/location come from the employee record when we have one, so
+      // the case carries routing context a public form could not ask for.
+      departmentId: employee?.departmentId ?? null,
+      locationId: employee?.locationId ?? null,
       assignedTeamId,
       assignedUserId,
       firstResponseDueAt,
@@ -583,7 +642,10 @@ export async function createPublicCase(
 
   await recordEvent(created.id, null, "CREATED", {
     toStatus: created.status,
-    detail: { priority, caseNumber, via: "public-web", reporter: input.reporterEmail },
+    detail: {
+      priority, caseNumber, via: "public-web",
+      reporter: reporterEmail, employeeCode: employee?.employeeCode ?? null,
+    },
   });
   if (assignedUserId) {
     await recordEvent(created.id, null, "ASSIGNED", { detail: { assignedUserId, assignedTeamId } });
@@ -594,7 +656,10 @@ export async function createPublicCase(
     action: "CREATE",
     entityType: "SUPPORT_CASE",
     entityId: created.id,
-    detail: { caseNumber, priority, source: "WEB", reporterEmail: input.reporterEmail },
+    detail: {
+      caseNumber, priority, source: "WEB", reporterEmail,
+      employeeCode: employee?.employeeCode ?? null,
+    },
   });
 
   // Notify the queue/assignee (there is no internal requester to notify).
@@ -603,7 +668,9 @@ export async function createPublicCase(
     type: "CASE_ASSIGNED",
     level: priority === "P1" ? "CRITICAL" : "INFO",
     title: `เคสใหม่จากเว็บ ${caseNumber} (${priority})`,
-    body: `${input.subject} — ผู้แจ้ง ${input.reporterName} <${input.reporterEmail}>`,
+    body: `${input.subject} — ผู้แจ้ง ${reporterName ?? "-"}${
+      employee ? ` (${employee.employeeCode})` : reporterEmail ? ` <${reporterEmail}>` : ""
+    }`,
     link: `/support/${created.id}`,
   });
   if (priority === "P1") {

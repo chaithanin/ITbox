@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { IMPACT_LABEL } from "@/lib/services/support";
 import type { CaseImpact } from "@prisma/client";
 import { submitPublicCaseAction } from "./actions";
+import { EmployeeGate } from "./employee-gate";
 
 export const dynamic = "force-dynamic";
 
@@ -18,6 +19,8 @@ const ERRORS: Record<string, string> = {
   invalid: "กรอกข้อมูลไม่ครบหรือไม่ถูกต้อง กรุณาตรวจสอบอีกครั้ง / Some fields are missing or invalid.",
   rate: "คุณส่งคำขอบ่อยเกินไป กรุณารอสักครู่แล้วลองใหม่ / Too many requests. Please try again later.",
   notfound: "ไม่พบองค์กรนี้ / Organization not found.",
+  employee:
+    "ไม่พบรหัสพนักงานนี้ หรือพนักงานไม่อยู่ในสถานะทำงาน กรุณาตรวจสอบอีกครั้ง / Staff ID not found or not active.",
   failed: "เกิดข้อผิดพลาดในการเปิดเคส กรุณาลองใหม่ / Could not open the case. Please try again.",
 };
 
@@ -62,9 +65,9 @@ export default async function PublicReportPage({
         <CheckCircle2 className="mx-auto h-14 w-14 text-emerald-500" />
         <h1 className="mt-3 text-xl font-bold">ส่งเคสสำเร็จ / Case submitted</h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          ทีม IT ได้รับเรื่องของคุณแล้ว และจะติดต่อกลับทางอีเมลที่ให้ไว้
+          ทีม IT ได้รับเรื่องของคุณแล้ว และจะติดต่อกลับตามข้อมูลพนักงานที่บันทึกไว้
           <br />
-          Our IT team has received your request and will follow up by email.
+          Our IT team has received your request and will follow up with you.
         </p>
         {isReal && (
           <p className="mx-auto mt-4 inline-block rounded-lg border bg-muted/50 px-4 py-2 font-mono text-sm">
@@ -122,26 +125,9 @@ export default async function PublicReportPage({
             </label>
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div>
-              <Label htmlFor="reporterName">
-                ชื่อ-นามสกุล / Your name <span className="text-destructive">*</span>
-              </Label>
-              <Input id="reporterName" name="reporterName" required minLength={2} maxLength={120} className="mt-1" />
-            </div>
-            <div>
-              <Label htmlFor="reporterPhone">เบอร์โทร / Phone</Label>
-              <Input id="reporterPhone" name="reporterPhone" type="tel" maxLength={40} className="mt-1" />
-            </div>
-          </div>
-
-          <div>
-            <Label htmlFor="reporterEmail">
-              อีเมล / Email <span className="text-destructive">*</span>
-            </Label>
-            <Input id="reporterEmail" name="reporterEmail" type="email" required maxLength={200} className="mt-1" />
-            <p className="mt-1 text-xs text-muted-foreground">ทีมงานจะติดต่อกลับทางอีเมลนี้</p>
-          </div>
+          {/* Identity first: staff ID -> masked name -> confirm. The case fields
+              below only appear once the reporter confirms it is them. */}
+          <EmployeeGate slug={slug}>
 
           <div>
             <Label htmlFor="subject">
@@ -186,6 +172,7 @@ export default async function PublicReportPage({
           </div>
 
           <Button type="submit" className="w-full">ส่งเรื่อง / Submit</Button>
+          </EmployeeGate>
           <p className="text-center text-xs text-muted-foreground">
             การส่งแบบฟอร์มถือว่ายินยอมให้เก็บข้อมูลติดต่อเพื่อดำเนินการแก้ไขปัญหา
           </p>

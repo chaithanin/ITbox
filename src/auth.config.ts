@@ -18,6 +18,7 @@ export const authConfig = {
         pathname.startsWith("/api/auth") ||
         pathname.startsWith("/scan") ||
         pathname.startsWith("/report") || // public web-intake case form
+        pathname === "/api/public/employee-lookup" || // staff-ID confirm step on that form
         pathname.startsWith("/api/it-report/ingest") || // API-key-authed collector push
         pathname.startsWith("/api/edr/ingest") || // API-key-authed endpoint agent push
         pathname.startsWith("/api/monitoring/ingest") || // API-key-authed monitoring push

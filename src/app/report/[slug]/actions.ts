@@ -5,16 +5,14 @@ import { headers } from "next/headers";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { createPublicCase } from "@/lib/services/support";
+import { createPublicCase, findEmployeeByCode } from "@/lib/services/support";
 import type { CaseImpact } from "@prisma/client";
 
 const emptyNull = (v: unknown) => (typeof v === "string" && v.trim() === "" ? null : v);
 
 const schema = z.object({
   slug: z.string().min(1).max(120),
-  reporterName: z.string().trim().min(2).max(120),
-  reporterEmail: z.string().trim().email().max(200),
-  reporterPhone: z.preprocess(emptyNull, z.string().trim().max(40).nullable()),
+  employeeCode: z.string().trim().min(1).max(64),
   subject: z.string().trim().min(3).max(300),
   description: z.string().trim().min(10).max(5000),
   typeId: z.preprocess(emptyNull, z.string().uuid().nullable()),
@@ -45,9 +43,7 @@ export async function submitPublicCaseAction(formData: FormData) {
 
   const parsed = schema.safeParse({
     slug,
-    reporterName: formData.get("reporterName"),
-    reporterEmail: formData.get("reporterEmail"),
-    reporterPhone: formData.get("reporterPhone"),
+    employeeCode: formData.get("employeeCode"),
     subject: formData.get("subject"),
     description: formData.get("description"),
     typeId: formData.get("typeId"),
@@ -63,12 +59,16 @@ export async function submitPublicCaseAction(formData: FormData) {
   });
   if (!org) redirect(`/report/${slug}?error=notfound`);
 
+  // Re-validate the staff ID here: the browser step is convenience only, and a
+  // hand-crafted POST must not be able to open a case against an unknown or
+  // departed employee.
+  const employee = await findEmployeeByCode(org.id, d.employeeCode);
+  if (!employee) redirect(`/report/${slug}?error=employee`);
+
   let caseNumber: string;
   try {
     const created = await createPublicCase(org.id, {
-      reporterName: d.reporterName,
-      reporterEmail: d.reporterEmail,
-      reporterPhone: d.reporterPhone,
+      employeeCode: d.employeeCode,
       subject: d.subject,
       description: d.description,
       typeId: d.typeId,
