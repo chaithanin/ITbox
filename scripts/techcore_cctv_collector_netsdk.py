@@ -323,23 +323,40 @@ def collect_device(sdk, dev, defaults, tmap, tunnel_map, args, slot):
 
     # p2p device
     if args.p2p_bin:
-        # open a FRESH tunnel and log in immediately (the reliable path)
         extra = conn.get("p2pArgs") or []
         if not isinstance(extra, list):
             extra = [str(extra)]
-        local_port = args.p2p_local_base + slot
-        try:
-            with P2PTunnel(args.p2p_bin, serial, local_port, args.p2p_remote_port,
-                           not args.no_relay, [str(a) for a in extra], args.verbose):
-                return _read_device(sdk, rec, "127.0.0.1", local_port, conn, "netsdk-p2p", args.verbose)
-        except ChannelAuthError:
-            rec["status"] = "OFFLINE"
-            rec["errorMessage"] = "P2P channel auth required (disable P2P encryption/verification on the NVR)"
-            return rec
-        except RuntimeError as e:
-            rec["status"] = "OFFLINE"
-            rec["errorMessage"] = str(e)[:200]
-            return rec
+
+        # dh-p2p's relay is flaky: roughly one attempt in three either never
+        # reaches "Ready to connect!" or comes up too degraded to carry the login
+        # (0x66 login timeout / 0x6b main connection failed). Retrying the login
+        # on the SAME sick tunnel does not help - the tunnel is what failed. So on
+        # a transport failure we tear it down and build a completely fresh one.
+        # Credential failures are never retried: a second wrong password moves the
+        # NVR closer to locking the account.
+        last = rec
+        for attempt in range(1, args.p2p_attempts + 1):
+            # a different local port each time, so a socket still in TIME_WAIT
+            # from the previous attempt cannot collide with the new tunnel
+            local_port = args.p2p_local_base + slot * args.p2p_attempts + (attempt - 1)
+            try:
+                with P2PTunnel(args.p2p_bin, serial, local_port, args.p2p_remote_port,
+                               not args.no_relay, [str(a) for a in extra], args.verbose):
+                    got = _read_device(sdk, dict(rec), "127.0.0.1", local_port, conn,
+                                       "netsdk-p2p", args.verbose)
+                if got["status"] in ("ONLINE", "AUTH_ERROR"):
+                    return got
+                last = got
+            except ChannelAuthError:
+                rec["status"] = "OFFLINE"
+                rec["errorMessage"] = "P2P channel auth required (disable P2P encryption/verification on the NVR)"
+                return rec
+            except RuntimeError as e:
+                last = {**rec, "status": "OFFLINE", "errorMessage": str(e)[:200]}
+            if attempt < args.p2p_attempts:
+                log(args.verbose, f"{serial}: attempt {attempt} failed, rebuilding the tunnel")
+                time.sleep(3)
+        return last
 
     if args.map:
         entry = tunnel_map.get(serial)
@@ -385,6 +402,10 @@ def main():
                     help="device-side SDK port to tunnel to (default 37777)")
     ap.add_argument("--p2p-local-base", type=int, default=18080,
                     help="first local port for fresh tunnels (base+index per device)")
+    ap.add_argument("--p2p-attempts", type=int, default=3,
+                    help="tunnel+login attempts per p2p device, each with a fresh tunnel "
+                         "(default 3; the dh-p2p relay fails intermittently). Credential "
+                         "failures are never retried.")
     ap.add_argument("--no-relay", action="store_true", help="do not pass --relay to dh-p2p")
     ap.add_argument("--interval", type=int, default=int(os.environ.get("INTERVAL_SECONDS", "300")))
     ap.add_argument("--once", action="store_true")
