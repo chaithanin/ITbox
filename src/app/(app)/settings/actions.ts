@@ -18,6 +18,8 @@ const createUserSchema = z.object({
   password: z.string().min(1).max(256),
   confirmPassword: z.string().min(1).max(256),
   roleId: z.string().uuid(),
+  // Optional HR staff ID — links this account to its employee record.
+  employeeCode: z.string().trim().max(50).optional().transform((v) => (v ? v : undefined)),
 });
 
 export async function createUserAction(formData: FormData) {
@@ -43,21 +45,59 @@ export async function createUserAction(formData: FormData) {
   if (existing) {
     redirect("/settings/users?error=email-exists");
   }
+  if (input.employeeCode) {
+    const codeTaken = await prisma.user.findFirst({
+      where: { organizationId: admin.organizationId, employeeCode: input.employeeCode, deletedAt: null },
+      select: { id: true },
+    });
+    if (codeTaken) redirect("/settings/users?error=code-exists");
+  }
   const user = await prisma.user.create({
     data: {
       organizationId: admin.organizationId,
       email: input.email,
       name: input.name,
+      employeeCode: input.employeeCode ?? null,
       passwordHash: await hashPassword(input.password),
       userRoles: { create: { roleId: role.id } },
     },
   });
   await auditLog(admin, {
     action: "CREATE", entityType: "USER", entityId: user.id,
-    detail: { email: input.email, role: role.key },
+    detail: { email: input.email, role: role.key, employeeCode: input.employeeCode ?? null },
   });
   revalidatePath("/settings/users");
   redirect("/settings/users?ok=user-created");
+}
+
+/** Set (or clear) a user's HR employee code — the deterministic key that links
+ * the login account to its HR employee record. */
+export async function setUserEmployeeCodeAction(userId: string, formData: FormData) {
+  const admin = await requirePermission("user:manage");
+  const raw = String(formData.get("employeeCode") ?? "").trim().slice(0, 50);
+  const code = raw || null;
+  const target = await prisma.user.findFirst({
+    where: { id: userId, organizationId: admin.organizationId, deletedAt: null },
+    select: { id: true },
+  });
+  if (!target) redirect("/settings/users?error=user-not-found");
+  if (code) {
+    const clash = await prisma.user.findFirst({
+      where: { organizationId: admin.organizationId, employeeCode: code, deletedAt: null, NOT: { id: userId } },
+      select: { id: true },
+    });
+    if (clash) redirect("/settings/users?error=code-exists");
+  }
+  await prisma.user.update({ where: { id: target!.id }, data: { employeeCode: code } });
+  // Re-link the matching employee to this account immediately (matches by code).
+  const { linkEmployeesToUsers } = await import("@/lib/hr-user-link");
+  await linkEmployeesToUsers(admin.organizationId).catch(() => {});
+  await auditLog(admin, {
+    action: "UPDATE", entityType: "USER", entityId: target!.id,
+    detail: { event: "EMPLOYEE_CODE_SET", employeeCode: code },
+  });
+  revalidatePath("/settings/users");
+  redirect("/settings/users?ok=code-set");
 }
 
 /**

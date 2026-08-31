@@ -32,12 +32,18 @@ function normName(raw: string): string {
  * vault shares and support cases can then resolve a person to their account).
  *
  * Matching, in priority order:
- *  1. email — exact, case-insensitive (most reliable, when the employee has one);
- *  2. full name — `firstName lastName` vs `User.name`, normalized (title/whitespace/
- *     case), and only when UNAMBIGUOUS: exactly one employee and exactly one
- *     unlinked user carry that name. Employee code is the employee's stable
- *     identity used here to detect same-name collisions and skip them rather
- *     than mislink.
+ *  1. employee code — exact (case-insensitive) against User.employeeCode. This
+ *     is the deterministic, 100%-reliable match. Set the code on an account in
+ *     Settings > Users to guarantee it.
+ *  2. email — exact, case-insensitive (when the employee has one);
+ *  3. full name — `firstName lastName` vs `User.name`, normalized (title/
+ *     whitespace/case), and only when UNAMBIGUOUS: exactly one employee and
+ *     exactly one unlinked user carry that name — the employee code disambiguates
+ *     same-name collisions so they are skipped rather than mislinked.
+ *
+ * On a successful email/name link, the employee's code is stamped onto the user
+ * account (when it has none), so the next reconciliation matches by code — the
+ * first fuzzy match bootstraps a permanent deterministic key.
  *
  * Rules: only touches employees with no user link yet; never reuses a user
  * already bound to another employee (Employee.userId is unique); idempotent.
@@ -52,20 +58,22 @@ export async function linkEmployeesToUsers(orgId: string, employeeIds?: string[]
       userId: null,
       ...(employeeIds ? { id: { in: employeeIds } } : {}),
     },
-    select: { id: true, firstName: true, lastName: true, email: true },
+    select: { id: true, employeeCode: true, firstName: true, lastName: true, email: true },
   });
   if (employees.length === 0) return { linked: 0, unmatched: 0, alreadyLinked: 0 };
 
-  // All active users in the org — indexed by email and by normalized name.
+  // All active users in the org — indexed by code, email and normalized name.
   const users = await prisma.user.findMany({
     where: { organizationId: orgId, deletedAt: null },
-    select: { id: true, email: true, name: true, employee: { select: { id: true } } },
+    select: { id: true, email: true, name: true, employeeCode: true, employee: { select: { id: true } } },
   });
-  type Ref = { id: string; taken: boolean };
+  type Ref = { id: string; taken: boolean; hasCode: boolean };
+  const userByCode = new Map<string, Ref>();
   const userByEmail = new Map<string, Ref>();
   const usersByName = new Map<string, Ref[]>();
   for (const u of users) {
-    const ref: Ref = { id: u.id, taken: Boolean(u.employee) };
+    const ref: Ref = { id: u.id, taken: Boolean(u.employee), hasCode: Boolean(u.employeeCode) };
+    if (u.employeeCode) userByCode.set(u.employeeCode.toLowerCase(), ref);
     if (u.email) userByEmail.set(u.email.toLowerCase(), ref);
     const n = normName(u.name);
     if (n) {
@@ -87,9 +95,11 @@ export async function linkEmployeesToUsers(orgId: string, employeeIds?: string[]
   let unmatched = 0;
   let alreadyLinked = 0;
   for (const e of employees) {
-    // 1. email
-    let ref: Ref | undefined = e.email ? userByEmail.get(e.email.toLowerCase()) : undefined;
-    // 2. unambiguous full-name
+    // 1. employee code (deterministic)
+    let ref: Ref | undefined = userByCode.get(e.employeeCode.toLowerCase());
+    // 2. email
+    if (!ref && e.email) ref = userByEmail.get(e.email.toLowerCase());
+    // 3. unambiguous full-name
     if (!ref) {
       const n = normName(`${e.firstName} ${e.lastName}`);
       if (n && empNameCount.get(n) === 1) {
@@ -102,6 +112,11 @@ export async function linkEmployeesToUsers(orgId: string, employeeIds?: string[]
     try {
       await prisma.employee.update({ where: { id: e.id }, data: { userId: ref.id } });
       ref.taken = true; // don't bind the same user to two employees in one pass
+      // Bootstrap: stamp the code onto the account so future runs match by code.
+      if (!ref.hasCode) {
+        await prisma.user.update({ where: { id: ref.id }, data: { employeeCode: e.employeeCode } }).catch(() => {});
+        ref.hasCode = true;
+      }
       linked++;
     } catch {
       alreadyLinked++;

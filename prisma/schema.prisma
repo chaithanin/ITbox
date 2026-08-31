@@ -111,6 +111,11 @@ model User {
   lockedUntil      DateTime?
   lastLoginAt      DateTime?
 
+  // HR employee code (staff ID). Links a login account to its HR employee
+  // record for deterministic reconciliation — see lib/hr-user-link.ts. Nullable
+  // (not every account is an employee), unique per org.
+  employeeCode String?
+
   // Language / theme preferences
   locale String @default("th")
   // How the post-login KPI popup behaves for this user: DAILY | EVERY_LOGIN | OFF
@@ -143,6 +148,7 @@ model User {
   supportTeamMemberships SupportTeamMember[]
   signatureProfile   SignatureProfile?
 
+  @@unique([organizationId, employeeCode])
   @@index([organizationId])
   @@map("users")
 }

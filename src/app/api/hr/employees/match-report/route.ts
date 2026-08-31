@@ -26,7 +26,7 @@ export async function POST(req: Request) {
     }),
     prisma.user.findMany({
       where: { organizationId: orgId, deletedAt: null },
-      select: { email: true, name: true, employee: { select: { id: true } } },
+      select: { email: true, name: true, employeeCode: true, employee: { select: { id: true } } },
     }),
   ]);
 
@@ -47,10 +47,13 @@ export async function POST(req: Request) {
       total: users.length,
       linkedToEmployee: users.length - unlinkedUsers.length,
       unlinked: unlinkedUsers.length,
+      withEmployeeCode: users.filter((u) => u.employeeCode).length,
     },
     unmatchedEmployees: unlinkedWithEmail
       .slice(0, 200)
       .map((e) => ({ employeeCode: e.employeeCode, name: `${e.firstName} ${e.lastName}`.trim(), email: e.email })),
-    unlinkedUsers: unlinkedUsers.slice(0, 200).map((u) => ({ email: u.email, name: u.name })),
+    unlinkedUsers: unlinkedUsers
+      .slice(0, 200)
+      .map((u) => ({ email: u.email, name: u.name, employeeCode: u.employeeCode })),
   });
 }

@@ -13,7 +13,7 @@ import { ConfirmButton } from "@/components/confirm-button";
 import { formatDateTime } from "@/lib/utils";
 import {
   createUserAction, setUserStatusAction, setUserRolesAction, adminResetPasswordAction,
-  disableUserMfaAction,
+  disableUserMfaAction, setUserEmployeeCodeAction,
 } from "../actions";
 
 export const dynamic = "force-dynamic";
@@ -22,6 +22,8 @@ const PW_RULE = "รหัสผ่าน 8–12 ตัว มีพิมพ์
 
 const MESSAGES: Record<string, { text: string; error?: boolean }> = {
   "user-created": { text: "สร้างผู้ใช้สำเร็จ / User created" },
+  "code-set": { text: "บันทึกรหัสพนักงานแล้ว — จับคู่กับพนักงานให้อัตโนมัติ / Employee code saved & linked" },
+  "code-exists": { text: "รหัสพนักงานนี้ถูกใช้กับบัญชีอื่นแล้ว / Employee code already in use", error: true },
   "password-reset": { text: "รีเซ็ตรหัสผ่านสำเร็จ (Session ถูกยกเลิกทั้งหมด) / Password reset" },
   "mfa-disabled": { text: "ปิด/รีเซ็ต MFA ของผู้ใช้แล้ว (Session ถูกยกเลิก) / User MFA reset", error: false },
   "weak-password": { text: `${PW_RULE} / Password must be 8–12 chars with upper, lower, number & special char`, error: true },
@@ -78,6 +80,10 @@ export default async function UsersPage({
               <Input id="name" name="name" required />
             </div>
             <div className="space-y-1">
+              <Label htmlFor="employeeCode">รหัสพนักงาน / Staff ID</Label>
+              <Input id="employeeCode" name="employeeCode" maxLength={50} placeholder="เช่น EMP001 (ไม่บังคับ)" />
+            </div>
+            <div className="space-y-1">
               <Label htmlFor="password">รหัสผ่าน / Password</Label>
               <Input
                 id="password" name="password" type="password" required
@@ -125,12 +131,21 @@ export default async function UsersPage({
             const rolesAction = setUserRolesAction.bind(null, u.id);
             const resetAction = adminResetPasswordAction.bind(null, u.id);
             const mfaOffAction = disableUserMfaAction.bind(null, u.id);
+            const codeAction = setUserEmployeeCodeAction.bind(null, u.id);
             const isLocked = u.lockedUntil && u.lockedUntil > new Date();
             return (
               <TableRow key={u.id}>
                 <TableCell>
                   <p className="font-medium">{u.name}</p>
                   <p className="text-xs text-muted-foreground">{u.email}</p>
+                  <form action={codeAction} className="mt-1 flex items-center gap-1">
+                    <Input
+                      name="employeeCode" defaultValue={u.employeeCode ?? ""} maxLength={50}
+                      placeholder="รหัสพนักงาน" className="h-6 w-28 text-[11px]"
+                      title="รหัสพนักงาน (Staff ID) — ผูกบัญชีกับพนักงาน HR แบบแม่นยำ"
+                    />
+                    <Button type="submit" variant="outline" size="sm" className="h-6 px-2 text-[11px]">ผูก</Button>
+                  </form>
                 </TableCell>
                 <TableCell>
                   <form action={rolesAction} className="flex flex-wrap items-center gap-1.5">
