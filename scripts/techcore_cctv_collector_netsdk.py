@@ -68,39 +68,56 @@ READY_MARK = "Ready to connect!"
 AUTH_MARKS = ("Authentication is not supported", "DevPwd_InvalidSalt", "403 Forbidden")
 
 # --- structs for per-channel recording + disk queries ----------------------
-# Import NET_TIME / NET_RECORDFILE_INFO from the bundled SDK_Struct if present
-# (its layout matches the DLL exactly); otherwise fall back to the canonical
-# Dahua layout so a trimmed SDK bundle still works.
-try:
+# All of these come from the bundled SDK_Struct so their layout matches the DLL
+# exactly (confirmed against the installed NetSDK via inspect). NET_TIME has a
+# canonical fallback for a trimmed bundle; the disk struct has no safe fallback
+# (its layout is firmware-specific) so we simply skip disk if it is absent.
+def _import_sdk(*names):
     try:
-        from NetSDK.SDK_Struct import NET_TIME as _NET_TIME, NET_RECORDFILE_INFO as _NET_RECINFO
+        mod = __import__("NetSDK.SDK_Struct", fromlist=list(names))
     except ImportError:
-        from SDK_Struct import NET_TIME as _NET_TIME, NET_RECORDFILE_INFO as _NET_RECINFO
-    NET_TIME, NET_RECORDFILE_INFO = _NET_TIME, _NET_RECINFO
+        mod = __import__("SDK_Struct", fromlist=list(names))
+    return tuple(getattr(mod, n) for n in names)
+
+
+try:
+    NET_TIME, NET_RECORDFILE_INFO = _import_sdk("NET_TIME", "NET_RECORDFILE_INFO")
 except Exception:  # noqa: BLE001
     class NET_TIME(Structure):
         _fields_ = [("dwYear", c_uint), ("dwMonth", c_uint), ("dwDay", c_uint),
                     ("dwHour", c_uint), ("dwMinute", c_uint), ("dwSecond", c_uint)]
+    NET_RECORDFILE_INFO = None
 
-    class NET_RECORDFILE_INFO(Structure):
-        _fields_ = [("ch", c_int), ("filename", c_char * 100), ("framenum", c_uint),
-                    ("size", c_uint), ("starttime", NET_TIME), ("endtime", NET_TIME),
-                    ("driveno", c_uint), ("startcluster", c_uint),
-                    ("nRecordFileType", c_byte), ("bImportantRecID", c_byte),
-                    ("bHint", c_byte), ("bReserved", c_byte)]
+try:
+    (SDK_HARDDISK_STATE,) = _import_sdk("SDK_HARDDISK_STATE")
+except Exception:  # noqa: BLE001
+    SDK_HARDDISK_STATE = None
+
+# CLIENT_QueryDevState type code for the hard-disk state (SDK_HARDDISK_STATE).
+# Prefer the value from EM_QUERY_DEV_STATE_TYPE (a member whose name mentions
+# DISK); fall back to the classic candidates. Confirmed per firmware by --probe.
+def _disk_type_candidates():
+    codes = []
+    try:
+        try:
+            from NetSDK.SDK_Enum import EM_QUERY_DEV_STATE_TYPE as E
+        except ImportError:
+            from SDK_Enum import EM_QUERY_DEV_STATE_TYPE as E
+        for attr in dir(E):
+            if "DISK" in attr.upper():
+                v = getattr(E, attr)
+                v = getattr(v, "value", v)
+                if isinstance(v, int):
+                    codes.append(v)
+    except Exception:  # noqa: BLE001
+        pass
+    for v in (4, 3, 26):  # classic DH_DEVSTATE_DISK values seen in the wild
+        if v not in codes:
+            codes.append(v)
+    return tuple(codes)
 
 
-class _DH_DISK_STATE(Structure):
-    _fields_ = [("nDiskState", c_int), ("dwVolume", c_uint), ("dwFreeSpace", c_uint)]
-
-
-class _DHDEV_DISK_STATE(Structure):
-    _fields_ = [("nDiskNum", c_int), ("stDisks", _DH_DISK_STATE * 32)]
-
-
-# DH_DEVSTATE_DISK candidate type codes for CLIENT_QueryDevState. 4 is the value
-# in the classic dhconfigsdk.h; the sweep in --probe confirms it per firmware.
-DISK_TYPE_CANDIDATES = (4,)
+DISK_TYPE_CANDIDATES = _disk_type_candidates()
 
 
 def log(v, *a):
@@ -334,82 +351,94 @@ def _iso_local(dt):
     return dt.replace(tzinfo=tz).isoformat()
 
 
-def _call_query_record(sdk, login_id, ch, tm_start, tm_end, buf, maxlen):
-    """CLIENT_QueryRecordFile via the NetClient wrapper. Returns (ok, count).
-    Tolerates the two arg conventions seen across NetSDK Python bundles."""
+def _query_record_raw(sdk, login_id, ch, tm_start, tm_end, wait_ms=4000, by_time=True):
+    """CLIENT_QueryRecordFile via the NetClient wrapper. The wrapper allocates the
+    record buffer itself and returns (result, file_count, infos); on failure it
+    returns just (result, ...). Returns (ok, count, infos)."""
     fn = getattr(sdk, "QueryRecordFile", None)
     if fn is None:
         raise RuntimeError("this NetSDK build has no QueryRecordFile")
-    # nRecordFileType=0 (all record types), pchCardid=None, bTime=False
-    for a in ((login_id, ch, 0, tm_start, tm_end, None, buf, maxlen, False, 4000),
-              (login_id, ch, 0, tm_start, tm_end, None, buf, maxlen)):
-        try:
-            res = fn(*a)
-        except TypeError:
-            continue
-        if isinstance(res, tuple):
-            return bool(res[0]), int(res[1]) if len(res) > 1 else 0
-        return bool(res), 0
-    raise RuntimeError("QueryRecordFile: no compatible call signature")
+    # (login_id, channel, recordfile_type=0(all), start, end, card_id, wait, by_time)
+    res = fn(login_id, ch, 0, tm_start, tm_end, b"", wait_ms, by_time)
+    if not isinstance(res, tuple):
+        return bool(res), 0, None
+    ok = bool(res[0])
+    count = res[1] if len(res) > 1 else 0
+    infos = res[2] if len(res) > 2 else None
+    try:
+        count = int(count)
+    except (TypeError, ValueError):
+        count = 0
+    return ok, count, infos
 
 
 def query_recording(sdk, login_id, ch, window_min, verbose):
     """Ask the recorder for this channel's recordings in the last `window_min`.
     A recording present in that window means the camera has signal and is being
     written to disk. Returns a dict of camera fields for the ingest payload."""
+    if NET_RECORDFILE_INFO is None:
+        return {"status": "UNKNOWN", "recordingStatus": "UNKNOWN"}
     now_local = datetime.now()
     tm_start = _mk_nettime(now_local - timedelta(minutes=window_min))
     tm_end = _mk_nettime(now_local)
-    MAX = 64
-    buf = (NET_RECORDFILE_INFO * MAX)()
-    ok, count = _call_query_record(sdk, login_id, ch, tm_start, tm_end, buf, MAX)
+    ok, count, infos = _query_record_raw(sdk, login_id, ch, tm_start, tm_end)
+    if not ok or count <= 0 or infos is None:
+        # The wrapper returns FALSE when it simply finds no files in the window.
+        return {"status": "NO_RECORDING", "recordingStatus": "NO_RECORDING_FOUND"}
     latest = None
-    for i in range(min(count, MAX)):
+    for i in range(min(count, 5000)):
+        try:
+            ri = infos[i]
+        except (TypeError, IndexError):
+            break
         for field in ("endtime", "starttime"):
-            dt = _nettime_to_dt(getattr(buf[i], field))
+            dt = _nettime_to_dt(getattr(ri, field, None))
             if dt and (latest is None or dt > latest):
                 latest = dt
-    if count > 0 and latest is not None:
-        gap = max(0, int((now_local - latest).total_seconds()))
-        return {"status": "ONLINE", "recordingStatus": "RECORDING",
-                "latestRecording": _iso_local(latest), "recordingGapSeconds": gap}
-    # QueryRecordFile returns FALSE when it simply finds no files, so no records
-    # in the window is reported as "no recording found", not an error.
-    return {"status": "NO_RECORDING", "recordingStatus": "NO_RECORDING_FOUND"}
+    out = {"status": "ONLINE", "recordingStatus": "RECORDING"}
+    if latest is not None:
+        out["latestRecording"] = _iso_local(latest)
+        out["recordingGapSeconds"] = max(0, int((now_local - latest).total_seconds()))
+    return out
+
+
+def _disk_field(d, *names):
+    for n in names:
+        v = getattr(d, n, None)
+        if v is not None:
+            try:
+                return int(v)
+            except (TypeError, ValueError):
+                pass
+    return None
 
 
 def query_storage(sdk, login_id, verbose, type_codes=DISK_TYPE_CANDIDATES):
-    """Best-effort HDD state via CLIENT_QueryDevState. Values that fail a sanity
-    check (wrong struct/type code for this firmware) are dropped rather than
-    pushed as garbage; use --probe to confirm the right type code first."""
+    """HDD state via CLIENT_QueryDevState with SDK_HARDDISK_STATE. The wrapper
+    wraps pBuf in a pointer itself, so we pass the struct instance directly and
+    read it back after the call. Values that fail a sanity check (wrong type code
+    for this firmware) are dropped rather than pushed as garbage."""
     fn = getattr(sdk, "QueryDevState", None)
-    if fn is None:
+    if fn is None or SDK_HARDDISK_STATE is None:
         return []
     for tc in type_codes:
-        st = _DHDEV_DISK_STATE()
-        res = None
-        for a in ((login_id, tc, byref(st), sizeof(st), 4000),
-                  (login_id, tc, byref(st), sizeof(st))):
-            try:
-                res = fn(*a)
-                break
-            except TypeError:
-                continue
-            except Exception as e:  # noqa: BLE001
-                log(verbose, f"QueryDevState type={tc} error: {e}")
-                res = None
-                break
-        if res is None:
+        st = SDK_HARDDISK_STATE()
+        try:
+            result = fn(login_id, tc, st, sizeof(st), 0, 4000)
+        except Exception as e:  # noqa: BLE001
+            log(verbose, f"QueryDevState type={tc} error: {e}")
             continue
-        ok = res[0] if isinstance(res, tuple) else res
-        if not ok or not (0 < st.nDiskNum <= 32):
+        if not result:
             continue
-        out = []
-        sane = True
-        for i in range(st.nDiskNum):
-            d = st.stDisks[i]
-            cap_mb, free_mb = int(d.dwVolume), int(d.dwFreeSpace)
-            if cap_mb < 100_000 or cap_mb > 200_000_000 or free_mb > cap_mb:
+        ndisk = getattr(st, "dwDiskNum", 0) or 0
+        disks = getattr(st, "stDisks", None)
+        if disks is None or not (0 < ndisk <= len(disks)):
+            continue
+        out, sane = [], True
+        for i in range(ndisk):
+            cap_mb = _disk_field(disks[i], "dwVolume")
+            free_mb = _disk_field(disks[i], "dwFreeSpace")
+            if cap_mb is None or free_mb is None or cap_mb < 100_000 or cap_mb > 200_000_000 or free_mb > cap_mb:
                 sane = False
                 break
             out.append({"hddIndex": i, "status": "NORMAL",
@@ -423,35 +452,48 @@ def query_storage(sdk, login_id, verbose, type_codes=DISK_TYPE_CANDIDATES):
 
 def probe_device(sdk, login_id, info, verbose):
     """Print the NetSDK API surface + raw query results for one device, so the
-    right disk type code and record-query behaviour can be confirmed safely
-    before wiring them into every cycle."""
+    right disk type code and record query behaviour can be confirmed safely."""
     print("=== NetSDK API surface ===")
-    for m in ("QueryRecordFile", "QueryDevState", "QuerySystemInfo", "QueryDevInfo", "QueryDevInfoNew"):
+    for m in ("QueryRecordFile", "QueryDevState", "GetStorageBoundTimeEx", "QueryFurthestRecordTime"):
         print(f"  {m}: {'yes' if hasattr(sdk, m) else 'NO'}")
+    print(f"  SDK_HARDDISK_STATE struct: {'yes' if SDK_HARDDISK_STATE else 'NO'}")
+    print("  disk type candidates:", DISK_TYPE_CANDIDATES)
+    try:
+        try:
+            from NetSDK.SDK_Enum import EM_QUERY_DEV_STATE_TYPE as E
+        except ImportError:
+            from SDK_Enum import EM_QUERY_DEV_STATE_TYPE as E
+        members = [(a, getattr(getattr(E, a), "value", getattr(E, a)))
+                   for a in dir(E) if not a.startswith("_")]
+        print("  EM_QUERY_DEV_STATE_TYPE (disk-ish):",
+              [(a, v) for a, v in members if "DISK" in a.upper() or "STORAGE" in a.upper()])
+    except Exception as e:  # noqa: BLE001
+        print("  (EM_QUERY_DEV_STATE_TYPE not readable:", e, ")")
     n = device_channels(info)
     print(f"=== channels reported: {n} ===")
     try:
         print("  QueryRecordFile ch1 (last 60min):", query_recording(sdk, login_id, 1, 60, verbose))
     except Exception as e:  # noqa: BLE001
-        print("  QueryRecordFile ch1 ERROR:", e)
-    fn = getattr(sdk, "QueryDevState", None)
-    if not fn:
-        print("  (no QueryDevState in this build)")
+        print("  QueryRecordFile ch1 ERROR:", repr(e))
+    if not (getattr(sdk, "QueryDevState", None) and SDK_HARDDISK_STATE):
+        print("  (cannot sweep disk: QueryDevState or SDK_HARDDISK_STATE missing)")
         return
-    print("=== QueryDevState disk type sweep ===")
-    for tc in (1, 2, 3, 4, 5, 6, 7, 8, 0x0A, 0x19, 0x24, 0x25):
-        st = _DHDEV_DISK_STATE()
+    print("=== QueryDevState disk type sweep (SDK_HARDDISK_STATE) ===")
+    for tc in sorted(set(DISK_TYPE_CANDIDATES) | {1, 2, 3, 4, 5, 6, 7, 8, 26}):
+        st = SDK_HARDDISK_STATE()
         try:
-            res = fn(login_id, tc, byref(st), sizeof(st), 3000)
+            res = sdk.QueryDevState(login_id, tc, st, sizeof(st), 0, 3000)
         except Exception as e:  # noqa: BLE001
             print(f"  type={tc}: call error {e}")
             continue
-        ok = res[0] if isinstance(res, tuple) else res
         extra = ""
-        if 0 < st.nDiskNum <= 32:
-            d0 = st.stDisks[0]
-            extra = f" nDiskNum={st.nDiskNum} disk0 vol={d0.dwVolume}MB free={d0.dwFreeSpace}MB state={d0.nDiskState}"
-        print(f"  type={tc}: ok={bool(ok)}{extra}")
+        nd = getattr(st, "dwDiskNum", 0) or 0
+        disks = getattr(st, "stDisks", None)
+        if disks is not None and 0 < nd <= len(disks):
+            v = _disk_field(disks[0], "dwVolume")
+            fr = _disk_field(disks[0], "dwFreeSpace")
+            extra = f" dwDiskNum={nd} disk0 vol={v}MB free={fr}MB"
+        print(f"  type={tc}: ok={bool(res)}{extra}")
 
 
 # --------------------------- collection ---------------------------
