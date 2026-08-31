@@ -22,6 +22,10 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV PORT=8080
+# Render all server-side dates in Thailand time. Node 22 ships full ICU, so this
+# resolves via bundled tz data with no OS tzdata package needed. Business-hours
+# / SLA math uses its own explicit offset and is unaffected.
+ENV TZ=Asia/Bangkok
 
 RUN groupadd -r nodejs && useradd -r -g nodejs nextjs
 
