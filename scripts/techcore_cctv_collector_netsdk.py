@@ -36,7 +36,7 @@ to this script; for p2p devices, the compiled dh-p2p binary (--p2p-bin) or a run
 supervisor (--map).
 """
 import argparse, json, os, socket, subprocess, sys, threading, time, urllib.request, urllib.error
-from ctypes import sizeof, byref, Structure, c_int, c_uint, c_char, c_byte
+from ctypes import sizeof, byref, Structure, c_int, c_uint, c_char, c_byte, c_ubyte
 from datetime import datetime, timedelta, timezone
 from xml.etree import ElementTree as ET
 
@@ -450,50 +450,78 @@ def query_storage(sdk, login_id, verbose, type_codes=DISK_TYPE_CANDIDATES):
     return []
 
 
-def probe_device(sdk, login_id, info, verbose):
-    """Print the NetSDK API surface + raw query results for one device, so the
-    right disk type code and record query behaviour can be confirmed safely."""
-    print("=== NetSDK API surface ===")
-    for m in ("QueryRecordFile", "QueryDevState", "GetStorageBoundTimeEx", "QueryFurthestRecordTime"):
-        print(f"  {m}: {'yes' if hasattr(sdk, m) else 'NO'}")
-    print(f"  SDK_HARDDISK_STATE struct: {'yes' if SDK_HARDDISK_STATE else 'NO'}")
-    print("  disk type candidates:", DISK_TYPE_CANDIDATES)
+# EM_QUERY_DEV_STATE_TYPE codes that work over the P2P main connection (unlike
+# QueryRecordFile, which opens a second connection the relay tunnel can't carry).
+QDS_RECORDING = 3   # per-channel recording state
+QDS_ONLINE = 53     # per-channel / device online state
+
+
+def _querydevstate_bytes(sdk, login_id, ntype, nbytes=1024, wait=4000):
+    """QueryDevState into a raw byte buffer (the wrapper wraps pBuf in a pointer
+    itself and does not return the length, so we pass a ctypes byte array and
+    read it back). Returns the raw bytes on success, else None."""
+    fn = getattr(sdk, "QueryDevState", None)
+    if fn is None:
+        return None
+    buf = (c_ubyte * nbytes)()
     try:
-        try:
-            from NetSDK.SDK_Enum import EM_QUERY_DEV_STATE_TYPE as E
-        except ImportError:
-            from SDK_Enum import EM_QUERY_DEV_STATE_TYPE as E
-        members = [(a, getattr(getattr(E, a), "value", getattr(E, a)))
-                   for a in dir(E) if not a.startswith("_")]
-        print("  EM_QUERY_DEV_STATE_TYPE (disk-ish):",
-              [(a, v) for a, v in members if "DISK" in a.upper() or "STORAGE" in a.upper()])
+        ok = fn(login_id, ntype, buf, sizeof(buf), 0, wait)
+    except Exception:  # noqa: BLE001
+        return None
+    if not ok:
+        return None
+    return bytes(buf)
+
+
+def query_channel_state(sdk, login_id, nchan, verbose):
+    """Per-channel recording state via QueryDevState(RECORDING). The buffer is a
+    byte indexed by channel; a non-zero byte means that channel is recording (so
+    it has signal). Falls back to UNKNOWN cameras if the query is unsupported."""
+    raw = None
+    try:
+        raw = _querydevstate_bytes(sdk, login_id, QDS_RECORDING)
     except Exception as e:  # noqa: BLE001
-        print("  (EM_QUERY_DEV_STATE_TYPE not readable:", e, ")")
+        log(verbose, f"recording-state query failed: {e}")
+    cams = []
+    for ch in range(1, (nchan or 0) + 1):
+        if raw is not None and (ch - 1) < len(raw):
+            recording = raw[ch - 1] > 0
+            if recording:
+                cams.append({"channel": ch, "status": "ONLINE", "recordingStatus": "RECORDING"})
+            else:
+                cams.append({"channel": ch, "status": "NO_RECORDING", "recordingStatus": "NO_RECORDING_FOUND"})
+        else:
+            cams.append({"channel": ch, "status": "UNKNOWN"})
+    return cams
+
+
+def probe_device(sdk, login_id, info, verbose):
+    """Print raw QueryDevState results for one device so the disk parse and the
+    RECORDING/ONLINE byte formats can be confirmed before trusting them. Runs the
+    disk query first, while the P2P tunnel is freshest."""
     n = device_channels(info)
     print(f"=== channels reported: {n} ===")
-    try:
-        print("  QueryRecordFile ch1 (last 60min):", query_recording(sdk, login_id, 1, 60, verbose))
-    except Exception as e:  # noqa: BLE001
-        print("  QueryRecordFile ch1 ERROR:", repr(e))
-    if not (getattr(sdk, "QueryDevState", None) and SDK_HARDDISK_STATE):
-        print("  (cannot sweep disk: QueryDevState or SDK_HARDDISK_STATE missing)")
-        return
-    print("=== QueryDevState disk type sweep (SDK_HARDDISK_STATE) ===")
-    for tc in sorted(set(DISK_TYPE_CANDIDATES) | {1, 2, 3, 4, 5, 6, 7, 8, 26}):
-        st = SDK_HARDDISK_STATE()
-        try:
-            res = sdk.QueryDevState(login_id, tc, st, sizeof(st), 0, 3000)
-        except Exception as e:  # noqa: BLE001
-            print(f"  type={tc}: call error {e}")
+
+    # 1) DISK (freshest tunnel) via SDK_HARDDISK_STATE
+    print("=== disk (QueryDevState DISK=4) ===")
+    if getattr(sdk, "QueryDevState", None) and SDK_HARDDISK_STATE:
+        print("  parsed query_storage():", query_storage(sdk, login_id, verbose))
+    else:
+        print("  (QueryDevState or SDK_HARDDISK_STATE missing)")
+
+    # 2) RECORDING + ONLINE: dump raw bytes so the per-channel layout is visible
+    for label, ntype in (("RECORDING", QDS_RECORDING), ("ONLINE", QDS_ONLINE)):
+        raw = _querydevstate_bytes(sdk, login_id, ntype)
+        if raw is None:
+            print(f"=== {label}(type {ntype}): query returned no data ===")
             continue
-        extra = ""
-        nd = getattr(st, "dwDiskNum", 0) or 0
-        disks = getattr(st, "stDisks", None)
-        if disks is not None and 0 < nd <= len(disks):
-            v = _disk_field(disks[0], "dwVolume")
-            fr = _disk_field(disks[0], "dwFreeSpace")
-            extra = f" dwDiskNum={nd} disk0 vol={v}MB free={fr}MB"
-        print(f"  type={tc}: ok={bool(res)}{extra}")
+        head = list(raw[: max(40, (n or 0) + 4)])
+        print(f"=== {label}(type {ntype}) first {len(head)} bytes ===")
+        print("  ", head)
+    print("=== parsed query_channel_state() ===")
+    cams = query_channel_state(sdk, login_id, n, verbose)
+    rec_on = sum(1 for c in cams if c.get("recordingStatus") == "RECORDING")
+    print(f"  {rec_on}/{len(cams)} channels RECORDING; first 5: {cams[:5]}")
 
 
 # --------------------------- collection ---------------------------
@@ -516,19 +544,24 @@ def _read_device(sdk, rec, host, port, conn, via, args):
             rec["model"] = model
         rec["channelCount"] = n or None
         rec["capabilities"] = {"supports_sdk": True, "via": via}
-        for ch in range(1, (n or 0) + 1):
-            cam = {"channel": ch, "status": "UNKNOWN"}
-            if not args.no_recinfo:
-                try:
-                    cam.update(query_recording(sdk, login_id, ch, args.rec_window_min, verbose))
-                except Exception as e:  # noqa: BLE001
-                    log(verbose, f"ch{ch} recording query failed: {e}")
-            rec["cameras"].append(cam)
+        # Disk first, while the tunnel is freshest (dh-p2p relays degrade the
+        # longer they are held open). Both queries use QueryDevState on the main
+        # connection, which the relay carries; QueryRecordFile does not work over
+        # P2P (it opens a second connection), so recording state comes from the
+        # RECORDING device-state query instead - one call for all channels.
         if not args.no_storage:
             try:
                 rec["storage"] = query_storage(sdk, login_id, verbose)
             except Exception as e:  # noqa: BLE001
                 log(verbose, f"storage query failed: {e}")
+        if args.no_recinfo:
+            rec["cameras"] = [{"channel": ch, "status": "UNKNOWN"} for ch in range(1, (n or 0) + 1)]
+        else:
+            try:
+                rec["cameras"] = query_channel_state(sdk, login_id, n, verbose)
+            except Exception as e:  # noqa: BLE001
+                log(verbose, f"channel-state query failed: {e}")
+                rec["cameras"] = [{"channel": ch, "status": "UNKNOWN"} for ch in range(1, (n or 0) + 1)]
     finally:
         try:
             sdk.Logout(login_id)
