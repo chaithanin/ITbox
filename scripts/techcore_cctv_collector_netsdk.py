@@ -591,7 +591,18 @@ def collect_device(sdk, dev, defaults, tmap, tunnel_map, args, slot):
         if not host:
             rec["errorMessage"] = "mode:ip but no host set"
             return rec
-        return _read_device(sdk, rec, host, int(conn.get("sdkPort") or SDK_PORT), conn, "netsdk-ip", args)
+        # Resolve DDNS hostnames (and plain IPs) to a current address; the NetSDK
+        # login wants an IP, and re-resolving each run tracks the DDNS IP as it
+        # changes. A LAN IP or literal IP passes through gethostbyname unchanged.
+        try:
+            ip = socket.gethostbyname(host)
+        except OSError as e:
+            rec["status"] = "OFFLINE"
+            rec["errorMessage"] = f"cannot resolve host {host}: {e}"[:200]
+            return rec
+        if args.verbose and ip != host:
+            log(True, f"{serial}: resolved {host} -> {ip}")
+        return _read_device(sdk, rec, ip, int(conn.get("sdkPort") or SDK_PORT), conn, "netsdk-ip", args)
 
     # p2p device
     if args.p2p_bin:
