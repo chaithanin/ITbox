@@ -1,0 +1,22 @@
+[package]
+name = "dh-p2p"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+async-trait = "0.1.74"
+base64 = "0.21.5"
+chrono = "0.4.31"
+clap = { version = "4.4.11", features = ["derive"] }
+rand = "0.8.5"
+sha1 = "0.10.6"
+md-5 = "0.10.6"
+sha2 = "0.10"
+hmac = "0.12"
+pbkdf2 = { version = "0.12", default-features = false, features = ["hmac"] }
+aes = "0.8"
+ofb = "0.6"
+tokio = { version = "1", features = ["full"] }
+xml-rs = "0.8.19"
