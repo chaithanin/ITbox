@@ -3,27 +3,46 @@ import { prisma } from "@/lib/prisma";
 export type LinkResult = {
   /** Employees newly linked to a user account in this pass. */
   linked: number;
-  /** Employees whose email matched no user account in the org. */
+  /** Employees that matched no user account (by email or unambiguous name). */
   unmatched: number;
   /** Employees skipped because the matching user is already tied to another employee. */
   alreadyLinked: number;
 };
 
+// Leading honorifics stripped before comparing names (Thai + English).
+const TITLES = [
+  "นาย", "นาง", "นางสาว", "น.ส.", "ดร.", "ดร", "ว่าที่ร.ต.", "ว่าที่ ร.ต.",
+  "mr.", "mr", "mrs.", "mrs", "ms.", "ms", "miss", "dr.", "dr",
+];
+
+/** Normalize a full name for comparison: strip a leading title, collapse
+ * whitespace, lowercase. Returns "" when nothing usable remains. */
+function normName(raw: string): string {
+  let s = raw.replace(/\s+/g, " ").trim();
+  const lower = s.toLowerCase();
+  for (const t of TITLES) {
+    if (lower.startsWith(t + " ")) { s = s.slice(t.length).trim(); break; }
+  }
+  return s.replace(/\s+/g, " ").trim().toLowerCase();
+}
+
 /**
- * Match employees to system user accounts by email (org-scoped), setting
- * Employee.userId. This is how HR people data (source of truth) reconciles with
- * TECHCORE login accounts so asset assignments, vault shares and support cases
- * can resolve a person to their account.
+ * Match employees to system user accounts (org-scoped), setting Employee.userId,
+ * so HR people data reconciles with TECHCORE login accounts (asset assignments,
+ * vault shares and support cases can then resolve a person to their account).
  *
- * Rules:
- *  - only touches employees with no user link yet and a non-empty email;
- *  - matches case-insensitively against User.email in the same org;
- *  - never reuses a user already bound to another employee (Employee.userId is
- *    unique) — those are reported as `alreadyLinked`, not linked;
- *  - idempotent: safe to run repeatedly and after every HR sync.
+ * Matching, in priority order:
+ *  1. email — exact, case-insensitive (most reliable, when the employee has one);
+ *  2. full name — `firstName lastName` vs `User.name`, normalized (title/whitespace/
+ *     case), and only when UNAMBIGUOUS: exactly one employee and exactly one
+ *     unlinked user carry that name. Employee code is the employee's stable
+ *     identity used here to detect same-name collisions and skip them rather
+ *     than mislink.
  *
- * Pass `employeeIds` to reconcile just the rows a sync batch touched; omit it to
- * backfill the whole org.
+ * Rules: only touches employees with no user link yet; never reuses a user
+ * already bound to another employee (Employee.userId is unique); idempotent.
+ *
+ * Pass `employeeIds` to reconcile just a sync batch; omit to backfill the org.
  */
 export async function linkEmployeesToUsers(orgId: string, employeeIds?: string[]): Promise<LinkResult> {
   const employees = await prisma.employee.findMany({
@@ -31,37 +50,60 @@ export async function linkEmployeesToUsers(orgId: string, employeeIds?: string[]
       organizationId: orgId,
       deletedAt: null,
       userId: null,
-      email: { not: null },
       ...(employeeIds ? { id: { in: employeeIds } } : {}),
     },
-    select: { id: true, email: true },
+    select: { id: true, firstName: true, lastName: true, email: true },
   });
   if (employees.length === 0) return { linked: 0, unmatched: 0, alreadyLinked: 0 };
 
-  // Load candidate users. Emails are normally stored lowercased on both sides;
-  // pass both the raw and lowercased forms so a case mismatch still matches
-  // (Postgres `in` is case-sensitive), then key the map by lowercased email.
-  const variants = Array.from(new Set(employees.flatMap((e) => [e.email as string, (e.email as string).toLowerCase()])));
+  // All active users in the org — indexed by email and by normalized name.
   const users = await prisma.user.findMany({
-    where: { organizationId: orgId, deletedAt: null, email: { in: variants } },
-    select: { id: true, email: true, employee: { select: { id: true } } },
+    where: { organizationId: orgId, deletedAt: null },
+    select: { id: true, email: true, name: true, employee: { select: { id: true } } },
   });
-  const userByEmail = new Map<string, { id: string; taken: boolean }>();
-  for (const u of users) userByEmail.set(u.email.toLowerCase(), { id: u.id, taken: Boolean(u.employee) });
+  type Ref = { id: string; taken: boolean };
+  const userByEmail = new Map<string, Ref>();
+  const usersByName = new Map<string, Ref[]>();
+  for (const u of users) {
+    const ref: Ref = { id: u.id, taken: Boolean(u.employee) };
+    if (u.email) userByEmail.set(u.email.toLowerCase(), ref);
+    const n = normName(u.name);
+    if (n) {
+      const arr = usersByName.get(n);
+      if (arr) arr.push(ref);
+      else usersByName.set(n, [ref]);
+    }
+  }
+
+  // Count how many unlinked employees share each normalized name, so a name that
+  // maps to more than one person is treated as ambiguous and skipped.
+  const empNameCount = new Map<string, number>();
+  for (const e of employees) {
+    const n = normName(`${e.firstName} ${e.lastName}`);
+    if (n) empNameCount.set(n, (empNameCount.get(n) ?? 0) + 1);
+  }
 
   let linked = 0;
   let unmatched = 0;
   let alreadyLinked = 0;
   for (const e of employees) {
-    const u = userByEmail.get((e.email as string).toLowerCase());
-    if (!u) { unmatched++; continue; }
-    if (u.taken) { alreadyLinked++; continue; }
+    // 1. email
+    let ref: Ref | undefined = e.email ? userByEmail.get(e.email.toLowerCase()) : undefined;
+    // 2. unambiguous full-name
+    if (!ref) {
+      const n = normName(`${e.firstName} ${e.lastName}`);
+      if (n && empNameCount.get(n) === 1) {
+        const free = (usersByName.get(n) ?? []).filter((u) => !u.taken);
+        if (free.length === 1) ref = free[0];
+      }
+    }
+    if (!ref) { unmatched++; continue; }
+    if (ref.taken) { alreadyLinked++; continue; }
     try {
-      await prisma.employee.update({ where: { id: e.id }, data: { userId: u.id } });
-      u.taken = true; // don't bind the same user to two employees in one pass
+      await prisma.employee.update({ where: { id: e.id }, data: { userId: ref.id } });
+      ref.taken = true; // don't bind the same user to two employees in one pass
       linked++;
     } catch {
-      // Unique collision (raced) — treat as already linked.
       alreadyLinked++;
     }
   }
