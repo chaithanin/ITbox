@@ -243,23 +243,33 @@ def login_once(sdk, host, port, user, pwd):
     return 0, None, None, err, code
 
 
+# Login failures that retrying cannot fix, and where retrying actively harms:
+# every extra bad attempt counts toward the NVR's lockout threshold. 0x64 is a
+# wrong username/password, 0x68 means the account is ALREADY locked out (we hit
+# this for real on one recorder while password-guessing).
+CREDENTIAL_ERRORS = {
+    0x64: "wrong username or password - do not retry, the NVR locks the account",
+    0x68: "account is locked on the NVR - wait for the lockout to expire before trying again",
+}
+
+
 def login(sdk, host, port, user, pwd, verbose, retries=2):
     """TCP high-level-security login with a short retry (the first connection over a
-    fresh relay tunnel occasionally needs a second attempt). Returns (login_id, info,
-    status, err)."""
+    fresh relay tunnel occasionally needs a second attempt). Credential failures are
+    never retried: a second wrong password just pushes the NVR closer to locking the
+    account. Returns (login_id, info, status, err)."""
     last_err, last_code = None, 0
     for attempt in range(1, retries + 1):
         login_id, info, status, err, code = login_once(sdk, host, port, user, pwd)
         if login_id:
             return login_id, info, "ONLINE", None
         last_err, last_code = err, code
-        # 0x64 = wrong account/password -> don't retry, it won't change
-        if code == 0x64:
-            return 0, None, "AUTH_ERROR", f"{err} (0x{code:08x})"
-        log(verbose, f"login attempt {attempt} failed 0x{code:08x} ({err}); retrying" if attempt < retries else "")
+        if code in CREDENTIAL_ERRORS:
+            return 0, None, "AUTH_ERROR", f"{err} (0x{code:08x}) - {CREDENTIAL_ERRORS[code]}"
         if attempt < retries:
+            log(verbose, f"login attempt {attempt} failed 0x{code:08x} ({err}); retrying")
             time.sleep(2)
-    status = "AUTH_ERROR" if last_code == 0x64 else "OFFLINE"
+    status = "AUTH_ERROR" if last_code in CREDENTIAL_ERRORS else "OFFLINE"
     return 0, None, status, f"{last_err} (0x{last_code:08x})" if isinstance(last_code, int) else str(last_err)
 
 
@@ -290,8 +300,18 @@ def _read_device(sdk, rec, host, port, conn, via, verbose):
 
 def collect_device(sdk, dev, defaults, tmap, tunnel_map, args, slot):
     serial = dev["serial"]
-    conn = {**defaults, **tmap.get(serial, {})}
     rec = {"serial": serial, "status": "UNKNOWN", "cameras": [], "storage": []}
+
+    # Only ever touch recorders explicitly listed in cctv_targets.json. device.xml
+    # is just the fleet inventory; a device missing from targets has no known-good
+    # credentials, and trying defaults on it is how you lock out admin accounts
+    # across the whole fleet at once. Report the gap instead of guessing.
+    entry = tmap.get(serial)
+    if entry is None:
+        rec["errorMessage"] = "not listed in cctv_targets.json - skipped (credentials never guessed)"
+        return rec
+
+    conn = {**defaults, **entry}
     mode = conn.get("mode") or ("ip" if conn.get("host") else "p2p")
 
     if mode == "ip":
