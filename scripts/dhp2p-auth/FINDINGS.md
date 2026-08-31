@@ -44,14 +44,39 @@ is still open (see "Status").
 
 ## Status
 
-- ✅ Authentication is solved and verified end to end (403 → 200; the NVR accepts
-  our `DevAuth` and returns its NAT info + encrypted LocalAddr).
-- ⛔ Post-auth **relay data path is not yet working**: after `relay-channel` the
-  read from the relay agent never returns. The device advertises
-  `IpEncrptV2=true`, so the relayed PTCP stream is very likely V2-encrypted with
-  the per-session key (`get_enc`/`get_dec`), which the Rust relay loop does not
-  yet apply. The upstream Python reference authenticates but never relays, and the
-  upstream Rust relays but never authenticates, so this combination is new ground.
+- ✅ **Authentication is solved and verified end to end** on real V2 hardware
+  (DHI-NVR4216-EI, firmware V4.005 / DevVersion 6.7.30): `403 DevPwd_InvalidSalt`
+  → `200 Server Nat Info!`. Both requests that carry `DevAuth` are accepted:
+  - `p2p-channel` — encrypted LocalAddr + DevAuth. Accepted (200).
+  - `relay-channel` — needs a FRESH nonce; reusing the p2p-channel nonce returns
+    `403 DevPwd_InvalidNonce` (ErrCode 6). With a fresh nonce it is accepted.
+- ⛔ **Post-auth relay handoff is still open.** After an accepted `relay-channel`
+  the relay **agent never sends anything** (12s timeout) — i.e. the device never
+  joins the relay, even though the cloud accepted our request. A working non-V2
+  device (firmware 6.6.5, no salt) on the very same code path gets an immediate
+  `200 Server Nat Info!` from the agent and completes the PTCP `Sync`.
+
+  Attempts that did NOT change the outcome (agent still silent):
+  1. fresh relay-channel nonce (this fixed the 403, nothing more);
+  2. removing a diagnostic read that had briefly held the socket on the main
+     server (ruled out a timing/dropped-reply cause);
+  3. encrypting the `agentAddr` (`get_enc`) and signing the ciphertext, mirroring
+     the p2p-channel — accepted, but the device still did not join.
+
+  Notable response differences vs. a working device: the V2 p2p-channel response
+  has `IpEncrptV2=true`, `IpType=3`, `TransType=0` and **no `<Relay>` element**,
+  whereas the working device returns `IpEncrpt=false` and `<Relay>:0</Relay>`.
+  The V2 relay negotiation looks genuinely different and needs a reference that
+  combines V2 auth **with** relay — which no public project currently has (the
+  Python fork does auth + direct only; the Rust does relay + anonymous only).
+
+### Practical outcome
+
+- 8 older-firmware sites (160 cameras) are monitored over P2P and unaffected.
+- The 9 V2-firmware NVRs can be fully monitored (online + disk + recording) over
+  a LAN/VPN with the collector's `mode:ip`; over P2P they remain blocked on this
+  relay handoff. The auth breakthrough here is preserved so the relay path can be
+  finished if a V2 reference surfaces.
 
 ## Reproduce
 

@@ -262,12 +262,16 @@ pub async fn p2p_handshake(
     // the device echoed in its p2p-channel response.
     let relay_body = match &auth_key {
         Some(key) => {
-            let nonce: u32 = data
-                .get("body/Nonce")
-                .and_then(|n| n.parse().ok())
-                .unwrap_or(0);
-            let auth = get_auth(&username, key, nonce, &randsalt, "");
-            format!("<body>{}<agentAddr>{}</agentAddr></body>", auth, agent)
+            // Fresh nonce (anti-replay). V2 encrypts every address the device must
+            // act on, so mirror the p2p-channel: encrypt the agentAddr and sign the
+            // ciphertext in DevAuth.
+            let nonce = rand::random::<u32>() & 0x7FFF_FFFF;
+            let agent_enc = get_enc(key, nonce, agent);
+            let auth = get_auth(&username, key, nonce, &randsalt, &agent_enc);
+            format!(
+                "<body>{}<IpEncrptV2>true</IpEncrptV2><agentAddr>{}</agentAddr></body>",
+                auth, agent_enc
+            )
         }
         None => format!("<body><agentAddr>{}</agentAddr></body>", agent),
     };
@@ -280,16 +284,11 @@ pub async fn p2p_handshake(
         )
         .await;
 
-    // Diagnostic: read the relay-channel response from the main server so a
-    // rejected auth here is visible instead of silently hanging the agent read.
-    if auth_key.is_some() {
-        println!("[auth] relay-channel response:");
-        let rc = socket2.dh_read_raw().await;
-        if rc.code >= 400 {
-            println!("[auth] relay-channel REJECTED: {} {}", rc.code, rc.status);
-        }
-    }
-
+    // Diagnostic (auth path): probe the relay-channel response and the relay agent
+    // non-fatally so we can see exactly where the V2 relay handoff stalls.
+    // Straight to the agent, same as the non-auth path: the agent answers the
+    // relay-channel almost immediately, so any delay here (an earlier diagnostic
+    // probe on the main socket) drops that single UDP reply and stalls the relay.
     socket2.connect(agent).await.unwrap();
     // TODO check timeout
     socket2.dh_read().await;
@@ -535,6 +534,7 @@ trait DHP2P {
     async fn dh_request(&self, path: &str, body: Option<&str>, seq: &mut u32);
     async fn dh_read_raw(&self) -> DHResponse;
     async fn dh_recv_text(&self) -> String;
+    async fn dh_probe(&self, secs: u64) -> String;
 
     async fn dh_read(&self) -> DHResponse {
         let res = self.dh_read_raw().await;
@@ -587,9 +587,35 @@ impl DHP2P for UdpSocket {
         self.send(req.as_bytes()).await.unwrap();
     }
 
+    async fn dh_probe(&self, secs: u64) -> String {
+        let mut buf = [0u8; 8192];
+        match time::timeout(std::time::Duration::from_secs(secs), self.recv(&mut buf)).await {
+            Ok(Ok(n)) => {
+                let txt = String::from_utf8_lossy(&buf[..n]).to_string();
+                println!("[probe] {} bytes from {}:", n, self.peer_addr().unwrap());
+                println!("{}", txt);
+                txt
+            }
+            Ok(Err(e)) => {
+                println!("[probe] recv error from {}: {}", self.peer_addr().unwrap(), e);
+                String::new()
+            }
+            Err(_) => {
+                println!("[probe] NO response from {} within {}s", self.peer_addr().unwrap(), secs);
+                String::new()
+            }
+        }
+    }
+
     async fn dh_recv_text(&self) -> String {
         let mut buf = [0u8; 8192];
-        let n = self.recv(&mut buf).await.unwrap();
+        let n = match time::timeout(std::time::Duration::from_secs(12), self.recv(&mut buf)).await {
+            Ok(r) => r.unwrap(),
+            Err(_) => {
+                println!("[timeout] no UDP response from {} within 12s", self.peer_addr().unwrap());
+                std::process::exit(2);
+            }
+        };
         let res = String::from_utf8_lossy(&buf[0..n]).to_string();
         println!("<<< (info) {}", self.peer_addr().unwrap());
         println!("{}", res);
@@ -601,7 +627,13 @@ impl DHP2P for UdpSocket {
         println!("### {}", self.peer_addr().unwrap());
 
         let mut buf = [0u8; 4096];
-        let n = self.recv(&mut buf).await.unwrap();
+        let n = match time::timeout(std::time::Duration::from_secs(12), self.recv(&mut buf)).await {
+            Ok(r) => r.unwrap(),
+            Err(_) => {
+                println!("[timeout] no UDP response from {} within 12s", self.peer_addr().unwrap());
+                std::process::exit(2);
+            }
+        };
         let res = String::from_utf8_lossy(&buf[0..n]);
 
         println!("<<< {}", self.peer_addr().unwrap());
