@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { resolveIngestOrg } from "@/lib/ingest-auth";
+import { linkEmployeesToUsers } from "@/lib/hr-user-link";
 
 export const dynamic = "force-dynamic";
 
@@ -36,7 +37,9 @@ const date = (v: unknown): Date | null => {
 const slug = (s: string) => s.trim().toUpperCase().replace(/[^A-Z0-9]+/g, "-").slice(0, 40) || "DEPT";
 
 export async function POST(req: Request) {
-  const auth = await resolveIngestOrg(req);
+  // Accept a dedicated HR sync key, and still honour the shared collector key
+  // for a smooth cut-over.
+  const auth = await resolveIngestOrg(req, { keys: ["hr.ingest", "itreport.ingest"] });
   if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
   const orgId = auth.orgId;
 
@@ -84,6 +87,8 @@ export async function POST(req: Request) {
   let ok = 0;
   const errors: { employeeCode: string; error: string }[] = [];
   const managerLinks: { code: string; managerCode: string }[] = [];
+  // Employee ids touched this batch — reconciled to user accounts at the end.
+  const touched: string[] = [];
   // Track dept/position changes to feed the Mover access-review control.
   const movers: { name: string; what: string; employeeId: string }[] = [];
   // Track lifecycle transitions to raise Onboarding (Joiner) / Offboarding (Leaver).
@@ -139,6 +144,7 @@ export async function POST(req: Request) {
       }
       const managerCode = str(e.managerCode, 50);
       if (managerCode && managerCode !== employeeCode) managerLinks.push({ code: employeeCode, managerCode });
+      touched.push(empId);
       ok++;
     } catch {
       errors.push({ employeeCode, error: "upsert_failed" });
@@ -155,6 +161,10 @@ export async function POST(req: Request) {
       await prisma.employee.update({ where: { id: emp.id }, data: { managerId: mgr.id } }).catch(() => {});
     }
   }
+
+  // Reconcile the employees in this batch to TECHCORE user accounts by email, so
+  // HR people data stays connected to login identities.
+  const link = await linkEmployeesToUsers(orgId, touched).catch(() => ({ linked: 0, unmatched: 0, alreadyLinked: 0 }));
 
   // Recipients for JML popups: IT managers/admins (and HR, who also action JML).
   let itManagers: { id: string }[] = [];
@@ -208,8 +218,8 @@ export async function POST(req: Request) {
   })));
 
   await prisma.auditLog.create({
-    data: { organizationId: orgId, action: "IMPORT", entityType: "EMPLOYEE", detail: { via: "hr-sync", ok, failed: errors.length, movers: movers.length, joiners: joiners.length, leavers: leavers.length, onboardingsCreated, offboardingsCreated } },
+    data: { organizationId: orgId, action: "IMPORT", entityType: "EMPLOYEE", detail: { via: "hr-sync", ok, failed: errors.length, movers: movers.length, joiners: joiners.length, leavers: leavers.length, onboardingsCreated, offboardingsCreated, usersLinked: link.linked } },
   }).catch(() => {});
 
-  return NextResponse.json({ ok, failed: errors.length, movers: movers.length, joiners: joiners.length, leavers: leavers.length, onboardingsCreated, offboardingsCreated, errors: errors.slice(0, 100) });
+  return NextResponse.json({ ok, failed: errors.length, movers: movers.length, joiners: joiners.length, leavers: leavers.length, onboardingsCreated, offboardingsCreated, usersLinked: link.linked, usersUnmatched: link.unmatched, errors: errors.slice(0, 100) });
 }
