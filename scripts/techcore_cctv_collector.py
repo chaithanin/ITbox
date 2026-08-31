@@ -55,7 +55,7 @@ Usage:
 Requires: Python 3.8+ (standard library only). P2P mode additionally needs the
 compiled `dh-p2p` binary on this machine (not bundled).
 """
-import argparse, base64, json, os, socket, subprocess, sys, time, urllib.request, urllib.error
+import argparse, base64, json, os, socket, subprocess, sys, threading, time, urllib.request, urllib.error
 from datetime import datetime, timezone
 from urllib.parse import quote
 from xml.etree import ElementTree as ET
@@ -65,7 +65,9 @@ RETRIES = 3
 RETRY_WAIT = 10  # seconds between recorder retries (per spec §6)
 MIN_SNAPSHOT_BYTES = 3000
 P2P_LOCAL_BASE = 18080      # first local port used for P2P tunnels (incremented per device)
-P2P_READY_TIMEOUT = 25      # seconds to wait for a tunnel's local port to accept connections
+P2P_READY_TIMEOUT = 40      # seconds to wait for dh-p2p to report the tunnel usable
+READY_MARK = "Ready to connect!"
+AUTH_MARKS = ("Authentication is not supported", "DevPwd_InvalidSalt", "403 Forbidden")
 
 
 # --------------------------- Dahua P2P tunnel (dh-p2p) ---------------------------
@@ -81,49 +83,91 @@ def _wait_for_port(host, port, timeout):
     return False
 
 
+class ChannelAuthError(RuntimeError):
+    """Device requires authentication when creating the P2P channel, which the
+    Rust dh-p2p PoC cannot do. Disable "P2P encryption/verification" on the NVR
+    (Network > P2P) or reach that recorder another way."""
+
+
 class P2PTunnel:
     """Context manager that spawns the third-party `dh-p2p` binary to forward a
     local TCP port to a remote Dahua device's HTTP CGI port *over Dahua P2P*, keyed
-    by the device serial — the same cloud path SmartPSS/gDMSS use. This lets ONE
+    by the device serial - the same cloud path SmartPSS/gDMSS use. This lets ONE
     central machine reach remote-province NVRs that have no reachable LAN IP and no
     port-forwarding, with nothing installed at the sites.
 
-    Requires the Rust `dh-p2p` build (github.com/…/dh-p2p): it is the only variant
-    whose `-p [bind:]local:remote` maps an arbitrary remote port (80), whereas the
-    Python PoC hardcodes RTSP 554. dh-p2p is an experimental reverse-engineered PoC
-    and can be unstable; the collector degrades gracefully if a tunnel won't come up.
+    Two things learned the hard way and baked in here:
+      * --relay is on by default. Direct UDP hole-punching fails behind carrier
+        NAT (the handshake reaches the device, then times out), so the relay path
+        is the one that actually works.
+      * We wait for dh-p2p to print "Ready to connect!", NOT merely for the local
+        port to accept. The port binds seconds before the P2P path is usable, so a
+        port check alone reports ready too early and the first request times out.
 
-        dh-p2p <SERIAL> -p 127.0.0.1:<local>:<remote>
+        dh-p2p --relay <SERIAL> -p 127.0.0.1:<local>:<remote>
+
+    dh-p2p is an experimental reverse-engineered PoC; the collector degrades
+    gracefully if a tunnel will not come up.
     """
 
-    def __init__(self, bin_path, serial, local_port, remote_port=80, extra_args=None, verbose=False):
+    def __init__(self, bin_path, serial, local_port, remote_port=80, extra_args=None,
+                 verbose=False, relay=True):
         self.bin_path = bin_path
         self.serial = serial
         self.local_port = int(local_port)
         self.remote_port = int(remote_port)
         self.extra_args = list(extra_args or [])
         self.verbose = verbose
+        self.relay = relay
         self.proc = None
+        self._ready = threading.Event()
+        self._auth = threading.Event()
+
+    def _drain(self, proc):
+        """Consume dh-p2p's (very chatty) output - it blocks on a full pipe
+        otherwise - while watching for the readiness / channel-auth markers."""
+        try:
+            for raw in iter(proc.stdout.readline, b""):
+                line = raw.decode("utf-8", "replace")
+                if READY_MARK in line:
+                    self._ready.set()
+                if any(m in line for m in AUTH_MARKS):
+                    self._auth.set()
+                if self.verbose:
+                    sys.stderr.write("[dhp2p:%s] %s" % (self.serial, line))
+        except Exception:
+            pass
 
     def __enter__(self):
-        cmd = [self.bin_path, self.serial, "-p",
-               f"127.0.0.1:{self.local_port}:{self.remote_port}"] + self.extra_args
+        cmd = [self.bin_path]
+        if self.relay:
+            cmd.append("--relay")
+        cmd += [self.serial, "-p", f"127.0.0.1:{self.local_port}:{self.remote_port}"] + self.extra_args
         log(self.verbose, "p2p spawn:", " ".join(cmd))
         try:
-            self.proc = subprocess.Popen(
-                cmd,
-                stdout=(None if self.verbose else subprocess.DEVNULL),
-                stderr=(None if self.verbose else subprocess.DEVNULL),
-            )
+            self.proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         except FileNotFoundError as e:
             raise RuntimeError(f"dh-p2p binary not found: {self.bin_path} ({e})")
-        if not _wait_for_port("127.0.0.1", self.local_port, P2P_READY_TIMEOUT):
-            self._terminate()
-            raise RuntimeError(
-                f"P2P tunnel for {self.serial} did not open 127.0.0.1:{self.local_port} "
-                f"within {P2P_READY_TIMEOUT}s (device offline, wrong serial, or dh-p2p failed)")
-        log(self.verbose, "p2p ready:", self.serial, "->127.0.0.1:%d" % self.local_port)
-        return self
+        threading.Thread(target=self._drain, args=(self.proc,), daemon=True).start()
+
+        end = time.time() + P2P_READY_TIMEOUT
+        while time.time() < end:
+            if self._auth.is_set():
+                self._terminate()
+                raise ChannelAuthError("device requires P2P-channel authentication")
+            if self._ready.is_set() and _wait_for_port("127.0.0.1", self.local_port, 1):
+                log(self.verbose, "p2p ready:", self.serial, "->127.0.0.1:%d" % self.local_port)
+                return self
+            if self.proc.poll() is not None:
+                self._terminate()
+                if self._auth.is_set():
+                    raise ChannelAuthError("device requires P2P-channel authentication")
+                raise RuntimeError("dh-p2p exited before the tunnel was ready")
+            time.sleep(0.3)
+        self._terminate()
+        raise RuntimeError(
+            f"P2P tunnel for {self.serial} was not ready within {P2P_READY_TIMEOUT}s "
+            f"(device offline, wrong serial, or relay slow)")
 
     def __exit__(self, *exc):
         self._terminate()
@@ -323,12 +367,15 @@ def collect_recorder_p2p(dev, conn, args, slot):
         extra = [str(extra)]
     try:
         with P2PTunnel(args.p2p_bin, serial, local_port, args.p2p_remote_port,
-                       [str(a) for a in extra], args.verbose):
+                       [str(a) for a in extra], args.verbose, relay=not args.no_relay):
             tconn = {**conn, "host": "127.0.0.1", "httpPort": local_port}
             rec = collect_recorder(dev, tconn, args.snapshot_dir, args.verbose)
             caps = rec.setdefault("capabilities", {})
             caps["via"] = "dh-p2p"
             return rec
+    except ChannelAuthError:
+        return {"serial": serial, "status": "OFFLINE", "cameras": [], "storage": [],
+                "errorMessage": "P2P channel auth required (disable P2P encryption/verification on the NVR)"}
     except RuntimeError as e:
         return {"serial": serial, "status": "OFFLINE", "cameras": [], "storage": [],
                 "errorMessage": str(e)[:200]}
@@ -696,6 +743,8 @@ def main():
                     help="device-side port to tunnel to (the HTTP CGI port; default 80)")
     ap.add_argument("--p2p-local-base", type=int, default=P2P_LOCAL_BASE,
                     help=f"first local port for P2P tunnels, incremented per device (default {P2P_LOCAL_BASE})")
+    ap.add_argument("--no-relay", action="store_true",
+                    help="do not pass --relay to dh-p2p (relay is on by default; direct hole-punching fails behind carrier NAT)")
     ap.add_argument("--verbose", action="store_true")
     args = ap.parse_args()
 
