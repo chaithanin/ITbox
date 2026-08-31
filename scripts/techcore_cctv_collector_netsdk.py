@@ -398,7 +398,19 @@ def main():
         sys.exit(1)
 
     devices = parse_device_list(args.devices)
+
+    # A missing targets file used to fall back to "no targets", so every run
+    # skipped every recorder and still reported success - monitoring nothing,
+    # quietly. Fail loudly instead; the same goes for a file with no entries.
+    if not os.path.exists(args.targets):
+        print(f"ERROR: targets file not found: {args.targets}", file=sys.stderr)
+        print("Nothing would be monitored. Create it, or pass --targets <path>.", file=sys.stderr)
+        sys.exit(1)
     defaults, tmap = load_targets(args.targets)
+    if not tmap:
+        print(f"ERROR: {args.targets} lists no recorders under \"targets\".", file=sys.stderr)
+        print("Nothing would be monitored - add at least one serial.", file=sys.stderr)
+        sys.exit(1)
     mode_desc = "fresh tunnels (--p2p-bin)" if args.p2p_bin else ("supervisor map (--map)" if args.map else "no p2p transport")
     print(f"[netsdk] {len(devices)} devices from {args.devices}; {len(tmap)} targets mapped; p2p via {mode_desc}")
 
