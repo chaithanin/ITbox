@@ -36,8 +36,8 @@ to this script; for p2p devices, the compiled dh-p2p binary (--p2p-bin) or a run
 supervisor (--map).
 """
 import argparse, json, os, socket, subprocess, sys, threading, time, urllib.request, urllib.error
-from ctypes import sizeof
-from datetime import datetime, timezone
+from ctypes import sizeof, byref, Structure, c_int, c_uint, c_char, c_byte
+from datetime import datetime, timedelta, timezone
 from xml.etree import ElementTree as ET
 
 # --- Dahua NetSDK imports (tolerate both package layouts) -------------------
@@ -66,6 +66,41 @@ SDK_PORT = 37777
 READY_TIMEOUT = 40
 READY_MARK = "Ready to connect!"
 AUTH_MARKS = ("Authentication is not supported", "DevPwd_InvalidSalt", "403 Forbidden")
+
+# --- structs for per-channel recording + disk queries ----------------------
+# Import NET_TIME / NET_RECORDFILE_INFO from the bundled SDK_Struct if present
+# (its layout matches the DLL exactly); otherwise fall back to the canonical
+# Dahua layout so a trimmed SDK bundle still works.
+try:
+    try:
+        from NetSDK.SDK_Struct import NET_TIME as _NET_TIME, NET_RECORDFILE_INFO as _NET_RECINFO
+    except ImportError:
+        from SDK_Struct import NET_TIME as _NET_TIME, NET_RECORDFILE_INFO as _NET_RECINFO
+    NET_TIME, NET_RECORDFILE_INFO = _NET_TIME, _NET_RECINFO
+except Exception:  # noqa: BLE001
+    class NET_TIME(Structure):
+        _fields_ = [("dwYear", c_uint), ("dwMonth", c_uint), ("dwDay", c_uint),
+                    ("dwHour", c_uint), ("dwMinute", c_uint), ("dwSecond", c_uint)]
+
+    class NET_RECORDFILE_INFO(Structure):
+        _fields_ = [("ch", c_int), ("filename", c_char * 100), ("framenum", c_uint),
+                    ("size", c_uint), ("starttime", NET_TIME), ("endtime", NET_TIME),
+                    ("driveno", c_uint), ("startcluster", c_uint),
+                    ("nRecordFileType", c_byte), ("bImportantRecID", c_byte),
+                    ("bHint", c_byte), ("bReserved", c_byte)]
+
+
+class _DH_DISK_STATE(Structure):
+    _fields_ = [("nDiskState", c_int), ("dwVolume", c_uint), ("dwFreeSpace", c_uint)]
+
+
+class _DHDEV_DISK_STATE(Structure):
+    _fields_ = [("nDiskNum", c_int), ("stDisks", _DH_DISK_STATE * 32)]
+
+
+# DH_DEVSTATE_DISK candidate type codes for CLIENT_QueryDevState. 4 is the value
+# in the classic dhconfigsdk.h; the sweep in --probe confirms it per firmware.
+DISK_TYPE_CANDIDATES = (4,)
 
 
 def log(v, *a):
@@ -273,8 +308,155 @@ def login(sdk, host, port, user, pwd, verbose, retries=2):
     return 0, None, status, f"{last_err} (0x{last_code:08x})" if isinstance(last_code, int) else str(last_err)
 
 
+# --------------------------- per-channel recording + disk ---------------------------
+def _mk_nettime(dt):
+    t = NET_TIME()
+    t.dwYear, t.dwMonth, t.dwDay = dt.year, dt.month, dt.day
+    t.dwHour, t.dwMinute, t.dwSecond = dt.hour, dt.minute, dt.second
+    return t
+
+
+def _nettime_to_dt(nt):
+    try:
+        if not nt.dwYear:
+            return None
+        return datetime(nt.dwYear, nt.dwMonth, nt.dwDay, nt.dwHour, nt.dwMinute, nt.dwSecond)
+    except (ValueError, AttributeError):
+        return None
+
+
+def _iso_local(dt):
+    """NVR clocks report local wall-clock time; stamp the collector's local tz
+    offset so TECHCORE (running in UTC) stores an unambiguous instant."""
+    if dt is None:
+        return None
+    tz = datetime.now().astimezone().tzinfo
+    return dt.replace(tzinfo=tz).isoformat()
+
+
+def _call_query_record(sdk, login_id, ch, tm_start, tm_end, buf, maxlen):
+    """CLIENT_QueryRecordFile via the NetClient wrapper. Returns (ok, count).
+    Tolerates the two arg conventions seen across NetSDK Python bundles."""
+    fn = getattr(sdk, "QueryRecordFile", None)
+    if fn is None:
+        raise RuntimeError("this NetSDK build has no QueryRecordFile")
+    # nRecordFileType=0 (all record types), pchCardid=None, bTime=False
+    for a in ((login_id, ch, 0, tm_start, tm_end, None, buf, maxlen, False, 4000),
+              (login_id, ch, 0, tm_start, tm_end, None, buf, maxlen)):
+        try:
+            res = fn(*a)
+        except TypeError:
+            continue
+        if isinstance(res, tuple):
+            return bool(res[0]), int(res[1]) if len(res) > 1 else 0
+        return bool(res), 0
+    raise RuntimeError("QueryRecordFile: no compatible call signature")
+
+
+def query_recording(sdk, login_id, ch, window_min, verbose):
+    """Ask the recorder for this channel's recordings in the last `window_min`.
+    A recording present in that window means the camera has signal and is being
+    written to disk. Returns a dict of camera fields for the ingest payload."""
+    now_local = datetime.now()
+    tm_start = _mk_nettime(now_local - timedelta(minutes=window_min))
+    tm_end = _mk_nettime(now_local)
+    MAX = 64
+    buf = (NET_RECORDFILE_INFO * MAX)()
+    ok, count = _call_query_record(sdk, login_id, ch, tm_start, tm_end, buf, MAX)
+    latest = None
+    for i in range(min(count, MAX)):
+        for field in ("endtime", "starttime"):
+            dt = _nettime_to_dt(getattr(buf[i], field))
+            if dt and (latest is None or dt > latest):
+                latest = dt
+    if count > 0 and latest is not None:
+        gap = max(0, int((now_local - latest).total_seconds()))
+        return {"status": "ONLINE", "recordingStatus": "RECORDING",
+                "latestRecording": _iso_local(latest), "recordingGapSeconds": gap}
+    # QueryRecordFile returns FALSE when it simply finds no files, so no records
+    # in the window is reported as "no recording found", not an error.
+    return {"status": "NO_RECORDING", "recordingStatus": "NO_RECORDING_FOUND"}
+
+
+def query_storage(sdk, login_id, verbose, type_codes=DISK_TYPE_CANDIDATES):
+    """Best-effort HDD state via CLIENT_QueryDevState. Values that fail a sanity
+    check (wrong struct/type code for this firmware) are dropped rather than
+    pushed as garbage; use --probe to confirm the right type code first."""
+    fn = getattr(sdk, "QueryDevState", None)
+    if fn is None:
+        return []
+    for tc in type_codes:
+        st = _DHDEV_DISK_STATE()
+        res = None
+        for a in ((login_id, tc, byref(st), sizeof(st), 4000),
+                  (login_id, tc, byref(st), sizeof(st))):
+            try:
+                res = fn(*a)
+                break
+            except TypeError:
+                continue
+            except Exception as e:  # noqa: BLE001
+                log(verbose, f"QueryDevState type={tc} error: {e}")
+                res = None
+                break
+        if res is None:
+            continue
+        ok = res[0] if isinstance(res, tuple) else res
+        if not ok or not (0 < st.nDiskNum <= 32):
+            continue
+        out = []
+        sane = True
+        for i in range(st.nDiskNum):
+            d = st.stDisks[i]
+            cap_mb, free_mb = int(d.dwVolume), int(d.dwFreeSpace)
+            if cap_mb < 100_000 or cap_mb > 200_000_000 or free_mb > cap_mb:
+                sane = False
+                break
+            out.append({"hddIndex": i, "status": "NORMAL",
+                        "capacityBytes": cap_mb * 1024 * 1024,
+                        "usedBytes": (cap_mb - free_mb) * 1024 * 1024,
+                        "freeBytes": free_mb * 1024 * 1024})
+        if sane and out:
+            return out
+    return []
+
+
+def probe_device(sdk, login_id, info, verbose):
+    """Print the NetSDK API surface + raw query results for one device, so the
+    right disk type code and record-query behaviour can be confirmed safely
+    before wiring them into every cycle."""
+    print("=== NetSDK API surface ===")
+    for m in ("QueryRecordFile", "QueryDevState", "QuerySystemInfo", "QueryDevInfo", "QueryDevInfoNew"):
+        print(f"  {m}: {'yes' if hasattr(sdk, m) else 'NO'}")
+    n = device_channels(info)
+    print(f"=== channels reported: {n} ===")
+    try:
+        print("  QueryRecordFile ch1 (last 60min):", query_recording(sdk, login_id, 1, 60, verbose))
+    except Exception as e:  # noqa: BLE001
+        print("  QueryRecordFile ch1 ERROR:", e)
+    fn = getattr(sdk, "QueryDevState", None)
+    if not fn:
+        print("  (no QueryDevState in this build)")
+        return
+    print("=== QueryDevState disk type sweep ===")
+    for tc in (1, 2, 3, 4, 5, 6, 7, 8, 0x0A, 0x19, 0x24, 0x25):
+        st = _DHDEV_DISK_STATE()
+        try:
+            res = fn(login_id, tc, byref(st), sizeof(st), 3000)
+        except Exception as e:  # noqa: BLE001
+            print(f"  type={tc}: call error {e}")
+            continue
+        ok = res[0] if isinstance(res, tuple) else res
+        extra = ""
+        if 0 < st.nDiskNum <= 32:
+            d0 = st.stDisks[0]
+            extra = f" nDiskNum={st.nDiskNum} disk0 vol={d0.dwVolume}MB free={d0.dwFreeSpace}MB state={d0.nDiskState}"
+        print(f"  type={tc}: ok={bool(ok)}{extra}")
+
+
 # --------------------------- collection ---------------------------
-def _read_device(sdk, rec, host, port, conn, via, verbose):
+def _read_device(sdk, rec, host, port, conn, via, args):
+    verbose = args.verbose
     login_id, info, status, err = login(sdk, host, port, conn.get("username"),
                                         conn.get("password"), verbose)
     rec["status"] = status
@@ -282,6 +464,10 @@ def _read_device(sdk, rec, host, port, conn, via, verbose):
         rec["errorMessage"] = (err or "")[:200]
         return rec
     try:
+        if getattr(args, "probe", None):
+            probe_device(sdk, login_id, info, verbose)
+            rec["errorMessage"] = "probe complete (see stdout)"
+            return rec
         n = device_channels(info)
         model = device_model(info)
         if model:
@@ -289,7 +475,18 @@ def _read_device(sdk, rec, host, port, conn, via, verbose):
         rec["channelCount"] = n or None
         rec["capabilities"] = {"supports_sdk": True, "via": via}
         for ch in range(1, (n or 0) + 1):
-            rec["cameras"].append({"channel": ch, "status": "UNKNOWN"})
+            cam = {"channel": ch, "status": "UNKNOWN"}
+            if not args.no_recinfo:
+                try:
+                    cam.update(query_recording(sdk, login_id, ch, args.rec_window_min, verbose))
+                except Exception as e:  # noqa: BLE001
+                    log(verbose, f"ch{ch} recording query failed: {e}")
+            rec["cameras"].append(cam)
+        if not args.no_storage:
+            try:
+                rec["storage"] = query_storage(sdk, login_id, verbose)
+            except Exception as e:  # noqa: BLE001
+                log(verbose, f"storage query failed: {e}")
     finally:
         try:
             sdk.Logout(login_id)
@@ -319,7 +516,7 @@ def collect_device(sdk, dev, defaults, tmap, tunnel_map, args, slot):
         if not host:
             rec["errorMessage"] = "mode:ip but no host set"
             return rec
-        return _read_device(sdk, rec, host, int(conn.get("sdkPort") or SDK_PORT), conn, "netsdk-ip", args.verbose)
+        return _read_device(sdk, rec, host, int(conn.get("sdkPort") or SDK_PORT), conn, "netsdk-ip", args)
 
     # p2p device
     if args.p2p_bin:
@@ -343,7 +540,7 @@ def collect_device(sdk, dev, defaults, tmap, tunnel_map, args, slot):
                 with P2PTunnel(args.p2p_bin, serial, local_port, args.p2p_remote_port,
                                not args.no_relay, [str(a) for a in extra], args.verbose):
                     got = _read_device(sdk, dict(rec), "127.0.0.1", local_port, conn,
-                                       "netsdk-p2p", args.verbose)
+                                       "netsdk-p2p", args)
                 if got["status"] in ("ONLINE", "AUTH_ERROR"):
                     return got
                 last = got
@@ -367,7 +564,7 @@ def collect_device(sdk, dev, defaults, tmap, tunnel_map, args, slot):
             rec["status"] = "OFFLINE"
             rec["errorMessage"] = f"tunnel {entry.get('status')}: {entry.get('lastError', '')}".strip()
             return rec
-        return _read_device(sdk, rec, "127.0.0.1", int(entry["port"]), conn, "netsdk-p2p", args.verbose)
+        return _read_device(sdk, rec, "127.0.0.1", int(entry["port"]), conn, "netsdk-p2p", args)
 
     rec["errorMessage"] = "p2p device but neither --p2p-bin nor --map set"
     return rec
@@ -407,18 +604,36 @@ def main():
                          "(default 3; the dh-p2p relay fails intermittently). Credential "
                          "failures are never retried.")
     ap.add_argument("--no-relay", action="store_true", help="do not pass --relay to dh-p2p")
+    ap.add_argument("--rec-window-min", type=int, default=15,
+                    help="per-channel recording lookback window in minutes (default 15); "
+                         "a recording in this window means the camera has signal and is recording")
+    ap.add_argument("--no-recinfo", action="store_true",
+                    help="skip per-channel recording queries (cameras stay UNKNOWN, faster)")
+    ap.add_argument("--no-storage", action="store_true",
+                    help="skip the HDD/disk query")
+    ap.add_argument("--probe", metavar="SERIAL",
+                    help="dump the NetSDK API surface + raw query results for ONE device "
+                         "(confirms the disk type code before trusting it) and exit")
     ap.add_argument("--interval", type=int, default=int(os.environ.get("INTERVAL_SECONDS", "300")))
     ap.add_argument("--once", action="store_true")
     ap.add_argument("--verbose", action="store_true")
     args = ap.parse_args()
 
+    # --probe only inspects one device and prints to stdout; it never pushes, so
+    # it does not need TECHCORE_URL/KEY.
     url = os.environ.get("TECHCORE_URL")
     key = os.environ.get("TECHCORE_KEY")
-    if not url or not key:
+    if not args.probe and (not url or not key):
         print("ERROR: set TECHCORE_URL and TECHCORE_KEY", file=sys.stderr)
         sys.exit(1)
 
     devices = parse_device_list(args.devices)
+    if args.probe:
+        devices = [d for d in devices if d["serial"] == args.probe]
+        if not devices:
+            print(f"ERROR: serial {args.probe} not found in {args.devices}", file=sys.stderr)
+            sys.exit(1)
+        args.once = True
 
     # A missing targets file used to fall back to "no targets", so every run
     # skipped every recorder and still reported success - monitoring nothing,
@@ -450,7 +665,8 @@ def main():
                 print(f"[netsdk] {dev['serial']} {dev['name']}: {rec['status']} "
                       f"({len(rec['cameras'])} ch)"
                       + (f" [{rec['errorMessage']}]" if rec.get("errorMessage") else ""))
-            push(url, key, payload, args.verbose)
+            if not args.probe:
+                push(url, key, payload, args.verbose)
             if args.once:
                 break
             time.sleep(args.interval)
