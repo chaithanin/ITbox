@@ -105,6 +105,27 @@ fn get_auth(username: &str, key: &[u8], nonce: u32, randsalt: &str, payload: &st
     )
 }
 
+/// Decrypt an IpEncrptV2 address (AES-256-OFB is symmetric, so reuse get_enc's key).
+fn get_dec(key: &[u8], nonce: u32, data_b64: &str) -> String {
+    let mut dk = [0u8; 32];
+    pbkdf2::pbkdf2_hmac::<Sha256>(key, nonce.to_string().as_bytes(), 20000, &mut dk);
+    let ct = base64::engine::general_purpose::STANDARD
+        .decode(data_b64.trim())
+        .unwrap_or_default();
+    let pt = aes256_ofb(&dk, SESSION_IV, &ct);
+    String::from_utf8_lossy(&pt).trim_end_matches('\0').to_string()
+}
+
+/// Like ip_to_bytes but WITHOUT the bitwise inversion (the second STUN packet's
+/// device LocalAddr is sent as-is, per the reference client).
+fn ip_to_bytes_plain(ip: &str) -> Vec<u8> {
+    let addr: SocketAddrV4 = ip.parse().unwrap();
+    let mut bytes = Vec::new();
+    bytes.extend_from_slice(&addr.port().to_be_bytes());
+    bytes.extend_from_slice(&addr.ip().octets());
+    bytes
+}
+
 fn ip_to_bytes(ip: &str) -> Vec<u8> {
     let addr: SocketAddrV4 = ip.parse().unwrap();
     let ip = addr.ip().octets();
@@ -250,11 +271,23 @@ pub async fn p2p_handshake(
     }
 
     let data = res.body.unwrap();
-    let device_laddr = &data["body/LocalAddr"];
-    let device = &data["body/PubAddr"];
+    // For an authenticated (IpEncrptV2) device the returned LocalAddr is encrypted
+    // with the response nonce; decrypt it so the direct STUN packet can use it.
+    let resp_nonce: u32 = data
+        .get("body/Nonce")
+        .and_then(|n| n.parse().ok())
+        .unwrap_or(0);
+    let device_laddr: String = match &auth_key {
+        Some(key) => get_dec(key, resp_nonce, &data["body/LocalAddr"]),
+        None => data.get("body/LocalAddr").cloned().unwrap_or_default(),
+    };
+    let device = data["body/PubAddr"].clone();
+    if auth_key.is_some() {
+        println!("[auth] device_laddr(decrypted)={} pubaddr={}", device_laddr, device);
+    }
 
     // not necessary when relay_mode is true, but UDP is connectionless
-    socket.connect(device).await.unwrap();
+    socket.connect(&device).await.unwrap();
 
     socket2.connect(MAIN_SERVER).await.unwrap();
 
@@ -375,17 +408,17 @@ pub async fn p2p_handshake(
     );
     println!("---");
 
-    let rtrans_id = &buf[8..20];
+    let rtrans_id = buf[8..20].to_vec();
 
     println!(">>> {}", socket.peer_addr().unwrap());
     let data = [
         b"\xfe\xfe\xff\xe7".to_vec(),
         cookie.to_vec(),
-        rtrans_id.to_vec(),
+        rtrans_id.clone(),
         b"\x7f\xd6\xff\xf7".to_vec(),
         cid.clone(),
         b"\xff\xfb\xff\xf7\xff\xfe".to_vec(),
-        ip_to_bytes(&device_laddr),
+        ip_to_bytes_plain(&device_laddr),
     ]
     .concat();
     println!(
@@ -397,6 +430,24 @@ pub async fn p2p_handshake(
     );
     socket.send(&data).await.unwrap();
     println!("---");
+
+    // V2 authenticated devices need one extra exchange before the PTCP handshake.
+    if auth_key.is_some() {
+        let _ = time::timeout(time::Duration::from_secs(5), socket.recv(&mut buf)).await;
+        let data3 = [
+            b"\xfe\xfe\xff\xf3".to_vec(),
+            cookie.to_vec(),
+            rtrans_id.clone(),
+            b"\x7f\xd6\xff\xf7".to_vec(),
+            cid.clone(),
+            b"\xff\xfb\xff\xf7\xff\xfe".to_vec(),
+            b"\xa8\x13\x3f\x57\xfe\x37".to_vec(),
+        ]
+        .concat();
+        for _ in 0..5 {
+            socket.send(&data3).await.unwrap();
+        }
+    }
 
     // read 5 times
     for _ in 0..5 {

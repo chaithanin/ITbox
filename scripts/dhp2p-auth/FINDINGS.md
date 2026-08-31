@@ -70,6 +70,24 @@ is still open (see "Status").
   combines V2 auth **with** relay — which no public project currently has (the
   Python fork does auth + direct only; the Rust does relay + anonymous only).
 
+### Why both transports are blocked (final)
+
+The direct path was ported too (decrypt the response `LocalAddr` with `get_dec`,
+send the V2 STUN with the extra `\xfe\xfe\xff\xf3…` exchange). Two facts close it:
+
+1. The decrypted device LocalAddr is **`172.16.0.2`** — a **carrier-grade NAT
+   (CGNAT)** address. Direct UDP hole-punch to such a device cannot work, which
+   is exactly why relay was needed in the first place.
+2. Both transports converge on the **same blocker**: after `relay-channel` the
+   client must read the relay agent (to obtain the PTCP `sign`) — the reference
+   `main.py` does this for its direct path too. For our V2 NVR the agent never
+   answers because the device never joins it, even though the cloud accepted the
+   `relay-channel`. That join is cloud/device-side and not observable or fixable
+   from the client. `main.py` works for its author's V2 device (not behind CGNAT,
+   and whose device does join), so the gap is environment/firmware-specific and
+   needs a reference that actually relays a V2 device — which does not exist
+   publicly.
+
 ### Practical outcome
 
 - 8 older-firmware sites (160 cameras) are monitored over P2P and unaffected.
