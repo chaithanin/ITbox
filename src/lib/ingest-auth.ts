@@ -13,9 +13,25 @@ function bearer(req: Request): string | null {
   return x ? x.trim() : null;
 }
 
-function clientIp(req: Request): string {
+/**
+ * Resolve the caller's IP for rate limiting. The LEFT-most X-Forwarded-For entry
+ * is fully client-controlled (an attacker rotates it to defeat per-IP limits —
+ * ING-001), so we trust the RIGHT side, which the platform appends. On Cloud Run
+ * the real client IP is the right-most entry; if the service sits behind extra
+ * trusted proxies, set INGEST_TRUSTED_PROXIES to how many hops they add so we
+ * step that many positions further left.
+ */
+export function clientIp(req: Request): string {
   const xff = req.headers.get("x-forwarded-for");
-  return (xff ? xff.split(",")[0] : "").trim() || "unknown";
+  if (xff) {
+    const ips = xff.split(",").map((s) => s.trim()).filter(Boolean);
+    if (ips.length > 0) {
+      const trusted = Number.parseInt(process.env.INGEST_TRUSTED_PROXIES ?? "0", 10) || 0;
+      const idx = ips.length - 1 - trusted;
+      return ips[idx >= 0 ? idx : 0];
+    }
+  }
+  return req.headers.get("x-real-ip")?.trim() || "unknown";
 }
 
 export type IngestAuth = { ok: true; orgId: string } | { ok: false; status: number; error: string };

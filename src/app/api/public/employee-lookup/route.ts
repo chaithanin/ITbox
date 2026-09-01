@@ -13,10 +13,10 @@
  * No session required — this route is listed as public in auth.config.ts.
  */
 import { NextResponse } from "next/server";
-import { headers } from "next/headers";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { clientIp } from "@/lib/ingest-auth";
 import { findEmployeeByCode, maskEmployeeName } from "@/lib/services/support";
 
 const schema = z.object({
@@ -32,8 +32,8 @@ const NOT_FOUND = NextResponse.json(
 );
 
 export async function POST(req: Request) {
-  const h = await headers();
-  const ip = h.get("x-forwarded-for")?.split(",")[0]?.trim() ?? h.get("x-real-ip") ?? "unknown";
+  // Trust the platform-appended XFF hop, not the spoofable left-most one (ING-001).
+  const ip = clientIp(req);
 
   // 20 lookups/hour/IP: plenty for a person who mistypes, useless for scraping.
   if (!checkRateLimit(`emplookup:ip:${ip}`, 20, 60 * 60 * 1000)) {

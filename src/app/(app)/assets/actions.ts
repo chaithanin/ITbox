@@ -33,6 +33,21 @@ const assetSchema = z.object({
   macAddress: z.string().optional(),
   imei: z.string().optional(),
   notes: z.string().optional(),
+}).superRefine((v, ctx) => {
+  // LOGIC-003: reject negative price and future purchase date at the form layer,
+  // matching the CSV import validation.
+  if (v.purchasePrice && v.purchasePrice.trim()) {
+    const n = Number(v.purchasePrice);
+    if (Number.isNaN(n) || n < 0) {
+      ctx.addIssue({ code: "custom", path: ["purchasePrice"], message: "ราคาต้องเป็นตัวเลขไม่ติดลบ / Price must be a number ≥ 0" });
+    }
+  }
+  if (v.purchaseDate && v.purchaseDate.trim()) {
+    const d = new Date(v.purchaseDate);
+    if (!Number.isNaN(d.getTime()) && d.getTime() > Date.now()) {
+      ctx.addIssue({ code: "custom", path: ["purchaseDate"], message: "วันที่ซื้อต้องไม่เป็นอนาคต / Purchase date cannot be in the future" });
+    }
+  }
 });
 
 function optStr(v: string | undefined): string | null {
@@ -476,6 +491,11 @@ export async function transferAsset(formData: FormData) {
       select: { id: true, assetTag: true, departmentId: true, locationId: true, assignedToId: true, status: true },
     });
     if (!a) throw new Error("Asset not found");
+    // LOGIC-004: a disposed/retired asset must not be transferred back into
+    // service; reassigning custody requires a live asset.
+    if (a.status === "DISPOSED" || a.status === "RETIRED") {
+      throw new Error("Cannot transfer a disposed or retired asset");
+    }
 
     await tx.assetTransfer.create({
       data: {

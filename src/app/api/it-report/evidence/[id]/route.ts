@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { apiHandler } from "@/lib/api";
-import { requireUser, requirePermission, AuthError } from "@/lib/session";
+import { requirePermission, AuthError } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import { getStorageProvider } from "@/lib/storage";
 import { revalidatePath } from "next/cache";
@@ -8,7 +8,9 @@ import { revalidatePath } from "next/cache";
 /** Download one piece of IT health-check evidence (org-scoped). */
 export const GET = apiHandler(
   async (_req: Request, ctx: { params: Promise<{ id: string }> }) => {
-    const user = await requireUser();
+    // FILE-002: gate reads on support:read (was authentication-only), matching
+    // the upload/delete permission on the same resource.
+    const user = await requirePermission("support:read");
     const { id } = await ctx.params;
 
     const ev = await prisma.itHealthEvidence.findFirst({

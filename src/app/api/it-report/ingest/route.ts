@@ -2,11 +2,7 @@ import { NextResponse } from "next/server";
 import crypto from "node:crypto";
 import { prisma } from "@/lib/prisma";
 import { checkRateLimit } from "@/lib/rate-limit";
-
-function clientIp(req: Request): string {
-  const xff = req.headers.get("x-forwarded-for");
-  return (xff ? xff.split(",")[0] : "").trim() || "unknown";
-}
+import { clientIp } from "@/lib/ingest-auth";
 
 /**
  * Machine ingest endpoint for on-prem collectors (Synology, etc.).

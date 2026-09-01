@@ -5,13 +5,25 @@ import MicrosoftEntraID from "next-auth/providers/microsoft-entra-id";
 import { z } from "zod";
 import crypto from "node:crypto";
 import { prisma } from "@/lib/prisma";
-import { verifyPassword } from "@/lib/password";
+import { verifyPassword, hashPassword } from "@/lib/password";
 import { verifyTotp } from "@/lib/mfa";
 import { authConfig, SESSION_MAX_AGE_SECONDS } from "@/auth.config";
 import { checkRateLimit } from "@/lib/rate-limit";
 
 const MAX_FAILED_ATTEMPTS = 5;
 const LOCKOUT_MINUTES = 15;
+
+// A valid Argon2id hash of a throwaway value (computed once), used to spend the
+// same verify time on an unknown email as on a real account — see AUTH-005.
+let dummyHash: string | null = null;
+async function equalizeLoginTiming(password: string): Promise<void> {
+  try {
+    if (!dummyHash) dummyHash = await hashPassword("timing-equalizer");
+    await verifyPassword(dummyHash, password);
+  } catch {
+    /* timing only — ignore */
+  }
+}
 
 class LoginError extends CredentialsSignin {
   constructor(code: string) {
@@ -71,8 +83,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         const user = await prisma.user.findFirst({
           where: { email, deletedAt: null },
         });
-        // Uniform error for unknown user vs wrong password
+        // Uniform error for unknown user vs wrong password — and run a dummy
+        // Argon2 verify so an unknown email takes the same time as a real one,
+        // closing the timing side-channel enumeration (AUTH-005).
         if (!user || !user.passwordHash) {
+          await equalizeLoginTiming(password);
           throw new LoginError("INVALID_CREDENTIALS");
         }
         if (user.status === "DISABLED") {

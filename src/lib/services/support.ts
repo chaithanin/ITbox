@@ -211,14 +211,15 @@ export async function pickAssignee(
     return best;
   }
 
-  // ROUND_ROBIN
-  const team = await prisma.supportTeam.findUnique({ where: { id: teamId } });
-  const idx = ((team?.lastAssignedIndex ?? 0) + 1) % members.length;
-  await prisma.supportTeam.update({
-    where: { id: teamId },
-    data: { lastAssignedIndex: idx },
-  });
-  return members[idx].userId;
+  // ROUND_ROBIN — advance the cursor atomically so concurrent case creation for
+  // the same team can't read the same index and assign the same agent (DB-006).
+  const rows = await prisma.$queryRaw<{ lastAssignedIndex: number }[]>`
+    UPDATE support_teams
+    SET "lastAssignedIndex" = ("lastAssignedIndex" + 1) % ${members.length}
+    WHERE id = ${teamId}::uuid
+    RETURNING "lastAssignedIndex"`;
+  const idx = rows[0]?.lastAssignedIndex ?? 0;
+  return members[idx % members.length].userId;
 }
 
 // ---------------- Notifications ----------------
@@ -800,8 +801,9 @@ export async function transitionCase(
   if (!canTransition(c.status, to)) {
     throw new AuthError(`INVALID_TRANSITION:${c.status}->${to}`, 400);
   }
-  // Guard: P1 cannot be RESOLVED/CLOSED without a resolution note
-  if ((to === "RESOLVED" || to === "CLOSED") && c.priority === "P1" && !opts.resolutionNote && !c.resolutionNote) {
+  // Guard: no case (any priority) may be RESOLVED/CLOSED without a resolution
+  // note — the note recorded at RESOLVED carries through to CLOSED. (LOGIC-005)
+  if ((to === "RESOLVED" || to === "CLOSED") && !opts.resolutionNote && !c.resolutionNote) {
     throw new AuthError("RESOLUTION_NOTE_REQUIRED", 400);
   }
   // Only managers may reopen a CLOSED case
