@@ -878,6 +878,7 @@ model License {
   assignments  LicenseAssignment[]
 
   @@index([organizationId, expiresAt])
+  @@index([vendorId], map: "licenses_vendorId_idx")
   @@map("licenses")
 }
 
@@ -925,6 +926,7 @@ model Subscription {
   vendor       Vendor?      @relation(fields: [vendorId], references: [id])
 
   @@index([organizationId, renewalDate])
+  @@index([vendorId], map: "subscriptions_vendorId_idx")
   @@map("subscriptions")
 }
 
@@ -1015,6 +1017,8 @@ model MaintenanceTicket {
 
   @@unique([organizationId, ticketNumber])
   @@index([organizationId, status])
+  @@index([organizationId, assetId], map: "asset_maintenance_org_assetId_idx")
+  @@index([vendorId], map: "asset_maintenance_vendorId_idx")
   @@map("asset_maintenance")
 }
 
@@ -1097,6 +1101,7 @@ model Approval {
 
   @@index([organizationId, subjectType, subjectId])
   @@index([approverId, decision])
+  @@index([purchaseRequestId, step], map: "approvals_prId_step_idx")
   @@map("approvals")
 }
 
@@ -1757,6 +1762,7 @@ model NetworkDevice {
 
   @@unique([organizationId, name])
   @@index([organizationId, status])
+  @@index([vendorId], map: "network_devices_vendorId_idx")
   @@map("network_devices")
 }
 
@@ -1800,6 +1806,7 @@ model Subnet {
   ips          IpAddress[]
 
   @@unique([organizationId, cidr])
+  @@index([vlanRef], map: "subnets_vlanRef_idx")
   @@map("subnets")
 }
 
@@ -1829,6 +1836,7 @@ model IpAddress {
 
   @@unique([organizationId, address])
   @@index([organizationId, status])
+  @@index([subnetId], map: "ip_addresses_subnetId_idx")
   @@map("ip_addresses")
 }
 
@@ -1963,6 +1971,7 @@ model Contract {
   @@unique([organizationId, contractNumber])
   @@index([organizationId, status])
   @@index([organizationId, renewalDate])
+  @@index([vendorId], map: "contracts_vendorId_idx")
   @@map("contracts")
 }
 
@@ -2074,6 +2083,7 @@ model Vulnerability {
 
   @@index([organizationId, status])
   @@index([organizationId, severity])
+  @@index([assetId], map: "vulnerabilities_assetId_idx")
   @@map("vulnerabilities")
 }
 
@@ -2125,6 +2135,7 @@ model ConfigurationItem {
 
   @@unique([organizationId, name])
   @@index([organizationId, ciType])
+  @@index([assetId], map: "configuration_items_assetId_idx")
   @@map("configuration_items")
 }
 
@@ -2233,6 +2244,7 @@ model EndpointPosture {
 
   @@unique([organizationId, hostname])
   @@index([organizationId, protectionStatus])
+  @@index([assetId], map: "endpoint_posture_assetId_idx")
   @@map("endpoint_posture")
 }
 
@@ -2389,6 +2401,7 @@ model CctvRecorder {
   @@unique([organizationId, serial])
   @@index([organizationId, status])
   @@index([organizationId, project])
+  @@index([assetId], map: "cctv_recorders_assetId_idx")
   @@map("cctv_recorders")
 }
 
