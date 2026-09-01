@@ -28,6 +28,7 @@ const MESSAGES: Record<string, { text: string; error?: boolean }> = {
   "mfa-disabled": { text: "ปิด/รีเซ็ต MFA ของผู้ใช้แล้ว (Session ถูกยกเลิก) / User MFA reset", error: false },
   "weak-password": { text: `${PW_RULE} / Password must be 8–12 chars with upper, lower, number & special char`, error: true },
   "password-mismatch": { text: "รหัสผ่านและการยืนยันไม่ตรงกัน / Password and confirmation do not match", error: true },
+  "password-reused": { text: "ห้ามใช้รหัสผ่านเดิมหรือที่เคยใช้ล่าสุด / Cannot reuse the current or a recent password", error: true },
   "invalid-input": { text: "ข้อมูลไม่ถูกต้อง — ตรวจอีเมลและรหัสผ่าน / Invalid input", error: true },
   "email-exists": { text: "อีเมลนี้มีผู้ใช้อยู่แล้ว / Email already exists", error: true },
   "role-not-found": { text: "ไม่พบบทบาทที่เลือก / Role not found", error: true },

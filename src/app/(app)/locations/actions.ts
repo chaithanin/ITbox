@@ -22,23 +22,24 @@ export async function createLocation(formData: FormData) {
   const user = await requirePermission("location:manage");
   const input = locationSchema.parse(Object.fromEntries(formData));
 
-  const dup = await prisma.location.findFirst({
-    where: { organizationId: user.organizationId, code: input.code, deletedAt: null },
-    select: { id: true },
+  // Find-or-resurrect a soft-deleted code instead of colliding on the unique
+  // (which still counts deleted rows) — DB-005.
+  const existing = await prisma.location.findFirst({
+    where: { organizationId: user.organizationId, code: input.code },
+    select: { id: true, deletedAt: true },
   });
-  if (dup) throw new Error("Location code already exists");
+  if (existing && !existing.deletedAt) throw new Error("Location code already exists");
 
-  const row = await prisma.location.create({
-    data: {
-      organizationId: user.organizationId,
-      code: input.code,
-      name: input.name,
-      address: nul(input.address),
-      building: nul(input.building),
-      floor: nul(input.floor),
-      room: nul(input.room),
-    },
-  });
+  const fields = {
+    name: input.name,
+    address: nul(input.address),
+    building: nul(input.building),
+    floor: nul(input.floor),
+    room: nul(input.room),
+  };
+  const row = existing
+    ? await prisma.location.update({ where: { id: existing.id }, data: { ...fields, deletedAt: null } })
+    : await prisma.location.create({ data: { organizationId: user.organizationId, code: input.code, ...fields } });
   await auditLog(user, {
     action: "CREATE",
     entityType: "LOCATION",

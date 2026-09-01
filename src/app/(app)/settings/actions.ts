@@ -10,6 +10,27 @@ import { hashPassword, verifyPassword, validatePasswordPolicy } from "@/lib/pass
 import { generateTotpSecret, storeTotpSecret, verifyTotp, verifyTotpCode } from "@/lib/mfa";
 import { decryptSecret } from "@/lib/crypto/envelope";
 
+// ---------------- Password reuse (AUTH-006) ----------------
+
+const PASSWORD_HISTORY_SIZE = 5;
+
+/** True if `next` matches the current password or any recently-used one. */
+async function passwordReused(
+  current: { passwordHash: string | null; passwordHistory: string[] },
+  next: string,
+): Promise<boolean> {
+  const hashes = [current.passwordHash, ...(current.passwordHistory ?? [])].filter(Boolean) as string[];
+  for (const h of hashes.slice(0, PASSWORD_HISTORY_SIZE + 1)) {
+    if (await verifyPassword(h, next)) return true;
+  }
+  return false;
+}
+
+/** Prepend the outgoing hash and cap the history. */
+function nextHistory(oldHash: string | null, history: string[]): string[] {
+  return (oldHash ? [oldHash, ...history] : history).slice(0, PASSWORD_HISTORY_SIZE);
+}
+
 // ---------------- User management (admin) ----------------
 
 const createUserSchema = z.object({
@@ -189,9 +210,17 @@ export async function adminResetPasswordAction(userId: string, formData: FormDat
     where: { id: userId, organizationId: admin.organizationId, deletedAt: null },
   });
   if (!target) redirect("/settings/users?error=user-not-found");
+  if (await passwordReused({ passwordHash: target.passwordHash, passwordHistory: target.passwordHistory }, password)) {
+    redirect("/settings/users?error=password-reused");
+  }
   await prisma.user.update({
     where: { id: target.id },
-    data: { passwordHash: await hashPassword(password), failedLoginCount: 0, lockedUntil: null },
+    data: {
+      passwordHash: await hashPassword(password),
+      passwordHistory: nextHistory(target.passwordHash, target.passwordHistory),
+      failedLoginCount: 0,
+      lockedUntil: null,
+    },
   });
   // Revoke sessions so the new password must be used
   await prisma.userSession.updateMany({
@@ -261,9 +290,15 @@ export async function changePasswordAction(formData: FormData) {
   if (!validatePasswordPolicy(next).ok) {
     redirect("/settings/profile?error=weak-password");
   }
+  if (await passwordReused({ passwordHash: dbUser.passwordHash, passwordHistory: dbUser.passwordHistory }, next)) {
+    redirect("/settings/profile?error=password-reused");
+  }
   await prisma.user.update({
     where: { id: user.id },
-    data: { passwordHash: await hashPassword(next) },
+    data: {
+      passwordHash: await hashPassword(next),
+      passwordHistory: nextHistory(dbUser.passwordHash, dbUser.passwordHistory),
+    },
   });
   await auditLog(user, {
     action: "UPDATE", entityType: "USER", entityId: user.id,

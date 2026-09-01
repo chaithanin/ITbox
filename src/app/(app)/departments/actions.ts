@@ -20,21 +20,19 @@ export async function createDepartment(formData: FormData) {
   const user = await requirePermission("department:manage");
   const input = departmentSchema.parse(Object.fromEntries(formData));
 
-  const dup = await prisma.department.findFirst({
-    where: { organizationId: user.organizationId, code: input.code, deletedAt: null },
-    select: { id: true },
+  // Find-or-resurrect: the (organizationId, code) unique still counts
+  // soft-deleted rows, so re-creating a previously-deleted code would collide.
+  // Reuse the soft-deleted row instead of failing (DB-005).
+  const existing = await prisma.department.findFirst({
+    where: { organizationId: user.organizationId, code: input.code },
+    select: { id: true, deletedAt: true },
   });
-  if (dup) throw new Error("Department code already exists");
+  if (existing && !existing.deletedAt) throw new Error("Department code already exists");
 
-  const row = await prisma.department.create({
-    data: {
-      organizationId: user.organizationId,
-      code: input.code,
-      name: input.name,
-      division: nul(input.division),
-      costCenter: nul(input.costCenter),
-    },
-  });
+  const fields = { name: input.name, division: nul(input.division), costCenter: nul(input.costCenter) };
+  const row = existing
+    ? await prisma.department.update({ where: { id: existing.id }, data: { ...fields, deletedAt: null } })
+    : await prisma.department.create({ data: { organizationId: user.organizationId, code: input.code, ...fields } });
   await auditLog(user, {
     action: "CREATE",
     entityType: "DEPARTMENT",

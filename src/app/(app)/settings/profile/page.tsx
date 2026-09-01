@@ -23,6 +23,7 @@ const MESSAGES: Record<string, { text: string; error?: boolean }> = {
   "mfa-enabled": { text: "เปิดใช้ MFA แล้ว / MFA enabled" },
   "mfa-disabled": { text: "ปิด MFA แล้ว / MFA disabled" },
   "wrong-password": { text: "รหัสผ่านปัจจุบันไม่ถูกต้อง / Wrong current password", error: true },
+  "password-reused": { text: "ห้ามใช้รหัสผ่านเดิมหรือที่เคยใช้ล่าสุด / Cannot reuse the current or a recent password", error: true },
   "weak-password": { text: "รหัสผ่าน 8–12 ตัว มีพิมพ์ใหญ่ พิมพ์เล็ก ตัวเลข และอักขระพิเศษ อย่างน้อยอย่างละ 1 ห้ามเว้นวรรค / 8–12 chars, upper+lower+number+special", error: true },
   "password-mismatch": { text: "รหัสผ่านใหม่และการยืนยันไม่ตรงกัน / New password and confirmation do not match", error: true },
   "mfa-invalid": { text: "รหัส MFA ไม่ถูกต้อง / Invalid MFA code", error: true },

@@ -12,9 +12,28 @@ const baseSecurityHeaders = [
   },
 ];
 
+// Content-Security-Policy for the authenticated app (OPS-001). Shipped in
+// REPORT-ONLY mode first: it never blocks, only reports violations, so we can
+// observe what a strict policy would break before switching the header name to
+// "Content-Security-Policy" to enforce it. 'unsafe-inline' on scripts is a
+// stepping stone — replace it with per-request nonces when enforcing.
+const appCsp = [
+  "default-src 'self'",
+  "base-uri 'self'",
+  "object-src 'none'",
+  "frame-ancestors 'none'",
+  "form-action 'self'",
+  "img-src 'self' data: blob:",
+  "font-src 'self' https://fonts.gstatic.com data:",
+  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+  "script-src 'self' 'unsafe-inline'",
+  "connect-src 'self'",
+].join("; ");
+
 // The rest of the app must never be framed (clickjacking).
 const securityHeaders = [
   { key: "X-Frame-Options", value: "DENY" },
+  { key: "Content-Security-Policy-Report-Only", value: appCsp },
   ...baseSecurityHeaders,
 ];
 
