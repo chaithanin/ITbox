@@ -38,12 +38,22 @@ const STEP_LABELS: Record<string, string> = {
   FINANCE: "ฝ่ายการเงิน / Finance",
 };
 
+const APPROVAL_ERRORS: Record<string, string> = {
+  "self-approval": "คุณไม่สามารถอนุมัติคำขอที่คุณเป็นผู้ยื่นเองได้ / You cannot approve your own request.",
+  "step-role": "คุณไม่มีบทบาทที่อนุมัติขั้นตอนนี้ / You don't hold the role required for this approval step.",
+  "already-decided": "คุณได้ตัดสินขั้นตอนอื่นของคำขอนี้แล้ว — ต้องใช้ผู้อนุมัติคนละคนต่อขั้น / You already decided another step; each step needs a different approver.",
+  "state-changed": "สถานะคำขอเปลี่ยนไปแล้ว โปรดรีเฟรช / The request changed; please refresh and retry.",
+};
+
 export default async function PurchaseRequestDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<Record<string, string | undefined>>;
 }) {
   const { id } = await params;
+  const approvalError = APPROVAL_ERRORS[(await searchParams).error ?? ""];
   const user = await getCurrentUser();
   if (!user || !user.permissions.has("procurement:read")) {
     return (
@@ -138,6 +148,12 @@ export default async function PurchaseRequestDetailPage({
           </Button>
         )}
       </PageHeader>
+
+      {approvalError && (
+        <p className="mb-4 rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          {approvalError}
+        </p>
+      )}
 
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="space-y-4 lg:col-span-2">

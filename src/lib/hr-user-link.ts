@@ -62,17 +62,27 @@ export async function linkEmployeesToUsers(orgId: string, employeeIds?: string[]
   });
   if (employees.length === 0) return { linked: 0, unmatched: 0, alreadyLinked: 0 };
 
+  // Users already bound to a LIVE employee are off-limits. We derive this from
+  // the employee side (not the User.employee relation) so that a user pointed at
+  // by a soft-deleted employee is correctly treated as available — see DB-001.
+  const taken = new Set(
+    (await prisma.employee.findMany({
+      where: { organizationId: orgId, deletedAt: null, userId: { not: null } },
+      select: { userId: true },
+    })).map((e) => e.userId as string),
+  );
+
   // All active users in the org — indexed by code, email and normalized name.
   const users = await prisma.user.findMany({
     where: { organizationId: orgId, deletedAt: null },
-    select: { id: true, email: true, name: true, employeeCode: true, employee: { select: { id: true } } },
+    select: { id: true, email: true, name: true, employeeCode: true },
   });
   type Ref = { id: string; taken: boolean; hasCode: boolean };
   const userByCode = new Map<string, Ref>();
   const userByEmail = new Map<string, Ref>();
   const usersByName = new Map<string, Ref[]>();
   for (const u of users) {
-    const ref: Ref = { id: u.id, taken: Boolean(u.employee), hasCode: Boolean(u.employeeCode) };
+    const ref: Ref = { id: u.id, taken: taken.has(u.id), hasCode: Boolean(u.employeeCode) };
     if (u.employeeCode) userByCode.set(u.employeeCode.toLowerCase(), ref);
     if (u.email) userByEmail.set(u.email.toLowerCase(), ref);
     const n = normName(u.name);

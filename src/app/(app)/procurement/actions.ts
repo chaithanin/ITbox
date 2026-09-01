@@ -20,6 +20,49 @@ const STEP_BY_STATUS: Record<string, { step: number; stepName: string; next: "PE
   PENDING_FINANCE: { step: 3, stepName: "FINANCE", next: "APPROVED" },
 };
 
+// Segregation of duties: each step may only be actioned by a holder of that
+// step's role (admins may stand in for any step, but the distinct-approver rule
+// below still forces multiple people). See FIN-001.
+const STEP_ROLE: Record<number, string[]> = {
+  1: ["MANAGER", "ADMIN", "SUPER_ADMIN"],
+  2: ["IT_MANAGER", "ADMIN", "SUPER_ADMIN"],
+  3: ["FINANCE", "ADMIN", "SUPER_ADMIN"],
+};
+
+/**
+ * Enforce segregation of duties for a purchase-request decision:
+ *  - the requester may never approve/reject their own request;
+ *  - the actor must hold the role that owns the current step;
+ *  - (approve only) the actor must not have already decided another step of the
+ *    same request — one person cannot control two steps.
+ * Returns an error slug to redirect with, or null when the actor may proceed.
+ */
+async function sodViolation(
+  orgId: string,
+  requestId: string,
+  requesterId: string | null,
+  step: number,
+  user: { id: string; roles: string[] },
+  requireDistinct: boolean,
+): Promise<string | null> {
+  if (requesterId && requesterId === user.id) return "self-approval";
+  const allowed = STEP_ROLE[step] ?? [];
+  if (!user.roles.some((r) => allowed.includes(r))) return "step-role";
+  if (requireDistinct) {
+    const already = await prisma.approval.findFirst({
+      where: {
+        organizationId: orgId,
+        purchaseRequestId: requestId,
+        approverId: user.id,
+        decision: { not: "PENDING" },
+      },
+      select: { id: true },
+    });
+    if (already) return "already-decided";
+  }
+  return null;
+}
+
 function isUniqueViolation(e: unknown): boolean {
   return e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002";
 }
@@ -209,31 +252,33 @@ export async function approvePurchaseRequest(id: string, formData: FormData) {
   const stepInfo = STEP_BY_STATUS[request.status];
   if (!stepInfo) redirect(`/procurement/${id}`);
 
-  const approval = await prisma.approval.findFirst({
-    where: {
-      organizationId: user.organizationId,
-      purchaseRequestId: id,
-      step: stepInfo.step,
-      decision: "PENDING",
-    },
-    select: { id: true },
-  });
-  if (approval) {
-    await prisma.approval.update({
-      where: { id: approval.id },
-      data: {
-        approverId: user.id,
-        decision: "APPROVED",
-        comment,
-        decidedAt: new Date(),
-      },
-    });
-  }
+  // Segregation of duties (FIN-001): no self-approval, correct step role, and a
+  // distinct approver per step.
+  const sod = await sodViolation(user.organizationId, id, request.requesterId, stepInfo.step, user, true);
+  if (sod) redirect(`/procurement/${id}?error=${sod}`);
 
-  await prisma.purchaseRequest.update({
-    where: { id },
-    data: { status: stepInfo.next },
+  // Atomic advance: lock the request row and re-verify the step is still open
+  // inside the transaction, so two approvers cannot both advance the same step.
+  let advanced = false;
+  await prisma.$transaction(async (tx) => {
+    const rows = await tx.$queryRaw<{ status: string }[]>`
+      SELECT status FROM purchase_requests
+      WHERE id = ${id}::uuid AND "organizationId" = ${user.organizationId}::uuid
+      FOR UPDATE`;
+    if (rows[0]?.status !== request.status) return; // changed under us — abort
+    const approval = await tx.approval.findFirst({
+      where: { organizationId: user.organizationId, purchaseRequestId: id, step: stepInfo.step, decision: "PENDING" },
+      select: { id: true },
+    });
+    if (!approval) return;
+    await tx.approval.update({
+      where: { id: approval.id },
+      data: { approverId: user.id, decision: "APPROVED", comment, decidedAt: new Date() },
+    });
+    await tx.purchaseRequest.update({ where: { id }, data: { status: stepInfo.next } });
+    advanced = true;
   });
+  if (!advanced) redirect(`/procurement/${id}?error=state-changed`);
 
   await notifyRequester(
     user.organizationId,
@@ -266,28 +311,31 @@ export async function rejectPurchaseRequest(id: string, formData: FormData) {
   const stepInfo = STEP_BY_STATUS[request.status];
   if (!stepInfo) redirect(`/procurement/${id}`);
 
-  const approval = await prisma.approval.findFirst({
-    where: {
-      organizationId: user.organizationId,
-      purchaseRequestId: id,
-      step: stepInfo.step,
-      decision: "PENDING",
-    },
-    select: { id: true },
-  });
-  if (approval) {
-    await prisma.approval.update({
-      where: { id: approval.id },
-      data: {
-        approverId: user.id,
-        decision: "REJECTED",
-        comment,
-        decidedAt: new Date(),
-      },
-    });
-  }
+  // Segregation of duties (FIN-001): no self-rejection, correct step role.
+  const sod = await sodViolation(user.organizationId, id, request.requesterId, stepInfo.step, user, false);
+  if (sod) redirect(`/procurement/${id}?error=${sod}`);
 
-  await prisma.purchaseRequest.update({ where: { id }, data: { status: "REJECTED" } });
+  let rejected = false;
+  await prisma.$transaction(async (tx) => {
+    const rows = await tx.$queryRaw<{ status: string }[]>`
+      SELECT status FROM purchase_requests
+      WHERE id = ${id}::uuid AND "organizationId" = ${user.organizationId}::uuid
+      FOR UPDATE`;
+    if (rows[0]?.status !== request.status) return; // changed under us — abort
+    const approval = await tx.approval.findFirst({
+      where: { organizationId: user.organizationId, purchaseRequestId: id, step: stepInfo.step, decision: "PENDING" },
+      select: { id: true },
+    });
+    if (approval) {
+      await tx.approval.update({
+        where: { id: approval.id },
+        data: { approverId: user.id, decision: "REJECTED", comment, decidedAt: new Date() },
+      });
+    }
+    await tx.purchaseRequest.update({ where: { id }, data: { status: "REJECTED" } });
+    rejected = true;
+  });
+  if (!rejected) redirect(`/procurement/${id}?error=state-changed`);
 
   await notifyRequester(
     user.organizationId,

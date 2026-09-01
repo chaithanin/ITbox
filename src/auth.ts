@@ -105,13 +105,26 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           );
         }
 
-        // MFA (TOTP)
+        // MFA (TOTP). A wrong code counts toward the same lockout as a wrong
+        // password, so the second factor can't be brute-forced once the password
+        // is known — see AUTH-002.
         if (user.mfaEnabled) {
           if (!totp) throw new LoginError("MFA_REQUIRED");
           const valid = await verifyTotp(user, totp);
           if (!valid) {
-            await audit(user.organizationId, user.id, "LOGIN", "FAILED", { reason: "MFA" });
-            throw new LoginError("MFA_INVALID");
+            const failed = user.failedLoginCount + 1;
+            await prisma.user.update({
+              where: { id: user.id },
+              data: {
+                failedLoginCount: failed,
+                lockedUntil:
+                  failed >= MAX_FAILED_ATTEMPTS
+                    ? new Date(Date.now() + LOCKOUT_MINUTES * 60_000)
+                    : null,
+              },
+            });
+            await audit(user.organizationId, user.id, "LOGIN", "FAILED", { reason: "MFA", failedCount: failed });
+            throw new LoginError(failed >= MAX_FAILED_ATTEMPTS ? "ACCOUNT_LOCKED" : "MFA_INVALID");
           }
         }
 

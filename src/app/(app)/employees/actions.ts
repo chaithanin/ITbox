@@ -196,7 +196,9 @@ export async function softDeleteEmployee(formData: FormData) {
     );
   }
 
-  await prisma.employee.update({ where: { id }, data: { deletedAt: new Date() } });
+  // Clear the user link on soft-delete so the account can be re-linked to a new
+  // employee record later (Employee.userId is unique) — see DB-001.
+  await prisma.employee.update({ where: { id }, data: { deletedAt: new Date(), userId: null } });
   await auditLog(user, {
     action: "DELETE",
     entityType: "EMPLOYEE",
