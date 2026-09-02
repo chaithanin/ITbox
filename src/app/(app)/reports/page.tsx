@@ -57,6 +57,21 @@ const REPORTS: { title: string; description: string; href: string }[] = [
     description: "ประวัติการเข้าถึงรายการ Vault — เฉพาะข้อมูลเมทาดาทา (ต้องมีสิทธิ์ audit:read) / Vault access history — metadata only (requires audit:read).",
     href: "/api/reports/vault-access",
   },
+  {
+    title: "คำขอยืมทรัพย์สิน / Borrow Requests",
+    description: "คำขอยืม-คืนทั้งหมด พร้อมสถานะ ผู้ขอ วันครบกำหนด / All borrow requests with status, requester and due dates.",
+    href: "/api/reports/borrow-requests",
+  },
+  {
+    title: "รายการเกินกำหนดคืน / Overdue Loans",
+    description: "รายการที่ยังไม่คืนและเลยกำหนด พร้อมจำนวนวันเกิน / Loans past due with days-overdue and asset tags.",
+    href: "/api/reports/borrow-overdue",
+  },
+  {
+    title: "อัตราการใช้งานทรัพย์สิน / Borrow Utilization",
+    description: "จำนวนครั้งที่แต่ละทรัพย์สินถูกยืม และที่กำลังยืมอยู่ / Times each asset was borrowed and how many are out now.",
+    href: "/api/reports/borrow-utilization",
+  },
 ];
 
 const EXPORT_FORMATS: { format: string; label: string }[] = [

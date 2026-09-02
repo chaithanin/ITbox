@@ -176,6 +176,52 @@ export async function POST(req: Request) {
       );
     }
 
+    // Borrow loans: due-soon (≤3 days) and overdue reminders. The body embeds
+    // the day count, which changes daily, so the idempotency guard still lets a
+    // fresh reminder go out each day an item is due/overdue (the 3d/1d/on-due →
+    // 1d/3d/7d cadence emerges naturally from a once-daily run).
+    const loans = await prisma.borrowRequest.findMany({
+      where: {
+        organizationId: org.id, deletedAt: null,
+        status: { in: ["ISSUED", "PARTIALLY_RETURNED"] },
+        dueDate: { not: null, lt: inDays(3) },
+      },
+      select: {
+        id: true, refNo: true, dueDate: true, requesterName: true,
+        requester: { select: { userId: true } },
+      },
+      take: 500,
+    });
+    for (const loan of loans) {
+      if (!loan.dueDate) continue;
+      const overdue = loan.dueDate.getTime() < now.getTime();
+      const days = Math.abs(Math.round((loan.dueDate.getTime() - now.getTime()) / 86_400_000));
+      const title = overdue
+        ? "ทรัพย์สินเกินกำหนดคืน / Borrowed asset overdue"
+        : "ใกล้ครบกำหนดคืนทรัพย์สิน / Borrowed asset due soon";
+      const body = overdue
+        ? `${loan.refNo} เกินกำหนดคืน ${days} วัน`
+        : `${loan.refNo} ครบกำหนดคืนใน ${days} วัน`;
+      const link = `/borrow/${loan.id}`;
+      // IT managers / admins
+      await notify("BORROW_DUE", loan.id, overdue ? "CRITICAL" : "WARNING", title, body, link);
+      // The requester (own notification, same daily idempotency guard)
+      if (loan.requester?.userId) {
+        const exists = await prisma.notification.findFirst({
+          where: { organizationId: org.id, userId: loan.requester.userId, type: "BORROW_DUE", body, createdAt: { gte: startOfDay } },
+          select: { id: true },
+        });
+        if (!exists) {
+          await prisma.notification.create({
+            data: {
+              organizationId: org.id, userId: loan.requester.userId, type: "BORROW_DUE",
+              level: overdue ? "CRITICAL" : "WARNING", title, body, link,
+            },
+          });
+        }
+      }
+    }
+
     // Hygiene: stamp revokedAt on shares past their expiry
     await prisma.vaultShare.updateMany({
       where: {

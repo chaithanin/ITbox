@@ -219,6 +219,9 @@ const REPORT_TITLES: Record<string, string> = {
   purchases: "การจัดซื้อ / Purchases",
   audit: "บันทึกตรวจสอบ / Audit Log",
   "vault-access": "การเข้าถึง Vault / Vault Access",
+  "borrow-requests": "คำขอยืมทรัพย์สิน / Borrow Requests",
+  "borrow-overdue": "รายการเกินกำหนดคืน / Overdue Loans",
+  "borrow-utilization": "อัตราการใช้งานทรัพย์สิน / Asset Borrow Utilization",
 };
 
 const REPORT_BUILDERS: Record<string, ReportBuilder> = {
@@ -494,6 +497,107 @@ const REPORT_BUILDERS: Record<string, ReportBuilder> = {
         r.createdAt, r.user?.name, r.user?.email, r.action, r.entityType, r.entityId,
         r.result, r.ip, r.detail === null ? "" : JSON.stringify(r.detail),
       ]),
+    };
+  },
+
+  "borrow-requests": async (user) => {
+    const rows = await prisma.borrowRequest.findMany({
+      where: { organizationId: user.organizationId, deletedAt: null },
+      select: {
+        refNo: true, status: true, requesterName: true, borrowDate: true, dueDate: true,
+        issuedAt: true, returnedAt: true, purpose: true, createdAt: true,
+        department: { select: { name: true } },
+        requester: { select: { employeeCode: true, firstName: true, lastName: true } },
+        _count: { select: { items: true } },
+      },
+      orderBy: { createdAt: "desc" },
+      take: MAX_ROWS,
+    });
+    return {
+      headers: [
+        "Ref No", "Status", "Employee Code", "Requester", "Department", "Items",
+        "Borrow Date", "Due Date", "Issued At", "Returned At", "Purpose", "Created At",
+      ],
+      rows: rows.map((r) => [
+        r.refNo, r.status, r.requester.employeeCode,
+        r.requesterName ?? `${r.requester.firstName} ${r.requester.lastName}`,
+        r.department?.name, r._count.items, r.borrowDate, r.dueDate, r.issuedAt,
+        r.returnedAt, r.purpose, r.createdAt,
+      ]),
+    };
+  },
+
+  "borrow-overdue": async (user) => {
+    const now = new Date();
+    const rows = await prisma.borrowRequest.findMany({
+      where: {
+        organizationId: user.organizationId, deletedAt: null,
+        status: { in: ["ISSUED", "PARTIALLY_RETURNED"] },
+        dueDate: { lt: now },
+      },
+      select: {
+        refNo: true, status: true, requesterName: true, requesterPhone: true,
+        dueDate: true, issuedAt: true,
+        department: { select: { name: true } },
+        requester: { select: { employeeCode: true, firstName: true, lastName: true } },
+        items: { select: { asset: { select: { assetTag: true, name: true } }, status: true } },
+      },
+      orderBy: { dueDate: "asc" },
+      take: MAX_ROWS,
+    });
+    return {
+      headers: [
+        "Ref No", "Employee Code", "Requester", "Phone", "Department", "Due Date",
+        "Days Overdue", "Assets Out", "Asset Tags",
+      ],
+      rows: rows.map((r) => {
+        const daysOverdue = r.dueDate
+          ? Math.floor((now.getTime() - r.dueDate.getTime()) / (24 * 60 * 60 * 1000))
+          : null;
+        const out = r.items.filter((i) => i.status === "ISSUED");
+        return [
+          r.refNo, r.requester.employeeCode,
+          r.requesterName ?? `${r.requester.firstName} ${r.requester.lastName}`,
+          r.requesterPhone, r.department?.name, r.dueDate, daysOverdue,
+          out.length, out.map((i) => i.asset.assetTag).join(", "),
+        ] as Cell[];
+      }),
+    };
+  },
+
+  "borrow-utilization": async (user) => {
+    const grouped = await prisma.borrowRequestItem.groupBy({
+      by: ["assetId"],
+      where: { organizationId: user.organizationId },
+      _count: true,
+    });
+    const assetIds = grouped.map((g) => g.assetId);
+    const assets = assetIds.length
+      ? await prisma.asset.findMany({
+          where: { id: { in: assetIds } },
+          select: { id: true, assetTag: true, name: true, status: true, category: { select: { name: true } } },
+        })
+      : [];
+    const map = new Map(assets.map((a) => [a.id, a]));
+    // Currently-out count per asset (items still ISSUED)
+    const outNow = await prisma.borrowRequestItem.groupBy({
+      by: ["assetId"],
+      where: { organizationId: user.organizationId, status: "ISSUED" },
+      _count: true,
+    });
+    const outMap = new Map(outNow.map((g) => [g.assetId, g._count]));
+    return {
+      headers: ["Asset Tag", "Asset Name", "Category", "Current Status", "Times Borrowed", "Currently Out"],
+      rows: grouped
+        .map((g) => {
+          const a = map.get(g.assetId);
+          return [
+            a?.assetTag ?? "", a?.name ?? "", a?.category?.name ?? "", a?.status ?? "",
+            g._count, outMap.get(g.assetId) ?? 0,
+          ] as Cell[];
+        })
+        .sort((a, b) => Number(b[4]) - Number(a[4]))
+        .slice(0, MAX_ROWS),
     };
   },
 

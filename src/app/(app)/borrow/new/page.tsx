@@ -66,6 +66,9 @@ export default async function NewBorrowRequestPage({
     categoryName: a.category?.name ?? null,
   }));
 
+  // Pre-select an asset when arriving from a QR scan (?assetId=...).
+  const prefill = sp.assetId ? assetOptions.filter((a) => a.id === sp.assetId) : [];
+
   if (!canPickRequester && !self) {
     return (
       <div>
@@ -96,6 +99,7 @@ export default async function NewBorrowRequestPage({
         employees={empOptions}
         assets={assetOptions}
         defaultRequesterId={!canPickRequester && self ? self.id : undefined}
+        defaultAssets={prefill}
         canPickRequester={canPickRequester}
       />
     </div>

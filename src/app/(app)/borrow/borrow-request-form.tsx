@@ -30,17 +30,19 @@ export function BorrowRequestForm({
   employees,
   assets,
   defaultRequesterId,
+  defaultAssets,
   canPickRequester,
 }: {
   employees: EmployeeOption[];
   assets: AssetOption[];
   defaultRequesterId?: string;
+  defaultAssets?: AssetOption[];
   canPickRequester: boolean;
 }) {
   const [requesterId, setRequesterId] = useState(defaultRequesterId ?? "");
   const [empQuery, setEmpQuery] = useState("");
   const [assetQuery, setAssetQuery] = useState("");
-  const [selected, setSelected] = useState<AssetOption[]>([]);
+  const [selected, setSelected] = useState<AssetOption[]>(defaultAssets ?? []);
 
   const requester = employees.find((e) => e.id === requesterId) ?? null;
 
