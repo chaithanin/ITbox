@@ -28,6 +28,18 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     ...(has("report:read") ? [{ href: "/dashboard/it-dashboard", label: "IT Dashboard", icon: "reports" }] : []),
     ...(has("report:read") ? [{ href: "/it-report", label: "IT Support Report", icon: "reports" }] : []),
     ...(has("asset:read") ? [{ href: "/assets", label: t("assets"), icon: "assets" }] : []),
+    ...(has("borrow:read")
+      ? [{
+          href: "/borrow", label: "ยืม-คืนทรัพย์สิน / Borrow & Return", icon: "borrow",
+          children: [
+            { href: "/borrow", label: "ภาพรวม / Dashboard" },
+            ...(has("borrow:create") ? [{ href: "/borrow/new", label: "ขอยืมใหม่ / New Request" }] : []),
+            ...(has("borrow:approve") ? [{ href: "/borrow/approvals", label: "รออนุมัติ / Approvals" }] : []),
+            ...(has("borrow:issue") ? [{ href: "/borrow/issue", label: "จ่าย-รับมอบ / Issue" }] : []),
+            ...(has("borrow:return") ? [{ href: "/borrow/returns", label: "รับคืน / Returns" }] : []),
+          ],
+        }]
+      : []),
     ...(has("employee:read")
       ? [{
           href: "/employees", label: t("employees"), icon: "employees",

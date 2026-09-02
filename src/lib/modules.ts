@@ -58,6 +58,16 @@ export const MODULES: ModuleDef[] = [
     sortOrder: 20,
   },
   {
+    code: "borrow",
+    labelKey: "borrowReturn",
+    descTh: "ยืม-คืนทรัพย์สินไอที",
+    descEn: "Borrow & return assets",
+    icon: "borrow",
+    route: "/borrow",
+    permission: "borrow:read",
+    sortOrder: 25,
+  },
+  {
     code: "vault",
     labelKey: "vault",
     descTh: "ตู้เซฟรหัสผ่าน",

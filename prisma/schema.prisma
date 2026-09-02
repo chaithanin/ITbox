@@ -328,6 +328,7 @@ model Employee {
   offboardings       Offboarding[]
   onboardings        Onboarding[]
   supportCases       SupportCase[]  @relation("CaseRequesterEmployee")
+  borrowRequests     BorrowRequest[] @relation("BorrowRequester")
 
   @@unique([organizationId, employeeCode])
   @@index([organizationId, departmentId])
@@ -354,6 +355,7 @@ model Department {
   vaultShares  VaultShare[] @relation("SharedWithDepartment")
   purchaseRequests PurchaseRequest[]
   supportCases SupportCase[] @relation("CaseDepartment")
+  borrowRequests BorrowRequest[]
 
   @@unique([organizationId, code])
   @@map("departments")
@@ -395,6 +397,8 @@ enum AssetStatus {
   AVAILABLE
   ASSIGNED
   IN_USE
+  RESERVED
+  BORROWED
   IN_REPAIR
   LOST
   STOLEN
@@ -486,6 +490,7 @@ model Asset {
   configItems ConfigurationItem[]
   endpointPostures EndpointPosture[]
   cctvRecorders CctvRecorder[]
+  borrowItems BorrowRequestItem[]
 
   @@unique([organizationId, assetTag])
   supportCases SupportCase[]  @relation("CaseAsset")
@@ -2527,4 +2532,312 @@ model CctvIncident {
   @@index([organizationId, status])
   @@index([organizationId, type])
   @@map("cctv_incidents")
+}
+
+// ============================================================
+// IT Asset Borrowing & Return Management
+// Temporary loan lifecycle (distinct from permanent AssetAssignment):
+//   Request → multi-step approval → issue/handover → return/inspection.
+// The DB is the source of truth; the A4 company-form PDF is rendered from it.
+// ============================================================
+
+enum BorrowRequestStatus {
+  DRAFT
+  PENDING_MANAGER
+  PENDING_IT
+  PENDING_MANAGEMENT
+  APPROVED
+  REJECTED
+  READY_TO_ISSUE
+  ISSUED
+  PARTIALLY_RETURNED
+  RETURNED
+  CLOSED
+  CANCELLED
+}
+
+enum BorrowApprovalStep {
+  MANAGER
+  IT
+  MANAGEMENT
+}
+
+enum BorrowApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  SKIPPED
+}
+
+enum BorrowItemStatus {
+  PENDING
+  ISSUED
+  RETURNED
+  DAMAGED
+  LOST
+}
+
+// Condition grade captured on the physical handover / return form.
+enum LoanCondition {
+  EXCELLENT
+  GOOD
+  FAIR
+  DAMAGED
+  OTHER
+}
+
+enum InspectionResult {
+  COMPLETE
+  DAMAGED
+  MISSING_ACCESSORY
+  REPAIR_REQUIRED
+  LOST
+}
+
+enum SignatureType {
+  NONE
+  DRAWN
+  TYPED
+  UPLOADED
+}
+
+enum SignatureRole {
+  REQUESTER
+  DEPT_MANAGER
+  IT_RECEIVER
+  IT_HANDOVER
+  IT_MANAGER
+  MANAGEMENT
+  RETURNER
+  RETURN_RECEIVER
+}
+
+enum ConditionPhotoPhase {
+  BEFORE
+  AFTER
+}
+
+model BorrowRequest {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @db.Uuid
+  refNo          String // IT-BR-2026-0001
+  refYear        Int
+  refSeq         Int
+
+  requesterEmployeeId String  @db.Uuid
+  departmentId        String? @db.Uuid
+  // Snapshot of requester contact at submit time (auto-populated from master;
+  // frozen so the printed form reflects the state when it was signed).
+  requesterName     String?
+  requesterPosition String?
+  requesterPhone    String?
+  requesterEmail    String?
+
+  purpose    String?
+  useLocation String? // where the asset will be used
+  borrowDate DateTime?
+  dueDate    DateTime?
+
+  status         BorrowRequestStatus @default(DRAFT)
+  currentStep    BorrowApprovalStep?
+  submittedAt    DateTime?
+  approvedAt     DateTime?
+  rejectedAt     DateTime?
+  rejectedReason String?
+  issuedAt       DateTime?
+  returnedAt     DateTime?
+  closedAt       DateTime?
+  cancelledAt    DateTime?
+  notes          String?
+
+  createdAt   DateTime  @default(now())
+  createdById String?   @db.Uuid
+  updatedAt   DateTime  @updatedAt
+  updatedById String?   @db.Uuid
+  deletedAt   DateTime?
+
+  requester  Employee    @relation("BorrowRequester", fields: [requesterEmployeeId], references: [id])
+  department Department? @relation(fields: [departmentId], references: [id])
+  items      BorrowRequestItem[]
+  approvals  BorrowApproval[]
+  issues     AssetIssueRecord[]
+  returns    AssetReturnRecord[]
+  signatures DigitalSignature[]
+
+  @@unique([organizationId, refNo])
+  @@index([organizationId, status])
+  @@index([organizationId, requesterEmployeeId])
+  @@index([organizationId, dueDate])
+  @@map("borrow_requests")
+}
+
+model BorrowRequestItem {
+  id              String           @id @default(uuid()) @db.Uuid
+  organizationId  String           @db.Uuid
+  borrowRequestId String           @db.Uuid
+  assetId         String           @db.Uuid
+  status          BorrowItemStatus @default(PENDING)
+  quantity        Int              @default(1)
+  note            String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  borrowRequest BorrowRequest     @relation(fields: [borrowRequestId], references: [id], onDelete: Cascade)
+  asset         Asset             @relation(fields: [assetId], references: [id])
+  issueItems    AssetIssueItem[]
+  returnItems   AssetReturnItem[]
+
+  @@index([organizationId, borrowRequestId])
+  @@index([organizationId, assetId])
+  @@map("borrow_request_items")
+}
+
+model BorrowApproval {
+  id              String               @id @default(uuid()) @db.Uuid
+  organizationId  String               @db.Uuid
+  borrowRequestId String               @db.Uuid
+  step            BorrowApprovalStep
+  sequence        Int
+  status          BorrowApprovalStatus @default(PENDING)
+  approverUserId  String?              @db.Uuid
+  approverName    String?
+  comment         String?
+  decidedAt       DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  borrowRequest BorrowRequest @relation(fields: [borrowRequestId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, borrowRequestId])
+  @@map("borrow_approvals")
+}
+
+model AssetIssueRecord {
+  id                   String  @id @default(uuid()) @db.Uuid
+  organizationId       String  @db.Uuid
+  borrowRequestId      String  @db.Uuid
+  issuedById           String? @db.Uuid // IT staff handing over
+  issuedByName         String?
+  receivedByEmployeeId String? @db.Uuid // borrower receiving
+  receivedByName       String?
+  issuedAt             DateTime @default(now())
+  note                 String?
+
+  createdAt   DateTime @default(now())
+  createdById String?  @db.Uuid
+
+  borrowRequest BorrowRequest    @relation(fields: [borrowRequestId], references: [id], onDelete: Cascade)
+  items         AssetIssueItem[]
+
+  @@index([organizationId, borrowRequestId])
+  @@map("asset_issue_records")
+}
+
+model AssetIssueItem {
+  id              String        @id @default(uuid()) @db.Uuid
+  organizationId  String        @db.Uuid
+  issueRecordId   String        @db.Uuid
+  borrowItemId    String        @db.Uuid
+  assetId         String        @db.Uuid
+  conditionBefore LoanCondition @default(GOOD)
+  conditionNote   String?
+  serialSnapshot  String?
+
+  createdAt DateTime @default(now())
+
+  issueRecord AssetIssueRecord      @relation(fields: [issueRecordId], references: [id], onDelete: Cascade)
+  borrowItem  BorrowRequestItem     @relation(fields: [borrowItemId], references: [id])
+  photos      AssetConditionPhoto[]
+
+  @@index([organizationId, issueRecordId])
+  @@map("asset_issue_items")
+}
+
+model AssetReturnRecord {
+  id                   String           @id @default(uuid()) @db.Uuid
+  organizationId       String           @db.Uuid
+  borrowRequestId      String           @db.Uuid
+  returnedByEmployeeId String?          @db.Uuid
+  returnedByName       String?
+  receivedById         String?          @db.Uuid // IT staff receiving return
+  receivedByName       String?
+  returnedAt           DateTime         @default(now())
+  inspectionResult     InspectionResult @default(COMPLETE)
+  note                 String?
+
+  createdAt   DateTime @default(now())
+  createdById String?  @db.Uuid
+
+  borrowRequest BorrowRequest     @relation(fields: [borrowRequestId], references: [id], onDelete: Cascade)
+  items         AssetReturnItem[]
+
+  @@index([organizationId, borrowRequestId])
+  @@map("asset_return_records")
+}
+
+model AssetReturnItem {
+  id                  String           @id @default(uuid()) @db.Uuid
+  organizationId      String           @db.Uuid
+  returnRecordId      String           @db.Uuid
+  borrowItemId        String           @db.Uuid
+  assetId             String           @db.Uuid
+  conditionAfter      LoanCondition    @default(GOOD)
+  inspectionResult    InspectionResult @default(COMPLETE)
+  accessoriesComplete Boolean          @default(true)
+  accessoriesNote     String?
+  damageNote          String?
+
+  createdAt DateTime @default(now())
+
+  returnRecord AssetReturnRecord     @relation(fields: [returnRecordId], references: [id], onDelete: Cascade)
+  borrowItem   BorrowRequestItem     @relation(fields: [borrowItemId], references: [id])
+  photos       AssetConditionPhoto[]
+
+  @@index([organizationId, returnRecordId])
+  @@map("asset_return_items")
+}
+
+model AssetConditionPhoto {
+  id             String              @id @default(uuid()) @db.Uuid
+  organizationId String              @db.Uuid
+  phase          ConditionPhotoPhase
+  issueItemId    String?             @db.Uuid
+  returnItemId   String?             @db.Uuid
+  storagePath    String
+  contentType    String?
+  sizeBytes      Int?
+  caption        String?
+  uploadedById   String?             @db.Uuid
+
+  createdAt DateTime @default(now())
+
+  issueItem  AssetIssueItem?  @relation(fields: [issueItemId], references: [id], onDelete: Cascade)
+  returnItem AssetReturnItem? @relation(fields: [returnItemId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, issueItemId])
+  @@index([organizationId, returnItemId])
+  @@map("asset_condition_photos")
+}
+
+model DigitalSignature {
+  id              String        @id @default(uuid()) @db.Uuid
+  organizationId  String        @db.Uuid
+  borrowRequestId String        @db.Uuid
+  role            SignatureRole
+  phase           String? // REQUEST / ISSUE / RETURN
+  signatureType   SignatureType @default(NONE)
+  signatureImage  String? // storage path to a drawn/uploaded signature
+  signedByUserId  String?       @db.Uuid
+  signedByName    String?
+  signedAt        DateTime?
+  ipAddress       String?
+
+  createdAt DateTime @default(now())
+
+  borrowRequest BorrowRequest @relation(fields: [borrowRequestId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, borrowRequestId])
+  @@map("digital_signatures")
 }

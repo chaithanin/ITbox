@@ -7,7 +7,7 @@ import {
   RefreshCcw, Wrench, ShoppingCart, Store, BarChart3, Bell, ScrollText,
   ShieldAlert, Settings, UserMinus, Boxes, LifeBuoy,
   Router, GitPullRequest, DatabaseBackup, FileText, Bug, BookOpen, ShieldX, Network,
-  UserPlus, LayoutGrid, Activity, MonitorSmartphone, Cctv,
+  UserPlus, LayoutGrid, Activity, MonitorSmartphone, Cctv, HandHelping,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { BrandLogo } from "@/components/brand-logo";
@@ -23,6 +23,7 @@ export interface NavItem {
 const ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   dashboard: LayoutDashboard,
   assets: Monitor,
+  borrow: HandHelping,
   employees: Users,
   departments: Building2,
   locations: MapPin,

@@ -7,6 +7,9 @@ export const PERMISSIONS = [
   // Assets
   "asset:read", "asset:create", "asset:update", "asset:delete",
   "asset:assign", "asset:return", "asset:transfer", "asset:dispose", "asset:export",
+  // Asset borrowing & return (temporary loans)
+  "borrow:read", "borrow:create", "borrow:approve",
+  "borrow:issue", "borrow:return", "borrow:manage", "borrow:export",
   // People & org structure
   "employee:read", "employee:create", "employee:update", "employee:delete",
   "department:read", "department:manage",
@@ -59,7 +62,7 @@ export type PermissionKey = (typeof PERMISSIONS)[number];
 const ALL = [...PERMISSIONS] as PermissionKey[];
 
 const READ_ONLY: PermissionKey[] = [
-  "asset:read", "employee:read", "department:read", "location:read",
+  "asset:read", "borrow:read", "employee:read", "department:read", "location:read",
   "license:read", "subscription:read", "vendor:read", "maintenance:read",
   "procurement:read", "report:read",
   "network:read", "change:read", "backup:read", "contract:read",
@@ -74,6 +77,7 @@ export const ROLE_PERMISSIONS: Record<string, PermissionKey[]> = {
   IT_MANAGER: [
     "asset:read", "asset:create", "asset:update", "asset:delete",
     "asset:assign", "asset:return", "asset:transfer", "asset:dispose", "asset:export",
+    "borrow:read", "borrow:create", "borrow:approve", "borrow:issue", "borrow:return", "borrow:manage", "borrow:export",
     "employee:read", "department:read", "location:read", "location:manage",
     "vault:read", "vault:create", "vault:update", "vault:delete",
     "vault:reveal", "vault:copy", "vault:share", "vault:rotate",
@@ -94,6 +98,7 @@ export const ROLE_PERMISSIONS: Record<string, PermissionKey[]> = {
   IT_STAFF: [
     "asset:read", "asset:create", "asset:update",
     "asset:assign", "asset:return", "asset:transfer",
+    "borrow:read", "borrow:create", "borrow:approve", "borrow:issue", "borrow:return",
     "employee:read", "department:read", "location:read",
     "vault:read", "vault:create", "vault:update", "vault:reveal", "vault:copy",
     "license:read", "subscription:read",
@@ -118,7 +123,7 @@ export const ROLE_PERMISSIONS: Record<string, PermissionKey[]> = {
   ],
   HR: [
     "employee:read", "employee:create", "employee:update", "employee:delete",
-    "department:read", "location:read", "asset:read",
+    "department:read", "location:read", "asset:read", "borrow:read",
     "offboarding:read", "offboarding:manage", "report:read", "support:create",
     "onboarding:read", "onboarding:manage", "catalog:read",
   ],
@@ -127,9 +132,11 @@ export const ROLE_PERMISSIONS: Record<string, PermissionKey[]> = {
   ],
   MANAGER: [
     ...READ_ONLY, "procurement:create", "procurement:approve", "support:create", "support:read",
+    "borrow:create", "borrow:approve",
   ],
   EMPLOYEE: [
     "asset:read", "vault:read", "procurement:read", "procurement:create", "support:create",
+    "borrow:read", "borrow:create",
   ],
   AUDITOR: [
     ...READ_ONLY, "audit:read", "vault:audit", "security:read", "report:export",

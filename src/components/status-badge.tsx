@@ -60,6 +60,24 @@ const STATUS_VARIANT: Record<string, "default" | "secondary" | "success" | "warn
   P2: "warning",
   P3: "default",
   P4: "secondary",
+  // Asset borrowing lifecycle
+  PENDING_MANAGEMENT: "warning",
+  READY_TO_ISSUE: "default",
+  ISSUED: "default",
+  BORROWED: "default",
+  RESERVED: "warning",
+  PARTIALLY_RETURNED: "warning",
+  CLOSED: "secondary",
+  DUE_SOON: "warning",
+  OVERDUE: "destructive",
+  // Loan condition / inspection result
+  EXCELLENT: "success",
+  GOOD: "success",
+  FAIR: "warning",
+  COMPLETE: "success",
+  MISSING_ACCESSORY: "warning",
+  REPAIR_REQUIRED: "warning",
+  UNDER_INSPECTION: "warning",
 };
 
 export function StatusBadge({ status, label }: { status: string; label?: string }) {
