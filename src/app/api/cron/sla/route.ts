@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { runSlaSweep } from "@/lib/services/support";
+import { verifyCronSecret } from "@/lib/cron-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -11,9 +12,7 @@ export const dynamic = "force-dynamic";
  * Protected by CRON_SECRET (Authorization: Bearer <secret>).
  */
 export async function POST(req: Request) {
-  const secret = process.env.CRON_SECRET;
-  const auth = req.headers.get("authorization");
-  if (!secret || auth !== `Bearer ${secret}`) {
+  if (!verifyCronSecret(req)) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
   const notified = await runSlaSweep();

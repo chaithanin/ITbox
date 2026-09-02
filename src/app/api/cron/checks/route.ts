@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { pushLineMessage } from "@/lib/services/notify";
 import { sendEmail, emailEnabled } from "@/lib/services/email";
 import { runSlaSweep } from "@/lib/services/support";
+import { verifyCronSecret } from "@/lib/cron-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -18,9 +19,7 @@ export const dynamic = "force-dynamic";
  * day: skips notifications already created today for the same entity.
  */
 export async function POST(req: Request) {
-  const secret = process.env.CRON_SECRET;
-  const auth = req.headers.get("authorization");
-  if (!secret || auth !== `Bearer ${secret}`) {
+  if (!verifyCronSecret(req)) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
