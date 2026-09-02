@@ -15,7 +15,8 @@ import { canActOnStep, type ApprovalStep } from "@/lib/borrow/service";
 import { deriveDisplayStatus, BORROW_STATUS_LABELS } from "@/lib/borrow/status";
 import { BorrowIssueForm } from "../borrow-issue-form";
 import { BorrowReturnForm } from "../borrow-return-form";
-import { decideApprovalAction, submitBorrowAction, cancelAction } from "../actions";
+import { BorrowApprovalForm } from "../borrow-approval-form";
+import { submitBorrowAction, cancelAction } from "../actions";
 
 export const dynamic = "force-dynamic";
 
@@ -168,19 +169,7 @@ export default async function BorrowDetailPage({
         <Card className="mb-4 border-primary/40">
           <CardContent className="p-5">
             <h2 className="mb-3 text-sm font-semibold">การอนุมัติของคุณ / Your Decision</h2>
-            <form action={decideApprovalAction} className="space-y-3">
-              <input type="hidden" name="id" value={req.id} />
-              <textarea
-                name="comment"
-                rows={2}
-                placeholder="ความเห็น (ถ้ามี) / Comment (optional)"
-                className="w-full rounded-md border bg-background px-3 py-2 text-sm"
-              />
-              <div className="flex justify-end gap-2">
-                <Button type="submit" name="decision" value="REJECT" variant="destructive">ไม่อนุมัติ / Reject</Button>
-                <Button type="submit" name="decision" value="APPROVE">อนุมัติ / Approve</Button>
-              </div>
-            </form>
+            <BorrowApprovalForm id={req.id} />
           </CardContent>
         </Card>
       )}

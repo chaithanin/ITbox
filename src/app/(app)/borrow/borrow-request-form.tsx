@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Search, X, Plus } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -40,6 +40,7 @@ export function BorrowRequestForm({
   canPickRequester: boolean;
 }) {
   const [requesterId, setRequesterId] = useState(defaultRequesterId ?? "");
+  const submitRef = useRef<HTMLInputElement>(null);
   const [empQuery, setEmpQuery] = useState("");
   const [assetQuery, setAssetQuery] = useState("");
   const [selected, setSelected] = useState<AssetOption[]>(defaultAssets ?? []);
@@ -77,6 +78,9 @@ export function BorrowRequestForm({
   return (
     <form action={createBorrowAction} className="space-y-6">
       <input type="hidden" name="requesterEmployeeId" value={requesterId} />
+      {/* Submit intent travels in this hidden input — a submit button's
+          name/value is not included in a Server Action's FormData. */}
+      <input type="hidden" name="submit" ref={submitRef} defaultValue="true" />
       {selected.map((a) => (
         <input key={a.id} type="hidden" name="assetId" value={a.id} />
       ))}
@@ -213,10 +217,19 @@ export function BorrowRequestForm({
       </Card>
 
       <div className="flex flex-wrap justify-end gap-2">
-        <Button type="submit" name="submit" value="false" variant="outline" disabled={!ready}>
+        <Button
+          type="submit"
+          variant="outline"
+          disabled={!ready}
+          onClick={() => { if (submitRef.current) submitRef.current.value = "false"; }}
+        >
           บันทึกร่าง / Save draft
         </Button>
-        <Button type="submit" name="submit" value="true" disabled={!ready}>
+        <Button
+          type="submit"
+          disabled={!ready}
+          onClick={() => { if (submitRef.current) submitRef.current.value = "true"; }}
+        >
           <Plus className="mr-1 h-4 w-4" /> ส่งขออนุมัติ / Submit for approval
         </Button>
       </div>
