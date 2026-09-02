@@ -27,6 +27,41 @@
 | **ITIL / infra** | `NetworkDevice`, `Vlan`, `Subnet`, `IpAddress`, `ChangeRequest`, `Problem`, `KbArticle`, `Vulnerability`, `ConfigurationItem`, `CiRelationship`, `BackupJob`, `ServiceCatalogItem`, `EndpointPosture`, `MonitoringHost`, `ItHealthCheck` |
 | **Platform** | `Notification`, `AuditLog`, `SystemSetting` |
 
+### ER diagram — assets, custody & borrowing
+
+```mermaid
+erDiagram
+  Organization ||--o{ Asset : owns
+  Organization ||--o{ Employee : owns
+  Employee ||--o| User : "linked (userId)"
+  Asset ||--o{ AssetAssignment : "custody ledger"
+  Asset ||--o{ AssetHistory : "event log"
+  Employee ||--o{ AssetAssignment : holds
+
+  Employee ||--o{ BorrowRequest : requests
+  BorrowRequest ||--o{ BorrowRequestItem : contains
+  BorrowRequest ||--o{ BorrowApproval : "approval chain"
+  BorrowRequest ||--o{ AssetIssueRecord : issued
+  BorrowRequest ||--o{ AssetReturnRecord : returned
+  BorrowRequest ||--o{ DigitalSignature : "signature-ready"
+  BorrowRequestItem }o--|| Asset : references
+  AssetIssueRecord ||--o{ AssetIssueItem : lines
+  AssetReturnRecord ||--o{ AssetReturnItem : lines
+  AssetIssueItem ||--o{ AssetConditionPhoto : "before"
+  AssetReturnItem ||--o{ AssetConditionPhoto : "after"
+```
+
+### ER diagram — RBAC
+
+```mermaid
+erDiagram
+  User ||--o{ UserRole : has
+  Role ||--o{ UserRole : grants
+  Role ||--o{ RolePermission : holds
+  Permission ||--o{ RolePermission : "in catalog"
+  Organization ||--o{ Role : "per-org"
+```
+
 ## 2. Key modeling decisions
 
 - **Permissions in the DB.** RBAC is data, not code. A permission a user holds is

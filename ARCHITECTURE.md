@@ -23,6 +23,44 @@ Browser ──► Next.js (Cloud Run)
         Google Cloud KMS ──► envelope keys for the vault
 ```
 
+### Request flow
+
+```mermaid
+flowchart LR
+  U["Browser"] --> MW["Edge middleware<br/>(cookie check)"]
+  MW --> RSC["RSC page.tsx<br/>read via Prisma"]
+  MW --> SA["Server Action<br/>requirePermission → Zod →<br/>$transaction (FOR UPDATE) → audit"]
+  MW --> RH["Route Handler /api/*"]
+  RSC --> DB[("PostgreSQL 16")]
+  SA --> DB
+  RH --> DB
+  SA --> KMS["Cloud KMS<br/>(vault envelope)"]
+  COL["Collectors<br/>HR · CCTV · EDR · monitoring"] -->|"API key (SHA-256)"| RH
+  SCH["Cloud Scheduler"] -->|"CRON_SECRET"| RH
+```
+
+### Borrow approval sequence
+
+```mermaid
+sequenceDiagram
+  actor R as Requester
+  actor IT as IT (approver)
+  actor ITS as IT Staff (issue/return)
+  participant App as ITBox
+  participant DB as PostgreSQL
+
+  R->>App: Create + Submit request
+  App->>DB: BorrowRequest(PENDING_IT) + items + 1 IT approval<br/>assets AVAILABLE→RESERVED
+  App-->>IT: notify (IT_MANAGER)
+  IT->>App: Approve (SoD: not self)
+  App->>DB: approval APPROVED → status READY_TO_ISSUE
+  ITS->>App: Issue / handover (condition-before)
+  App->>DB: assets RESERVED→BORROWED, status ISSUED
+  ITS->>App: Return + inspection (condition-after)
+  App->>DB: normal→AVAILABLE / damaged→IN_REPAIR / lost→LOST<br/>status CLOSED (or PARTIALLY_RETURNED)
+  App->>App: A4 PDF rendered from DB rows
+```
+
 ## 2. Layering
 
 | Layer | Location | Responsibility |

@@ -20,6 +20,17 @@ Workflow: `.github/workflows/deploy.yml` (`Deploy to Cloud Run`).
   Secrets: `GCP_WIF_PROVIDER`, `GCP_DEPLOY_SA`.
 - **Concurrency:** `group: deploy-cloud-run` (one at a time).
 
+```mermaid
+flowchart LR
+  P["git push<br/>(main / feature branch)"] --> A["GitHub Actions<br/>Deploy to Cloud Run"]
+  A --> W["Auth via WIF (OIDC)"]
+  W --> B["Cloud Build<br/>image :sha7"]
+  B --> M["itbox-migrate job<br/>prisma migrate deploy"]
+  M -->|"fails → stop, no release"| X["❌ deploy blocked"]
+  M -->|"ok"| D["gcloud run deploy itbox<br/>(image only)"]
+  D --> L["Revision serves 100%"]
+```
+
 **Pipeline steps:**
 1. Checkout + authenticate to GCP (WIF) + set up `gcloud`.
 2. Compute image tag `…/itbox:${GITHUB_SHA::7}`.

@@ -101,4 +101,4 @@ repo's Playwright setup and Chromium are available).
 - Commits: concise, imperative subject + a body explaining **why**.
 - CI deploys on push to `main` / the active feature branch (docs-only pushes are
   skipped). A failing migration or build blocks the deploy.
-- See `CONVENTIONS.md` for additional house style.
+- See `docs/CONVENTIONS.md` for additional house style.

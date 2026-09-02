@@ -13,6 +13,8 @@
   in `User.passwordHistory` to block reuse on change/reset.
 - **MFA:** TOTP (`otpauth`) and **WebAuthn/passkeys** (`@simplewebauthn`).
   Sensitive actions (e.g. vault reveal) can require a step-up.
+- **Sessions:** JWT cookie backed by a **revocable DB record** (`UserSession`),
+  an 8-hour absolute timeout, and "log out everywhere" (revoke all sessions).
 
 ## 2. Authorization (RBAC)
 
@@ -34,6 +36,9 @@
   KMS** (`src/lib/kms.ts`, `src/lib/envelope.ts`); a local key is used only in
   dev. Ciphertext is all that is stored. Reveal/copy are logged in
   `VaultAccessLog`; secret plaintext never appears in reports, exports, or logs.
+- **Reveal chain:** authn → RBAC (`vault:reveal`) → per-item ACL → step-up MFA
+  for HIGH/CRITICAL items → break-glass approval where required → decrypt → audit
+  (the value is **never** logged) → the plaintext auto-hides in the UI after ~30s.
 - **Rotation & emergency access:** `VaultRotationLog` tracks rotation;
   `VaultEmergencyRequest` gates break-glass access (`vault:emergency`, held by
   SUPER_ADMIN / SECURITY_ADMIN only).

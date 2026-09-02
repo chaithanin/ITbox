@@ -95,22 +95,36 @@ Production rules enforced by the app:
 - Reveal chain: authn → RBAC → per-item ACL → MFA (HIGH/CRITICAL) → approval
   (break-glass) → decrypt → audit (value never logged) → auto-hide 30s.
 - Sessions: JWT + revocable DB record, 8h absolute timeout, logout-all.
-- Full details: docs/security.md, docs/password-vault.md.
+- Full details: SECURITY.md, docs/password-vault.md.
 
 ## Documentation
 
+**Canonical docs** (repo root):
+
 | File | Content |
 |---|---|
-| docs/architecture.md | System + GCP architecture, layers, scalability |
-| docs/database.md | Schema groups, ERD, encrypted columns, migrations |
-| docs/api.md | REST endpoints + permissions |
-| docs/security.md | AuthN/AuthZ, sessions, headers, audit, secrets |
-| docs/password-vault.md | Envelope encryption, reveal chain, sharing, break glass |
-| docs/gcp-deployment.md | Step-by-step production deployment |
+| [PRD.md](PRD.md) | What it is, who it's for, in/out of scope |
+| [ARCHITECTURE.md](ARCHITECTURE.md) | Layering, RBAC, adapters, intake pipeline, diagrams |
+| [DATABASE.md](DATABASE.md) | Schema groups, ER diagrams, modeling decisions, KPI/SLA formulas |
+| [API.md](API.md) | REST endpoint reference |
+| [SECURITY.md](SECURITY.md) | Auth, RBAC, secrets, data protection, known gaps |
+| [DEPLOYMENT.md](DEPLOYMENT.md) | Docker + GCP Cloud Run deploy runbook |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | Dev setup, conventions, testing |
+| [ROADMAP.md](ROADMAP.md) | Built / next / out of scope |
+| [CHANGELOG.md](CHANGELOG.md) | Build history |
+| [GCP_DEPLOYMENT_REPORT.md](GCP_DEPLOYMENT_REPORT.md) | The current live deployment, verified |
+
+**Manuals & runbooks** (`docs/`):
+
+| File | Content |
+|---|---|
+| docs/user-manual.md / admin-manual.md | คู่มือใช้งาน (ไทย) |
+| docs/it-support.md | Help-desk operating guide |
+| docs/password-vault.md | Vault reveal chain, sharing, break glass |
+| docs/gcp-deployment.md | Step-by-step manual GCP setup |
 | docs/backup-restore.md / disaster-recovery.md | Backups, PITR, RPO/RTO runbooks |
 | docs/pdpa.md | Personal-data handling |
-| docs/user-manual.md / admin-manual.md | คู่มือใช้งาน (ไทย) |
-| docs/CONVENTIONS.md | Coding conventions |
+| docs/CONVENTIONS.md | Coding conventions (detail) |
 
 ## Implementation status
 
