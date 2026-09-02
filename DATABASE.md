@@ -27,6 +27,9 @@
 | **ITIL / infra** | `NetworkDevice`, `Vlan`, `Subnet`, `IpAddress`, `ChangeRequest`, `Problem`, `KbArticle`, `Vulnerability`, `ConfigurationItem`, `CiRelationship`, `BackupJob`, `ServiceCatalogItem`, `EndpointPosture`, `MonitoringHost`, `ItHealthCheck` |
 | **Platform** | `Notification`, `AuditLog`, `SystemSetting` |
 
+> **Full per-module ERD and status state machines:** see
+> [DIAGRAMS.md](DIAGRAMS.md). The two diagrams below are the most-referenced core.
+
 ### ER diagram — assets, custody & borrowing
 
 ```mermaid

@@ -106,6 +106,7 @@ Production rules enforced by the app:
 | [PRD.md](PRD.md) | What it is, who it's for, in/out of scope |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Layering, RBAC, adapters, intake pipeline, diagrams |
 | [DATABASE.md](DATABASE.md) | Schema groups, ER diagrams, modeling decisions, KPI/SLA formulas |
+| [DIAGRAMS.md](DIAGRAMS.md) | Full per-module ERD + asset/borrow/case state machines |
 | [API.md](API.md) | REST endpoint reference |
 | [SECURITY.md](SECURITY.md) | Auth, RBAC, secrets, data protection, known gaps |
 | [DEPLOYMENT.md](DEPLOYMENT.md) | Docker + GCP Cloud Run deploy runbook |
