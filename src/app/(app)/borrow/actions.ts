@@ -25,6 +25,29 @@ function optDate(v: FormDataEntryValue | null): Date | null {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
+/** A redirect()/notFound() throws a control-flow error we must let propagate. */
+function isControlFlow(e: unknown): boolean {
+  const d = (e as { digest?: unknown })?.digest;
+  return typeof d === "string" && (d.startsWith("NEXT_REDIRECT") || d === "NEXT_NOT_FOUND");
+}
+
+/**
+ * Surface any borrow-action failure to the request page as a readable message
+ * instead of a white-screen "server-side exception". Known BorrowErrors map to
+ * bilingual text; anything else is logged (Cloud Run) and its message shown, so
+ * the real cause is visible rather than an opaque digest. Never swallows the
+ * redirect() control-flow error that ends a successful action.
+ */
+function surface(id: string, e: unknown): never {
+  if (isControlFlow(e)) throw e;
+  const msg =
+    e instanceof BorrowError
+      ? borrowErrorMessage(e.message)
+      : `เกิดข้อผิดพลาด / Error: ${((e as Error)?.message ?? String(e)).slice(0, 300)}`;
+  console.error("borrow action failed", e);
+  redirect(`/borrow/${id}?error=${encodeURIComponent(msg)}`);
+}
+
 /** Translate BorrowError codes into a friendly bilingual message for the UI. */
 function borrowErrorMessage(code: string): string {
   const [key, arg] = code.split(":");
@@ -90,9 +113,9 @@ export async function createBorrowAction(formData: FormData) {
   const assetIds = formData.getAll("assetId").map((v) => String(v)).filter(Boolean);
   const submit = formData.get("submit") === "true" || formData.get("submit") === "1";
 
-  let result;
+  let newId: string;
   try {
-    result = await createBorrowRequest(user, {
+    const result = await createBorrowRequest(user, {
       requesterEmployeeId,
       purpose: optStr(formData.get("purpose")),
       useLocation: optStr(formData.get("useLocation")),
@@ -102,24 +125,27 @@ export async function createBorrowAction(formData: FormData) {
       assetIds,
       submit,
     });
-  } catch (e) {
-    if (e instanceof BorrowError) {
-      redirect(`/borrow/new?error=${encodeURIComponent(borrowErrorMessage(e.message))}`);
+    newId = result.id;
+    await auditLog(user, {
+      action: submit ? "BORROW_SUBMIT" : "BORROW_CREATE",
+      entityType: "BORROW_REQUEST",
+      entityId: result.id,
+      detail: { refNo: result.refNo, assetCount: assetIds.length, submit },
+    });
+    if (submit) {
+      await notifyApprovers(user.organizationId, STEP_NOTIFY_ROLES.PENDING_MANAGER, result.refNo, result.id);
     }
-    throw e;
+    revalidatePath("/borrow");
+  } catch (e) {
+    if (isControlFlow(e)) throw e;
+    const msg =
+      e instanceof BorrowError
+        ? borrowErrorMessage(e.message)
+        : `เกิดข้อผิดพลาด / Error: ${((e as Error)?.message ?? String(e)).slice(0, 300)}`;
+    console.error("borrow create failed", e);
+    redirect(`/borrow/new?error=${encodeURIComponent(msg)}`);
   }
-
-  await auditLog(user, {
-    action: submit ? "BORROW_SUBMIT" : "BORROW_CREATE",
-    entityType: "BORROW_REQUEST",
-    entityId: result.id,
-    detail: { refNo: result.refNo, assetCount: assetIds.length, submit },
-  });
-  if (submit) {
-    await notifyApprovers(user.organizationId, STEP_NOTIFY_ROLES.PENDING_MANAGER, result.refNo, result.id);
-  }
-  revalidatePath("/borrow");
-  redirect(`/borrow/${result.id}`);
+  redirect(`/borrow/${newId}`);
 }
 
 // ------------------------------------------------------------------
@@ -128,17 +154,15 @@ export async function createBorrowAction(formData: FormData) {
 export async function submitBorrowAction(formData: FormData) {
   const user = await requirePermission("borrow:create");
   const id = z.string().uuid().parse(formData.get("id"));
-  let result;
   try {
-    result = await submitBorrowRequest(user, id);
+    const result = await submitBorrowRequest(user, id);
+    await auditLog(user, { action: "BORROW_SUBMIT", entityType: "BORROW_REQUEST", entityId: id, detail: { refNo: result.refNo } });
+    await notifyApprovers(user.organizationId, STEP_NOTIFY_ROLES.PENDING_MANAGER, result.refNo, id);
+    revalidatePath(`/borrow/${id}`);
+    revalidatePath("/borrow");
   } catch (e) {
-    if (e instanceof BorrowError) redirect(`/borrow/${id}?error=${encodeURIComponent(borrowErrorMessage(e.message))}`);
-    throw e;
+    surface(id, e);
   }
-  await auditLog(user, { action: "BORROW_SUBMIT", entityType: "BORROW_REQUEST", entityId: id, detail: { refNo: result.refNo } });
-  await notifyApprovers(user.organizationId, STEP_NOTIFY_ROLES.PENDING_MANAGER, result.refNo, id);
-  revalidatePath(`/borrow/${id}`);
-  revalidatePath("/borrow");
   redirect(`/borrow/${id}`);
 }
 
@@ -151,28 +175,26 @@ export async function decideApprovalAction(formData: FormData) {
   const decision = z.enum(["APPROVE", "REJECT"]).parse(formData.get("decision"));
   const comment = optStr(formData.get("comment"));
 
-  let result;
   try {
-    result = await decideApproval(user, id, decision, comment);
-  } catch (e) {
-    if (e instanceof BorrowError) redirect(`/borrow/${id}?error=${encodeURIComponent(borrowErrorMessage(e.message))}`);
-    throw e;
-  }
-  await auditLog(user, {
-    action: decision === "APPROVE" ? "BORROW_APPROVE" : "BORROW_REJECT",
-    entityType: "BORROW_REQUEST", entityId: id, detail: { refNo: result.refNo, toStatus: result.status },
-  });
+    const result = await decideApproval(user, id, decision, comment);
+    await auditLog(user, {
+      action: decision === "APPROVE" ? "BORROW_APPROVE" : "BORROW_REJECT",
+      entityType: "BORROW_REQUEST", entityId: id, detail: { refNo: result.refNo, toStatus: result.status },
+    });
 
-  if (result.status === "REJECTED") {
-    await notify(user.organizationId, result.requesterUserId, `คำขอยืมถูกปฏิเสธ / Borrow request rejected: ${result.refNo}`, comment ?? "", `/borrow/${id}`, "WARNING");
-  } else if (result.status === "READY_TO_ISSUE") {
-    await notify(user.organizationId, result.requesterUserId, `คำขอยืมได้รับอนุมัติ / Borrow request approved: ${result.refNo}`, "พร้อมรับอุปกรณ์ที่ฝ่าย IT / Ready to collect at IT", `/borrow/${id}`);
-    await notifyApprovers(user.organizationId, ["IT_STAFF", "IT_MANAGER", "ADMIN", "SUPER_ADMIN"], result.refNo, id);
-  } else if (STEP_NOTIFY_ROLES[result.status]) {
-    await notifyApprovers(user.organizationId, STEP_NOTIFY_ROLES[result.status], result.refNo, id);
+    if (result.status === "REJECTED") {
+      await notify(user.organizationId, result.requesterUserId, `คำขอยืมถูกปฏิเสธ / Borrow request rejected: ${result.refNo}`, comment ?? "", `/borrow/${id}`, "WARNING");
+    } else if (result.status === "READY_TO_ISSUE") {
+      await notify(user.organizationId, result.requesterUserId, `คำขอยืมได้รับอนุมัติ / Borrow request approved: ${result.refNo}`, "พร้อมรับอุปกรณ์ที่ฝ่าย IT / Ready to collect at IT", `/borrow/${id}`);
+      await notifyApprovers(user.organizationId, ["IT_STAFF", "IT_MANAGER", "ADMIN", "SUPER_ADMIN"], result.refNo, id);
+    } else if (STEP_NOTIFY_ROLES[result.status]) {
+      await notifyApprovers(user.organizationId, STEP_NOTIFY_ROLES[result.status], result.refNo, id);
+    }
+    revalidatePath(`/borrow/${id}`);
+    revalidatePath("/borrow");
+  } catch (e) {
+    surface(id, e);
   }
-  revalidatePath(`/borrow/${id}`);
-  revalidatePath("/borrow");
   redirect(`/borrow/${id}`);
 }
 
@@ -189,21 +211,19 @@ export async function issueAction(formData: FormData) {
   const id = z.string().uuid().parse(formData.get("id"));
   const items = z.array(issueItemSchema).parse(JSON.parse(String(formData.get("items") ?? "[]")));
 
-  let result;
   try {
-    result = await issueAssets(user, id, {
+    const result = await issueAssets(user, id, {
       items: items.map((i) => ({ ...i, conditionNote: i.conditionNote ?? null })),
       receivedByName: optStr(formData.get("receivedByName")),
       note: optStr(formData.get("note")),
     });
+    await auditLog(user, { action: "BORROW_ISSUE", entityType: "BORROW_REQUEST", entityId: id, detail: { refNo: result.refNo, items: items.length } });
+    await notify(user.organizationId, result.requesterUserId, `รับมอบอุปกรณ์แล้ว / Assets issued: ${result.refNo}`, "กรุณาคืนภายในกำหนด / Please return by the due date", `/borrow/${id}`);
+    revalidatePath(`/borrow/${id}`);
+    revalidatePath("/borrow");
   } catch (e) {
-    if (e instanceof BorrowError) redirect(`/borrow/${id}?error=${encodeURIComponent(borrowErrorMessage(e.message))}`);
-    throw e;
+    surface(id, e);
   }
-  await auditLog(user, { action: "BORROW_ISSUE", entityType: "BORROW_REQUEST", entityId: id, detail: { refNo: result.refNo, items: items.length } });
-  await notify(user.organizationId, result.requesterUserId, `รับมอบอุปกรณ์แล้ว / Assets issued: ${result.refNo}`, "กรุณาคืนภายในกำหนด / Please return by the due date", `/borrow/${id}`);
-  revalidatePath(`/borrow/${id}`);
-  revalidatePath("/borrow");
   redirect(`/borrow/${id}`);
 }
 
@@ -223,9 +243,8 @@ export async function returnAction(formData: FormData) {
   const id = z.string().uuid().parse(formData.get("id"));
   const items = z.array(returnItemSchema).parse(JSON.parse(String(formData.get("items") ?? "[]")));
 
-  let result;
   try {
-    result = await returnAssets(user, id, {
+    const result = await returnAssets(user, id, {
       items: items.map((i) => ({
         ...i,
         accessoriesNote: i.accessoriesNote ?? null,
@@ -234,14 +253,13 @@ export async function returnAction(formData: FormData) {
       returnedByName: optStr(formData.get("returnedByName")),
       note: optStr(formData.get("note")),
     });
+    await auditLog(user, { action: "BORROW_RETURN", entityType: "BORROW_REQUEST", entityId: id, detail: { refNo: result.refNo, items: items.length, fully: result.fully } });
+    await notify(user.organizationId, result.requesterUserId, `บันทึกการคืนแล้ว / Return recorded: ${result.refNo}`, result.fully ? "ปิดคำขอเรียบร้อย / Request closed" : "คืนบางส่วน / Partial return", `/borrow/${id}`);
+    revalidatePath(`/borrow/${id}`);
+    revalidatePath("/borrow");
   } catch (e) {
-    if (e instanceof BorrowError) redirect(`/borrow/${id}?error=${encodeURIComponent(borrowErrorMessage(e.message))}`);
-    throw e;
+    surface(id, e);
   }
-  await auditLog(user, { action: "BORROW_RETURN", entityType: "BORROW_REQUEST", entityId: id, detail: { refNo: result.refNo, items: items.length, fully: result.fully } });
-  await notify(user.organizationId, result.requesterUserId, `บันทึกการคืนแล้ว / Return recorded: ${result.refNo}`, result.fully ? "ปิดคำขอเรียบร้อย / Request closed" : "คืนบางส่วน / Partial return", `/borrow/${id}`);
-  revalidatePath(`/borrow/${id}`);
-  revalidatePath("/borrow");
   redirect(`/borrow/${id}`);
 }
 
@@ -252,14 +270,12 @@ export async function cancelAction(formData: FormData) {
   const user = await requirePermission("borrow:create");
   const id = z.string().uuid().parse(formData.get("id"));
   const reason = optStr(formData.get("reason"));
-  let result;
   try {
-    result = await cancelBorrowRequest(user, id, reason);
+    const result = await cancelBorrowRequest(user, id, reason);
+    await auditLog(user, { action: "BORROW_CANCEL", entityType: "BORROW_REQUEST", entityId: id, detail: { refNo: result.refNo } });
   } catch (e) {
-    if (e instanceof BorrowError) redirect(`/borrow/${id}?error=${encodeURIComponent(borrowErrorMessage(e.message))}`);
-    throw e;
+    surface(id, e);
   }
-  await auditLog(user, { action: "BORROW_CANCEL", entityType: "BORROW_REQUEST", entityId: id, detail: { refNo: result.refNo } });
   revalidatePath(`/borrow/${id}`);
   revalidatePath("/borrow");
   redirect(`/borrow/${id}`);
