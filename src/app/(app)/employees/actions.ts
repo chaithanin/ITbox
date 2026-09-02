@@ -178,7 +178,7 @@ export async function softDeleteEmployee(formData: FormData) {
     where: { id, organizationId: user.organizationId, deletedAt: null },
     select: { id: true, employeeCode: true, firstName: true, lastName: true, status: true, userId: true },
   });
-  if (!existing) throw new Error("Employee not found");
+  if (!existing) redirect("/employees?error=not-found");
 
   // Deleting must never be a silent back-door around offboarding: an employee
   // who still holds assets/licenses or has a live account must go through the
@@ -191,9 +191,13 @@ export async function softDeleteEmployee(formData: FormData) {
     ? await prisma.user.count({ where: { id: existing.userId, status: "ACTIVE" } })
     : 0;
   if (existing.status === "ACTIVE" || openAssignments > 0 || activeLicenses > 0 || linkedActiveUser > 0) {
-    throw new Error(
-      "ไม่สามารถลบพนักงานที่ยังมีทรัพย์สิน/สิทธิ์/บัญชีใช้งานอยู่ได้ — กรุณาทำ Offboarding ก่อน / Cannot delete an employee who still holds assets, licenses, or an active account. Run Offboarding first."
-    );
+    // Show a friendly message on the employee page instead of a raw server
+    // exception. The specific reason lets the UI guide the user.
+    const reason = existing.status === "ACTIVE" ? "active"
+      : openAssignments > 0 ? "assets"
+      : activeLicenses > 0 ? "licenses"
+      : "account";
+    redirect(`/employees/${id}?error=cannot-delete&reason=${reason}`);
   }
 
   // Clear the user link on soft-delete so the account can be re-linked to a new

@@ -20,13 +20,24 @@ import {
 } from "@/components/ui/table";
 import { softDeleteEmployee, startOffboarding } from "../actions";
 
+const DELETE_ERRORS: Record<string, string> = {
+  active: "ลบไม่ได้: พนักงานยังสถานะ ACTIVE — ตั้งเป็นลาออก/ทำ Offboarding ก่อน / Cannot delete an ACTIVE employee — resign or run Offboarding first.",
+  assets: "ลบไม่ได้: ยังถือครองทรัพย์สินอยู่ — คืนทรัพย์สินผ่าน Offboarding ก่อน / Cannot delete: still holds assets. Return them via Offboarding first.",
+  licenses: "ลบไม่ได้: ยังถือ license อยู่ — เพิกถอนก่อน / Cannot delete: still holds licenses. Revoke them first.",
+  account: "ลบไม่ได้: ยังมีบัญชีผู้ใช้ที่ใช้งานอยู่ — ปิดบัญชีก่อน / Cannot delete: linked to an active user account. Disable it first.",
+};
+
 export default async function EmployeeDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<Record<string, string | undefined>>;
 }) {
   const user = await requirePermission("employee:read");
   const { id } = await params;
+  const sp = await searchParams;
+  const deleteError = sp.error === "cannot-delete" ? (DELETE_ERRORS[sp.reason ?? ""] ?? DELETE_ERRORS.active) : null;
 
   const employee = await prisma.employee.findFirst({
     where: { id, organizationId: user.organizationId, deletedAt: null },
@@ -106,6 +117,9 @@ export default async function EmployeeDetailPage({
 
   return (
     <div className="space-y-5">
+      {deleteError && (
+        <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">{deleteError}</p>
+      )}
       <PageHeader title={fullName} description={`${employee.employeeCode} · ${employee.position ?? "-"}`}>
         {user.permissions.has("employee:update") && (
           <Button variant="outline" asChild>
