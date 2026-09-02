@@ -192,6 +192,17 @@ export async function POST(req: Request) {
       },
       take: 500,
     });
+    // Per request: borrow reminders go to the IT Manager (plus the requester).
+    const itManagers = loans.length
+      ? await prisma.user.findMany({
+          where: {
+            organizationId: org.id, deletedAt: null, status: "ACTIVE",
+            userRoles: { some: { role: { key: "IT_MANAGER" } } },
+          },
+          select: { id: true },
+          take: 50,
+        })
+      : [];
     for (const loan of loans) {
       if (!loan.dueDate) continue;
       const overdue = loan.dueDate.getTime() < now.getTime();
@@ -203,8 +214,21 @@ export async function POST(req: Request) {
         ? `${loan.refNo} เกินกำหนดคืน ${days} วัน`
         : `${loan.refNo} ครบกำหนดคืนใน ${days} วัน`;
       const link = `/borrow/${loan.id}`;
-      // IT managers / admins
-      await notify("BORROW_DUE", loan.id, overdue ? "CRITICAL" : "WARNING", title, body, link);
+      // IT Manager(s) only — idempotent per day per user
+      for (const m of itManagers) {
+        const seen = await prisma.notification.findFirst({
+          where: { organizationId: org.id, userId: m.id, type: "BORROW_DUE", body, createdAt: { gte: startOfDay } },
+          select: { id: true },
+        });
+        if (!seen) {
+          await prisma.notification.create({
+            data: {
+              organizationId: org.id, userId: m.id, type: "BORROW_DUE",
+              level: overdue ? "CRITICAL" : "WARNING", title, body, link,
+            },
+          });
+        }
+      }
       // The requester (own notification, same daily idempotency guard)
       if (loan.requester?.userId) {
         const exists = await prisma.notification.findFirst({

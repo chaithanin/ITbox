@@ -98,10 +98,12 @@ async function notifyApprovers(orgId: string, roleKeys: string[], refNo: string,
   });
 }
 
+// Per request: borrow-request notifications go to the IT Manager only.
+const BORROW_NOTIFY_ROLES = ["IT_MANAGER"];
 const STEP_NOTIFY_ROLES: Record<string, string[]> = {
-  PENDING_MANAGER: ["MANAGER", "IT_MANAGER", "ADMIN", "SUPER_ADMIN"],
-  PENDING_IT: ["IT_STAFF", "IT_MANAGER", "ADMIN", "SUPER_ADMIN"],
-  PENDING_MANAGEMENT: ["IT_MANAGER", "ADMIN", "SUPER_ADMIN"],
+  PENDING_MANAGER: BORROW_NOTIFY_ROLES,
+  PENDING_IT: BORROW_NOTIFY_ROLES,
+  PENDING_MANAGEMENT: BORROW_NOTIFY_ROLES,
 };
 
 // ------------------------------------------------------------------
@@ -185,7 +187,7 @@ export async function decideApprovalAction(formData: FormData) {
       await notify(user.organizationId, result.requesterUserId, `คำขอยืมถูกปฏิเสธ / Borrow request rejected: ${result.refNo}`, comment ?? "", `/borrow/${id}`, "WARNING");
     } else if (result.status === "READY_TO_ISSUE") {
       await notify(user.organizationId, result.requesterUserId, `คำขอยืมได้รับอนุมัติ / Borrow request approved: ${result.refNo}`, "พร้อมรับอุปกรณ์ที่ฝ่าย IT / Ready to collect at IT", `/borrow/${id}`);
-      await notifyApprovers(user.organizationId, ["IT_STAFF", "IT_MANAGER", "ADMIN", "SUPER_ADMIN"], result.refNo, id);
+      await notifyApprovers(user.organizationId, BORROW_NOTIFY_ROLES, result.refNo, id);
     } else if (STEP_NOTIFY_ROLES[result.status]) {
       await notifyApprovers(user.organizationId, STEP_NOTIFY_ROLES[result.status], result.refNo, id);
     }
