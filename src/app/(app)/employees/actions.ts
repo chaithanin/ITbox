@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requirePermission, type CurrentUser } from "@/lib/session";
 import { auditLog } from "@/lib/audit";
+import { linkEmployeesToUsers } from "@/lib/hr-user-link";
 
 const employeeSchema = z.object({
   employeeCode: z.string().min(1).max(50),
@@ -211,6 +212,27 @@ export async function softDeleteEmployee(formData: FormData) {
   });
   revalidatePath("/employees");
   redirect("/employees");
+}
+
+/**
+ * On-demand employee sync: reconcile the employee roster against system user
+ * accounts (match by employeeCode → email → unambiguous name) and refresh the
+ * page. The HR roster itself flows in via the HR push sync + scheduler; this
+ * button re-links any newly-added employees to their login accounts without
+ * waiting for the next scheduled pass.
+ */
+export async function syncEmployeeLinksAction() {
+  const user = await requirePermission("employee:update");
+  const result = await linkEmployeesToUsers(user.organizationId);
+  await auditLog(user, {
+    action: "HR_LINK_SYNC",
+    entityType: "EMPLOYEE",
+    detail: { ...result },
+  });
+  revalidatePath("/employees");
+  redirect(
+    `/employees?synced=1&linked=${result.linked}&unmatched=${result.unmatched}&already=${result.alreadyLinked}`
+  );
 }
 
 /** Start the offboarding workflow for an ACTIVE employee. */

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Plus, Upload } from "lucide-react";
+import { Plus, Upload, RefreshCcw } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/session";
 import { PageHeader } from "@/components/page-header";
@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/table";
 import type { Prisma } from "@prisma/client";
 import { JmlTabs } from "./jml-tabs";
+import { syncEmployeeLinksAction } from "./actions";
 import { OnboardingBoard } from "../onboarding/board";
 import { OffboardingBoard } from "../offboarding/board";
 
@@ -95,6 +96,14 @@ export default async function EmployeesPage({
         title="พนักงาน / Employees"
         description={`ทั้งหมด ${total} คน / ${total} employees`}
       >
+        {user.permissions.has("employee:update") && (
+          <form action={syncEmployeeLinksAction}>
+            <Button type="submit" variant="outline" title="ซิงค์และจับคู่พนักงานกับบัญชีผู้ใช้ / Sync & match employees to user accounts">
+              <RefreshCcw className="h-4 w-4" />
+              ซิงค์ข้อมูล / Sync
+            </Button>
+          </form>
+        )}
         {user.permissions.has("employee:create") && (
           <>
             <Button variant="outline" asChild>
@@ -112,6 +121,12 @@ export default async function EmployeesPage({
           </>
         )}
       </PageHeader>
+
+      {sp.synced && (
+        <div className="mb-4 rounded-md border border-emerald-300 bg-emerald-50 px-4 py-2 text-sm text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-200">
+          ซิงค์สำเร็จ / Sync complete — จับคู่ใหม่ {sp.linked ?? 0} · ไม่พบบัญชี {sp.unmatched ?? 0} · มีบัญชีอยู่แล้ว {sp.already ?? 0}
+        </div>
+      )}
 
       <JmlTabs active="employees" show={show} />
 
