@@ -22,10 +22,15 @@ type Tx = Prisma.TransactionClient;
 export const APPROVAL_CHAIN = ["IT"] as const;
 export type ApprovalStep = "MANAGER" | "IT" | "MANAGEMENT";
 
-/** Which roles may act on each approval step (any-of). */
+/**
+ * Which roles may act on each approval step (any-of). The active chain is a
+ * single IT step: only the IT Manager and the (Assistant) Manager may approve
+ * a borrow request — IT Staff can create/issue/return but not approve. ADMIN /
+ * SUPER_ADMIN are system administrators and can always act.
+ */
 const STEP_ROLES: Record<ApprovalStep, string[]> = {
   MANAGER: ["MANAGER", "IT_MANAGER", "ADMIN", "SUPER_ADMIN"],
-  IT: ["IT_STAFF", "IT_MANAGER", "ADMIN", "SUPER_ADMIN"],
+  IT: ["IT_MANAGER", "MANAGER", "ADMIN", "SUPER_ADMIN"],
   MANAGEMENT: ["IT_MANAGER", "ADMIN", "SUPER_ADMIN"],
 };
 

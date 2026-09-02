@@ -98,7 +98,7 @@ export const ROLE_PERMISSIONS: Record<string, PermissionKey[]> = {
   IT_STAFF: [
     "asset:read", "asset:create", "asset:update",
     "asset:assign", "asset:return", "asset:transfer",
-    "borrow:read", "borrow:create", "borrow:approve", "borrow:issue", "borrow:return",
+    "borrow:read", "borrow:create", "borrow:issue", "borrow:return",
     "employee:read", "department:read", "location:read",
     "vault:read", "vault:create", "vault:update", "vault:reveal", "vault:copy",
     "license:read", "subscription:read",
