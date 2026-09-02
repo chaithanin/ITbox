@@ -3,7 +3,7 @@ import { getCurrentUser } from "@/lib/session";
 import { getT } from "@/lib/i18n";
 import { prisma } from "@/lib/prisma";
 import { AppShell } from "@/components/shell/app-shell";
-import type { NavItem } from "@/components/shell/sidebar";
+import type { NavGroup, NavItem } from "@/components/shell/sidebar";
 import { KpiPopup } from "@/components/kpi-popup";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
@@ -23,10 +23,35 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       : Promise.resolve(null),
   ]);
   const kpiPopupMode = dbUser?.kpiPopupMode ?? "DAILY";
-  const nav: NavItem[] = [
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Workspaces: the ~30 permission-gated modules grouped into 8 primary areas.
+  // Grouping is organizational only — every href, permission gate and sub-menu
+  // is identical to before; empty workspaces (no visible items) are dropped.
+  // ─────────────────────────────────────────────────────────────────────────
+
+  const overview: NavItem[] = [
     { href: "/dashboard", label: t("dashboard"), icon: "dashboard" },
     ...(has("report:read") ? [{ href: "/dashboard/it-dashboard", label: "IT Dashboard", icon: "reports" }] : []),
     ...(has("report:read") ? [{ href: "/it-report", label: "IT Support Report", icon: "reports" }] : []),
+  ];
+
+  const people: NavItem[] = [
+    ...(has("employee:read")
+      ? [{
+          href: "/employees", label: t("employees"), icon: "employees",
+          children: [
+            { href: "/employees", label: t("employees") },
+            ...(has("onboarding:read") ? [{ href: "/employees?tab=onboarding", label: "รับเข้า / Onboarding" }] : []),
+            ...(has("offboarding:read") ? [{ href: "/employees?tab=offboarding", label: "พ้นสภาพ / Offboarding" }] : []),
+          ],
+        }]
+      : []),
+    ...(has("department:read") ? [{ href: "/departments", label: t("departments"), icon: "departments" }] : []),
+    ...(has("location:read") ? [{ href: "/locations", label: t("locations"), icon: "locations" }] : []),
+  ];
+
+  const assets: NavItem[] = [
     ...(has("asset:read") ? [{ href: "/assets", label: t("assets"), icon: "assets" }] : []),
     ...(has("borrow:read")
       ? [{
@@ -40,33 +65,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           ],
         }]
       : []),
-    ...(has("employee:read")
-      ? [{
-          href: "/employees", label: t("employees"), icon: "employees",
-          children: [
-            { href: "/employees", label: t("employees") },
-            ...(has("onboarding:read") ? [{ href: "/employees?tab=onboarding", label: "รับเข้า / Onboarding" }] : []),
-            ...(has("offboarding:read") ? [{ href: "/employees?tab=offboarding", label: "พ้นสภาพ / Offboarding" }] : []),
-          ],
-        }]
-      : []),
-    ...(has("department:read") ? [{ href: "/departments", label: t("departments"), icon: "departments" }] : []),
-    ...(has("location:read") ? [{ href: "/locations", label: t("locations"), icon: "locations" }] : []),
-    ...(has("vault:read")
-      ? [{
-          href: "/vault", label: t("vault"), icon: "vault",
-          children: [
-            { href: "/vault", label: t("vaultAll") },
-            { href: "/vault/shared", label: t("vaultShared") },
-            { href: "/vault/favorites", label: t("vaultFavorites") },
-            { href: "/vault/rotation", label: t("vaultRotation") },
-            { href: "/vault/emergency", label: t("vaultEmergency") },
-            { href: "/vault/security", label: t("vaultSecurity") },
-          ],
-        }]
-      : []),
-    ...(has("license:read") ? [{ href: "/licenses", label: t("licenses"), icon: "licenses" }] : []),
-    ...(has("subscription:read") ? [{ href: "/subscriptions", label: t("subscriptions"), icon: "subscriptions" }] : []),
+    ...(has("maintenance:read") ? [{ href: "/maintenance", label: t("maintenance"), icon: "maintenance" }] : []),
+  ];
+
+  const support: NavItem[] = [
     ...(has("support:create")
       ? [{
           href: "/support", label: t("itSupport"), icon: "support",
@@ -92,7 +94,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           ],
         }]
       : []),
-    ...(has("maintenance:read") ? [{ href: "/maintenance", label: t("maintenance"), icon: "maintenance" }] : []),
+  ];
+
+  const infrastructure: NavItem[] = [
     ...(has("network:read") ? [{
       href: "/network", label: "เครือข่าย / Network", icon: "network",
       children: [
@@ -103,7 +107,6 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     ...(has("change:read") ? [{ href: "/changes", label: "Change Management", icon: "changes" }] : []),
     ...(has("problem:read") ? [{ href: "/problems", label: "Problem Management", icon: "problems" }] : []),
     ...(has("kb:read") ? [{ href: "/kb", label: "Knowledge Base", icon: "kb" }] : []),
-    ...(has("vuln:read") ? [{ href: "/vulnerabilities", label: "ช่องโหว่ / Vulnerabilities", icon: "vulnerabilities" }] : []),
     ...(has("cmdb:read") ? [{ href: "/cmdb", label: "CMDB", icon: "cmdb" }] : []),
     ...(has("monitoring:read") ? [{ href: "/monitoring", label: "Monitoring", icon: "monitoring" }] : []),
     ...(has("monitoring:read") ? [{ href: "/endpoints", label: "Endpoint Security", icon: "endpoints" }] : []),
@@ -124,13 +127,53 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       : []),
     ...(has("catalog:read") ? [{ href: "/catalog", label: "Service Catalog", icon: "catalog" }] : []),
     ...(has("backup:read") ? [{ href: "/backup", label: "Backup & DR", icon: "backup" }] : []),
-    ...(has("contract:read") ? [{ href: "/contracts", label: "สัญญา / Contracts", icon: "contracts" }] : []),
+  ];
+
+  const procurement: NavItem[] = [
     ...(has("procurement:read") ? [{ href: "/procurement", label: t("procurement"), icon: "procurement" }] : []),
     ...(has("vendor:read") ? [{ href: "/vendors", label: t("vendors"), icon: "vendors" }] : []),
-    ...(has("report:read") ? [{ href: "/reports", label: t("reports"), icon: "reports" }] : []),
-    { href: "/notifications", label: t("notifications"), icon: "notifications" },
-    ...(has("audit:read") ? [{ href: "/audit-logs", label: t("auditLogs"), icon: "audit" }] : []),
+    ...(has("license:read") ? [{ href: "/licenses", label: t("licenses"), icon: "licenses" }] : []),
+    ...(has("subscription:read") ? [{ href: "/subscriptions", label: t("subscriptions"), icon: "subscriptions" }] : []),
+    ...(has("contract:read") ? [{ href: "/contracts", label: "สัญญา / Contracts", icon: "contracts" }] : []),
+  ];
+
+  const security: NavItem[] = [
+    ...(has("vault:read")
+      ? [{
+          href: "/vault", label: t("vault"), icon: "vault",
+          children: [
+            { href: "/vault", label: t("vaultAll") },
+            { href: "/vault/shared", label: t("vaultShared") },
+            { href: "/vault/favorites", label: t("vaultFavorites") },
+            { href: "/vault/rotation", label: t("vaultRotation") },
+            { href: "/vault/emergency", label: t("vaultEmergency") },
+            { href: "/vault/security", label: t("vaultSecurity") },
+          ],
+        }]
+      : []),
     ...(has("security:read") ? [{ href: "/security", label: t("securityCenter"), icon: "security" }] : []),
+    ...(has("vuln:read") ? [{ href: "/vulnerabilities", label: "ช่องโหว่ / Vulnerabilities", icon: "vulnerabilities" }] : []),
+    ...(has("audit:read") ? [{ href: "/audit-logs", label: t("auditLogs"), icon: "audit" }] : []),
+  ];
+
+  const reports: NavItem[] = [
+    ...(has("report:read") ? [{ href: "/reports", label: t("reports"), icon: "reports" }] : []),
+  ];
+
+  const groupDefs: NavGroup[] = [
+    { id: "overview", label: t("wsOverview"), icon: "dashboard", items: overview },
+    { id: "people", label: t("wsPeople"), icon: "people", items: people },
+    { id: "assets", label: t("wsAssets"), icon: "assets", items: assets },
+    { id: "support", label: t("wsSupport"), icon: "support", items: support },
+    { id: "infrastructure", label: t("wsInfrastructure"), icon: "infrastructure", items: infrastructure },
+    { id: "procurement", label: t("wsProcurement"), icon: "procurement", items: procurement },
+    { id: "security", label: t("wsSecurity"), icon: "securityWs", items: security },
+    { id: "reports", label: t("wsReports"), icon: "reports", items: reports },
+  ];
+  const navGroups = groupDefs.filter((g) => g.items.length > 0);
+
+  const navFooter: NavItem[] = [
+    { href: "/notifications", label: t("notifications"), icon: "notifications" },
     ...(has("user:manage") || has("settings:manage")
       ? [{ href: "/settings", label: t("settings"), icon: "settings" }]
       : []),
@@ -138,7 +181,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   return (
     <AppShell
-      navItems={nav}
+      navGroups={navGroups}
+      navFooter={navFooter}
       appName={t("appName")}
       userName={user.name}
       userEmail={user.email}

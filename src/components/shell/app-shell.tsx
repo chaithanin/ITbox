@@ -1,11 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { Sidebar, type NavItem } from "./sidebar";
+import { Sidebar, type NavGroup, type NavItem } from "./sidebar";
 import { Topbar } from "./topbar";
 
 export function AppShell({
-  navItems,
+  navGroups,
+  navFooter,
   appName,
   userName,
   userEmail,
@@ -14,7 +15,8 @@ export function AppShell({
   labels,
   children,
 }: {
-  navItems: NavItem[];
+  navGroups: NavGroup[];
+  navFooter: NavItem[];
   appName: string;
   userName: string;
   userEmail: string;
@@ -26,7 +28,13 @@ export function AppShell({
   const [open, setOpen] = useState(false);
   return (
     <div className="min-h-screen">
-      <Sidebar items={navItems} appName={appName} open={open} onClose={() => setOpen(false)} />
+      <Sidebar
+        groups={navGroups}
+        footer={navFooter}
+        appName={appName}
+        open={open}
+        onClose={() => setOpen(false)}
+      />
       <div className="lg:pl-64">
         <Topbar
           userName={userName}
