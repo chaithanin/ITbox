@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { LifeBuoy, User2, CircleHelp, Paperclip, ArrowLeft } from "lucide-react";
+import { LifeBuoy, User2, Paperclip, ArrowLeft } from "lucide-react";
 import { requireUser } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import { Button } from "@/components/ui/button";
@@ -8,25 +8,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { IMPACT_LABEL, PRIORITY_LABEL } from "@/lib/services/support";
-import type { CaseImpact } from "@prisma/client";
 import { createCaseAction } from "../actions";
 import { CategoryPicker, type CategoryOption } from "./category-picker";
 import { ReporterFields } from "./reporter-fields";
 import { DevicePicker } from "./device-picker";
-
-const IMPACT_ORDER: CaseImpact[] = ["UNUSABLE", "MAJOR", "PARTIAL", "GENERAL"];
-
-// Impact → resulting priority + how the option should read/colour on the card.
-const IMPACT_META: Record<
-  CaseImpact,
-  { priority: "P1" | "P2" | "P3" | "P4"; descTh: string; accent: string; dot: string }
-> = {
-  UNUSABLE: { priority: "P1", descTh: "ทำงานต่อไม่ได้เลย ต้องแก้ด่วน", accent: "text-red-600 dark:text-red-400", dot: "bg-red-500" },
-  MAJOR: { priority: "P2", descTh: "กระทบงานสำคัญอย่างมาก", accent: "text-orange-600 dark:text-orange-400", dot: "bg-orange-500" },
-  PARTIAL: { priority: "P3", descTh: "ยังพอทำงานได้บางส่วน", accent: "text-amber-600 dark:text-amber-400", dot: "bg-amber-500" },
-  GENERAL: { priority: "P4", descTh: "สอบถาม/ขอทั่วไป ไม่เร่งด่วน", accent: "text-emerald-600 dark:text-emerald-400", dot: "bg-emerald-500" },
-};
 
 function initials(name: string): string {
   const parts = name.trim().split(/\s+/);
@@ -253,68 +238,12 @@ export default async function NewCasePage({
 
             <hr className="border-border" />
 
-            {/* Section 3 — impact + attachment */}
+            {/* Section 3 — attachment. Impact/urgency/priority are set by the
+                IT team when they triage the case, not by the requester. */}
             <section>
-              <SectionTitle step={3}>ความเร่งด่วน & ไฟล์แนบ / Impact & attachment</SectionTitle>
+              <SectionTitle step={3}>ไฟล์แนบ / Attachment</SectionTitle>
 
-              <div className="mb-1 flex items-center gap-1.5">
-                <Label>ปัญหานี้กระทบงานของคุณแค่ไหน?</Label>
-                <CircleHelp className="h-3.5 w-3.5 text-muted-foreground" />
-              </div>
-              <p className="mb-3 text-xs text-muted-foreground">
-                เลือกระดับผลกระทบ — ระบบจะกำหนดความเร่งด่วน (Priority) ให้อัตโนมัติ
-              </p>
-
-              <div className="grid gap-2.5 sm:grid-cols-2">
-                {IMPACT_ORDER.map((k) => {
-                  const m = IMPACT_META[k];
-                  return (
-                    <label key={k} className="cursor-pointer">
-                      <input
-                        type="radio"
-                        name="impact"
-                        value={k}
-                        defaultChecked={k === "GENERAL"}
-                        className="peer sr-only"
-                      />
-                      <div className="flex h-full items-start gap-3 rounded-xl border bg-card p-3 transition-colors hover:border-primary/50 peer-checked:border-primary peer-checked:bg-primary/5 peer-checked:ring-2 peer-checked:ring-primary/30 peer-focus-visible:ring-2 peer-focus-visible:ring-primary/40">
-                        <span className={`mt-0.5 h-2.5 w-2.5 shrink-0 rounded-full ${m.dot}`} aria-hidden />
-                        <div className="min-w-0">
-                          <p className="flex items-center gap-1.5 text-sm font-medium">
-                            {IMPACT_LABEL[k].th}
-                            <span className={`text-[10px] font-bold ${m.accent}`}>
-                              {m.priority} · {PRIORITY_LABEL[m.priority].th}
-                            </span>
-                          </p>
-                          <p className="text-xs text-muted-foreground">{m.descTh}</p>
-                        </div>
-                      </div>
-                    </label>
-                  );
-                })}
-              </div>
-
-              <div className="mt-4">
-                <Label>ความเร่งด่วน / Urgency</Label>
-                <p className="mb-2 text-xs text-muted-foreground">รอได้แค่ไหน — รวมกับผลกระทบเพื่อคำนวณ Priority (Impact × Urgency)</p>
-                <div className="grid grid-cols-3 gap-2">
-                  {([
-                    { v: "HIGH", th: "ด่วนมาก", desc: "ต้องแก้ทันที" },
-                    { v: "MEDIUM", th: "ปกติ", desc: "ภายในวันนี้" },
-                    { v: "LOW", th: "รอได้", desc: "ไม่เร่ง" },
-                  ] as const).map((u) => (
-                    <label key={u.v} className="cursor-pointer">
-                      <input type="radio" name="urgency" value={u.v} defaultChecked={u.v === "MEDIUM"} className="peer sr-only" />
-                      <div className="rounded-lg border bg-card p-2 text-center transition-colors hover:border-primary/50 peer-checked:border-primary peer-checked:bg-primary/5 peer-checked:ring-2 peer-checked:ring-primary/30">
-                        <p className="text-sm font-medium">{u.th}</p>
-                        <p className="text-[11px] text-muted-foreground">{u.desc}</p>
-                      </div>
-                    </label>
-                  ))}
-                </div>
-              </div>
-
-              <div className="mt-4">
+              <div>
                 <Label htmlFor="file" className="flex items-center gap-1.5">
                   <Paperclip className="h-3.5 w-3.5" />
                   แนบไฟล์ / Attachment
