@@ -17,8 +17,10 @@ import type { CurrentUser } from "@/lib/session";
 
 type Tx = Prisma.TransactionClient;
 
-export const APPROVAL_CHAIN = ["MANAGER", "IT", "MANAGEMENT"] as const;
-export type ApprovalStep = (typeof APPROVAL_CHAIN)[number];
+// Approval workflow: a single IT step (per request — previously
+// MANAGER → IT → MANAGEMENT). To restore multi-step, add steps back here.
+export const APPROVAL_CHAIN = ["IT"] as const;
+export type ApprovalStep = "MANAGER" | "IT" | "MANAGEMENT";
 
 /** Which roles may act on each approval step (any-of). */
 const STEP_ROLES: Record<ApprovalStep, string[]> = {
@@ -32,6 +34,12 @@ const STEP_STATUS: Record<ApprovalStep, "PENDING_MANAGER" | "PENDING_IT" | "PEND
   IT: "PENDING_IT",
   MANAGEMENT: "PENDING_MANAGEMENT",
 };
+
+// First step of the chain and its pending status — used when a request is
+// submitted, so the initial state follows APPROVAL_CHAIN rather than a
+// hardcoded MANAGER step.
+const FIRST_STEP: ApprovalStep = APPROVAL_CHAIN[0];
+const INITIAL_STATUS = STEP_STATUS[FIRST_STEP];
 
 export class BorrowError extends Error {
   constructor(message: string) {
@@ -121,8 +129,8 @@ export async function createBorrowRequest(user: CurrentUser, input: CreateBorrow
         borrowDate: input.borrowDate ?? null,
         dueDate: input.dueDate ?? null,
         notes: input.notes ?? null,
-        status: input.submit ? "PENDING_MANAGER" : "DRAFT",
-        currentStep: input.submit ? "MANAGER" : null,
+        status: input.submit ? INITIAL_STATUS : "DRAFT",
+        currentStep: input.submit ? FIRST_STEP : null,
         submittedAt: input.submit ? new Date() : null,
         createdById: user.id,
         updatedById: user.id,
@@ -188,10 +196,10 @@ export async function submitBorrowRequest(user: CurrentUser, id: string) {
     });
     await tx.borrowRequest.update({
       where: { id },
-      data: { status: "PENDING_MANAGER", currentStep: "MANAGER", submittedAt: new Date(), updatedById: user.id },
+      data: { status: INITIAL_STATUS, currentStep: FIRST_STEP, submittedAt: new Date(), updatedById: user.id },
     });
     await reserveAssets(tx, user.organizationId, assets, id, user.id);
-    return { id, refNo: req.refNo, status: "PENDING_MANAGER" as const };
+    return { id, refNo: req.refNo, status: INITIAL_STATUS };
   });
 }
 

@@ -135,7 +135,7 @@ export async function createBorrowAction(formData: FormData) {
       detail: { refNo: result.refNo, assetCount: assetIds.length, submit },
     });
     if (submit) {
-      await notifyApprovers(user.organizationId, STEP_NOTIFY_ROLES.PENDING_MANAGER, result.refNo, result.id);
+      await notifyApprovers(user.organizationId, BORROW_NOTIFY_ROLES, result.refNo, result.id);
     }
     revalidatePath("/borrow");
   } catch (e) {
@@ -159,7 +159,7 @@ export async function submitBorrowAction(formData: FormData) {
   try {
     const result = await submitBorrowRequest(user, id);
     await auditLog(user, { action: "BORROW_SUBMIT", entityType: "BORROW_REQUEST", entityId: id, detail: { refNo: result.refNo } });
-    await notifyApprovers(user.organizationId, STEP_NOTIFY_ROLES.PENDING_MANAGER, result.refNo, id);
+    await notifyApprovers(user.organizationId, BORROW_NOTIFY_ROLES, result.refNo, id);
     revalidatePath(`/borrow/${id}`);
     revalidatePath("/borrow");
   } catch (e) {
