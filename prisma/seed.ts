@@ -82,6 +82,7 @@ async function encryptSecretForSeed(plaintext: string) {
 // seed re-runs upsert so drift is corrected on next seed).
 const PERMISSIONS = [
   "asset:read","asset:create","asset:update","asset:delete","asset:assign","asset:return","asset:transfer","asset:dispose","asset:export",
+  "borrow:read","borrow:create","borrow:approve","borrow:issue","borrow:return","borrow:manage","borrow:export",
   "employee:read","employee:create","employee:update","employee:delete",
   "department:read","department:manage","location:read","location:manage",
   "vault:read","vault:create","vault:update","vault:delete","vault:reveal","vault:copy","vault:share","vault:rotate","vault:manage","vault:emergency","vault:audit",
@@ -100,7 +101,7 @@ const PERMISSIONS = [
 ];
 
 const READ_ONLY = [
-  "asset:read","employee:read","department:read","location:read","license:read",
+  "asset:read","borrow:read","employee:read","department:read","location:read","license:read",
   "subscription:read","vendor:read","maintenance:read","procurement:read","report:read",
   "network:read","change:read","backup:read","contract:read",
   "problem:read","kb:read","vuln:read","cmdb:read",
@@ -112,6 +113,7 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
   ADMIN: PERMISSIONS.filter((p) => p !== "vault:emergency"),
   IT_MANAGER: [
     "asset:read","asset:create","asset:update","asset:delete","asset:assign","asset:return","asset:transfer","asset:dispose","asset:export",
+    "borrow:read","borrow:create","borrow:approve","borrow:issue","borrow:return","borrow:manage","borrow:export",
     "employee:read","department:read","location:read","location:manage",
     "vault:read","vault:create","vault:update","vault:delete","vault:reveal","vault:copy","vault:share","vault:rotate","vault:manage","vault:emergency","vault:audit",
     "license:read","license:manage","subscription:read","subscription:manage",
@@ -128,6 +130,7 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
   ],
   IT_STAFF: [
     "asset:read","asset:create","asset:update","asset:assign","asset:return","asset:transfer",
+    "borrow:read","borrow:create","borrow:approve","borrow:issue","borrow:return",
     "employee:read","department:read","location:read",
     "vault:read","vault:create","vault:update","vault:reveal","vault:copy",
     "license:read","subscription:read","vendor:read","maintenance:read","maintenance:manage",
@@ -148,12 +151,12 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
   ],
   HR: [
     "employee:read","employee:create","employee:update","employee:delete",
-    "department:read","location:read","asset:read","offboarding:read","offboarding:manage","report:read","support:create",
+    "department:read","location:read","asset:read","borrow:read","offboarding:read","offboarding:manage","report:read","support:create",
     "onboarding:read","onboarding:manage","catalog:read",
   ],
   FINANCE: [...READ_ONLY, "procurement:approve", "report:export", "support:create"],
-  MANAGER: [...READ_ONLY, "procurement:create", "procurement:approve", "support:create", "support:read"],
-  EMPLOYEE: ["asset:read","vault:read","procurement:read","procurement:create","support:create"],
+  MANAGER: [...READ_ONLY, "procurement:create", "procurement:approve", "support:create", "support:read", "borrow:create", "borrow:approve"],
+  EMPLOYEE: ["asset:read","vault:read","procurement:read","procurement:create","support:create","borrow:read","borrow:create"],
   AUDITOR: [...READ_ONLY, "audit:read","vault:audit","security:read","report:export"],
   VIEWER: READ_ONLY,
 };
