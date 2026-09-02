@@ -56,11 +56,12 @@ export function BorrowRequestForm({
 
   const assetMatches = useMemo(() => {
     const q = assetQuery.trim().toLowerCase();
+    if (!q) return [];
     const chosen = new Set(selected.map((s) => s.id));
     return assets
       .filter((a) => !chosen.has(a.id))
       .filter((a) =>
-        !q ? true : `${a.assetTag} ${a.name} ${a.serialNumber ?? ""} ${a.categoryName ?? ""}`.toLowerCase().includes(q)
+        `${a.assetTag} ${a.name} ${a.serialNumber ?? ""} ${a.categoryName ?? ""}`.toLowerCase().includes(q)
       )
       .slice(0, 8);
   }, [assetQuery, assets, selected]);

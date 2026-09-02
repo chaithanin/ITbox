@@ -230,7 +230,7 @@ function buildPdf(d: FormData, font: Buffer): Promise<Buffer> {
     sigBlock(left + 2 * (qW + 10), y, qW, "ผู้ตรวจสอบ", "IT Manager", d.itManager1);
     sigBlock(left + 3 * (qW + 10), y, qW, "ผู้ตรวจสอบ", "Management", d.management1);
 
-    doc.fontSize(9).fillColor("#6b7280").text("Page 1 of 2", left, doc.page.height - margin + 4, { width, align: "center", lineBreak: false });
+    doc.fontSize(9).fillColor("#6b7280").text("Page 1 of 2", left, doc.page.height - margin - 30, { width, align: "center", lineBreak: false });
 
     // ================= PAGE 2 =================
     doc.addPage();
@@ -247,7 +247,7 @@ function buildPdf(d: FormData, font: Buffer): Promise<Buffer> {
     sigBlock(left + 2 * (qW + 10), y, qW, "ผู้ตรวจสอบ", "IT Manager", d.itManager2);
     sigBlock(left + 3 * (qW + 10), y, qW, "ผู้ตรวจสอบ", "Management", d.management2);
 
-    doc.fontSize(9).fillColor("#6b7280").text("Page 2 of 2", left, doc.page.height - margin + 4, { width, align: "center", lineBreak: false });
+    doc.fontSize(9).fillColor("#6b7280").text("Page 2 of 2", left, doc.page.height - margin - 30, { width, align: "center", lineBreak: false });
 
     doc.end();
   });
