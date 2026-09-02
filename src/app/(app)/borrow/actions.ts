@@ -170,12 +170,11 @@ export async function submitBorrowAction(formData: FormData) {
 // Approve / reject
 // ------------------------------------------------------------------
 export async function decideApprovalAction(formData: FormData) {
-  const user = await requirePermission("borrow:approve");
-  const id = z.string().uuid().parse(formData.get("id"));
-  const decision = z.enum(["APPROVE", "REJECT"]).parse(formData.get("decision"));
-  const comment = optStr(formData.get("comment"));
-
+  const id = z.string().uuid().safeParse(formData.get("id")).data ?? "";
   try {
+    const user = await requirePermission("borrow:approve");
+    const decision = z.enum(["APPROVE", "REJECT"]).parse(formData.get("decision"));
+    const comment = optStr(formData.get("comment"));
     const result = await decideApproval(user, id, decision, comment);
     await auditLog(user, {
       action: decision === "APPROVE" ? "BORROW_APPROVE" : "BORROW_REJECT",
