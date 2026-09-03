@@ -282,9 +282,24 @@ export const POST = apiHandler(async (req: Request) => {
 
   // Map header columns case-insensitively → index
   const headerRow = rows[0].map((h) => h.trim().toLowerCase());
+  // Accepted header aliases → canonical column. Lets the app's own asset export
+  // (which labels the holder column "assignedTo") round-trip back through import.
+  const ALIASES: Partial<Record<ColumnName, string[]>> = {
+    assignedToName: ["assignedto", "assigned to", "holder"],
+    serialNumber: ["serial", "serialno", "serial no"],
+    warrantyEnd: ["warranty end"],
+    purchaseDate: ["purchase date"],
+    purchasePrice: ["purchase price", "price"],
+  };
   const colIndex = new Map<ColumnName, number>();
   for (const col of COLUMNS) {
-    const idx = headerRow.indexOf(col.toLowerCase());
+    let idx = headerRow.indexOf(col.toLowerCase());
+    if (idx < 0) {
+      for (const alias of ALIASES[col] ?? []) {
+        idx = headerRow.indexOf(alias);
+        if (idx >= 0) break;
+      }
+    }
     if (idx >= 0) colIndex.set(col, idx);
   }
   if (!colIndex.has("assetTag") || !colIndex.has("name")) {
