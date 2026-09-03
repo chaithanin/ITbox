@@ -53,8 +53,9 @@
   the shared `itreport.ingest`).
 - `clientIp(req)` trusts only the right-most `INGEST_TRUSTED_PROXIES` hops of
   `X-Forwarded-For` to prevent IP spoofing.
-- Ingest routes are the only session-exempt paths (allowlist in
-  `src/auth.config.ts`).
+- Ingest routes and the `CRON_SECRET`-authed `/api/cron/*` jobs are the only
+  session-exempt paths (allowlist in `src/auth.config.ts`); each still enforces
+  its own auth (API key hash / `verifyCronSecret`) at the handler.
 
 ## 5. Scheduled jobs
 
