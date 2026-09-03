@@ -31,6 +31,19 @@ function nextHistory(oldHash: string | null, history: string[]): string[] {
   return (oldHash ? [oldHash, ...history] : history).slice(0, PASSWORD_HISTORY_SIZE);
 }
 
+/**
+ * Redirect back to a user-management screen: the per-user detail page when a
+ * safe `returnTo` was supplied (forms on /settings/users/[id] set it), else the
+ * list. Keeps the success/error banner on whichever page the admin was using.
+ */
+function usersReturn(returnTo: FormDataEntryValue | null, qs: string): never {
+  const base =
+    typeof returnTo === "string" && /^\/settings\/users\/[0-9a-fA-F-]+$/.test(returnTo)
+      ? returnTo
+      : "/settings/users";
+  redirect(`${base}?${qs}`);
+}
+
 // ---------------- User management (admin) ----------------
 
 const createUserSchema = z.object({
@@ -95,19 +108,20 @@ export async function createUserAction(formData: FormData) {
  * the login account to its HR employee record. */
 export async function setUserEmployeeCodeAction(userId: string, formData: FormData) {
   const admin = await requirePermission("user:manage");
+  const returnTo = formData.get("returnTo");
   const raw = String(formData.get("employeeCode") ?? "").trim().slice(0, 50);
   const code = raw || null;
   const target = await prisma.user.findFirst({
     where: { id: userId, organizationId: admin.organizationId, deletedAt: null },
     select: { id: true },
   });
-  if (!target) redirect("/settings/users?error=user-not-found");
+  if (!target) usersReturn(returnTo, "error=user-not-found");
   if (code) {
     const clash = await prisma.user.findFirst({
       where: { organizationId: admin.organizationId, employeeCode: code, deletedAt: null, NOT: { id: userId } },
       select: { id: true },
     });
-    if (clash) redirect("/settings/users?error=code-exists");
+    if (clash) usersReturn(returnTo, "error=code-exists");
   }
   await prisma.user.update({ where: { id: target!.id }, data: { employeeCode: code } });
   // Re-link the matching employee to this account immediately (matches by code).
@@ -118,7 +132,8 @@ export async function setUserEmployeeCodeAction(userId: string, formData: FormDa
     detail: { event: "EMPLOYEE_CODE_SET", employeeCode: code },
   });
   revalidatePath("/settings/users");
-  redirect("/settings/users?ok=code-set");
+  revalidatePath(`/settings/users/${target!.id}`);
+  usersReturn(returnTo, "ok=code-set");
 }
 
 /**
@@ -127,12 +142,13 @@ export async function setUserEmployeeCodeAction(userId: string, formData: FormDa
  * revokes sessions. Admins cannot ENABLE MFA for someone else, because TOTP
  * enrollment requires the user to scan the QR themselves (Settings → Profile).
  */
-export async function disableUserMfaAction(userId: string) {
+export async function disableUserMfaAction(userId: string, formData?: FormData) {
   const admin = await requirePermission("user:manage");
+  const returnTo = formData?.get("returnTo") ?? null;
   const target = await prisma.user.findFirst({
     where: { id: userId, organizationId: admin.organizationId, deletedAt: null },
   });
-  if (!target) redirect("/settings/users?error=user-not-found");
+  if (!target) usersReturn(returnTo, "error=user-not-found");
   await prisma.user.update({
     where: { id: target!.id },
     data: { mfaEnabled: false, totpSecretEnc: null, totpSecretDekEnc: null },
@@ -146,11 +162,13 @@ export async function disableUserMfaAction(userId: string) {
     detail: { event: "MFA_DISABLED_BY_ADMIN" },
   });
   revalidatePath("/settings/users");
-  redirect("/settings/users?ok=mfa-disabled");
+  revalidatePath(`/settings/users/${target!.id}`);
+  usersReturn(returnTo, "ok=mfa-disabled");
 }
 
 export async function setUserStatusAction(userId: string, formData: FormData) {
   const admin = await requirePermission("user:manage");
+  const returnTo = formData.get("returnTo");
   const status = z.enum(["ACTIVE", "DISABLED"]).parse(formData.get("status"));
   const target = await prisma.user.findFirst({
     where: { id: userId, organizationId: admin.organizationId, deletedAt: null },
@@ -171,10 +189,13 @@ export async function setUserStatusAction(userId: string, formData: FormData) {
     action: "UPDATE", entityType: "USER", entityId: target.id, detail: { status },
   });
   revalidatePath("/settings/users");
+  revalidatePath(`/settings/users/${target.id}`);
+  if (returnTo) usersReturn(returnTo, "ok=status-changed");
 }
 
 export async function setUserRolesAction(userId: string, formData: FormData) {
   const admin = await requirePermission("user:manage");
+  const returnTo = formData.get("returnTo");
   const roleIds = formData.getAll("roleIds").map((v) => z.string().uuid().parse(v));
   const target = await prisma.user.findFirst({
     where: { id: userId, organizationId: admin.organizationId, deletedAt: null },
@@ -194,24 +215,27 @@ export async function setUserRolesAction(userId: string, formData: FormData) {
     detail: { roles: roles.map((r) => r.key) },
   });
   revalidatePath("/settings/users");
+  revalidatePath(`/settings/users/${target.id}`);
+  if (returnTo) usersReturn(returnTo, "ok=roles-saved");
 }
 
 export async function adminResetPasswordAction(userId: string, formData: FormData) {
   const admin = await requirePermission("user:manage");
+  const returnTo = formData.get("returnTo");
   const password = String(formData.get("password") ?? "");
   const confirm = String(formData.get("confirmPassword") ?? "");
   if (password !== confirm) {
-    redirect("/settings/users?error=password-mismatch");
+    usersReturn(returnTo, "error=password-mismatch");
   }
   if (!validatePasswordPolicy(password).ok) {
-    redirect("/settings/users?error=weak-password");
+    usersReturn(returnTo, "error=weak-password");
   }
   const target = await prisma.user.findFirst({
     where: { id: userId, organizationId: admin.organizationId, deletedAt: null },
   });
-  if (!target) redirect("/settings/users?error=user-not-found");
+  if (!target) usersReturn(returnTo, "error=user-not-found");
   if (await passwordReused({ passwordHash: target.passwordHash, passwordHistory: target.passwordHistory }, password)) {
-    redirect("/settings/users?error=password-reused");
+    usersReturn(returnTo, "error=password-reused");
   }
   await prisma.user.update({
     where: { id: target.id },
@@ -232,7 +256,8 @@ export async function adminResetPasswordAction(userId: string, formData: FormDat
     detail: { event: "PASSWORD_RESET_BY_ADMIN" },
   });
   revalidatePath("/settings/users");
-  redirect("/settings/users?ok=password-reset");
+  revalidatePath(`/settings/users/${target.id}`);
+  usersReturn(returnTo, "ok=password-reset");
 }
 
 // ---------------- Role permissions ----------------

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { requirePermission } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import { PageHeader } from "@/components/page-header";
@@ -9,12 +10,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
-import { ConfirmButton } from "@/components/confirm-button";
 import { formatDateTime } from "@/lib/utils";
-import {
-  createUserAction, setUserStatusAction, setUserRolesAction, adminResetPasswordAction,
-  disableUserMfaAction, setUserEmployeeCodeAction,
-} from "../actions";
+import { createUserAction } from "../actions";
 
 export const dynamic = "force-dynamic";
 
@@ -115,123 +112,75 @@ export default async function UsersPage({
         </CardContent>
       </Card>
 
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>ผู้ใช้ / User</TableHead>
-            <TableHead>บทบาท / Roles</TableHead>
-            <TableHead>MFA</TableHead>
-            <TableHead>สถานะ</TableHead>
-            <TableHead>เข้าระบบล่าสุด</TableHead>
-            <TableHead>จัดการ / Actions</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {users.map((u) => {
-            const statusAction = setUserStatusAction.bind(null, u.id);
-            const rolesAction = setUserRolesAction.bind(null, u.id);
-            const resetAction = adminResetPasswordAction.bind(null, u.id);
-            const mfaOffAction = disableUserMfaAction.bind(null, u.id);
-            const codeAction = setUserEmployeeCodeAction.bind(null, u.id);
-            const isLocked = u.lockedUntil && u.lockedUntil > new Date();
-            return (
-              <TableRow key={u.id}>
-                <TableCell>
-                  <p className="font-medium">{u.name}</p>
-                  <p className="text-xs text-muted-foreground">{u.email}</p>
-                  <form action={codeAction} className="mt-1 flex items-center gap-1">
-                    <Input
-                      name="employeeCode" defaultValue={u.employeeCode ?? ""} maxLength={50}
-                      placeholder="รหัสพนักงาน" className="h-6 w-28 text-[11px]"
-                      title="รหัสพนักงาน (Staff ID) — ผูกบัญชีกับพนักงาน HR แบบแม่นยำ"
-                    />
-                    <Button type="submit" variant="outline" size="sm" className="h-6 px-2 text-[11px]">ผูก</Button>
-                  </form>
-                </TableCell>
-                <TableCell>
-                  <form action={rolesAction} className="flex flex-wrap items-center gap-1.5">
-                    <select
-                      name="roleIds"
-                      multiple
-                      defaultValue={u.userRoles.map((ur) => ur.roleId)}
-                      className="max-w-[11rem] rounded border bg-card p-1 text-xs"
-                      size={3}
-                    >
-                      {roles.map((r) => (
-                        <option key={r.id} value={r.id}>{r.key}</option>
-                      ))}
-                    </select>
-                    <Button type="submit" variant="outline" size="sm">บันทึก</Button>
-                  </form>
-                </TableCell>
-                <TableCell>
-                  <div className="flex flex-col items-start gap-1">
+      <div className="overflow-x-auto">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>ผู้ใช้ / User</TableHead>
+              <TableHead>บทบาท / Roles</TableHead>
+              <TableHead>รหัสพนักงาน / Staff ID</TableHead>
+              <TableHead>MFA</TableHead>
+              <TableHead>สถานะ</TableHead>
+              <TableHead>เข้าระบบล่าสุด</TableHead>
+              <TableHead className="text-right">จัดการ</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {users.map((u) => {
+              const isLocked = u.lockedUntil && u.lockedUntil > new Date();
+              return (
+                <TableRow key={u.id}>
+                  <TableCell>
+                    <p className="font-medium">{u.name}</p>
+                    <p className="text-xs text-muted-foreground">{u.email}</p>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex flex-wrap gap-1">
+                      {u.userRoles.length === 0 ? (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      ) : (
+                        u.userRoles.map((ur) => (
+                          <Badge key={ur.roleId} variant="secondary" className="font-mono text-[10px]">
+                            {ur.role.key}
+                          </Badge>
+                        ))
+                      )}
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-xs">
+                    {u.employeeCode ? (
+                      <span className="font-mono">{u.employeeCode}</span>
+                    ) : (
+                      <span className="text-muted-foreground">— ยังไม่ผูก</span>
+                    )}
+                  </TableCell>
+                  <TableCell>
                     {u.mfaEnabled
                       ? <Badge variant="success">เปิด / On</Badge>
                       : <Badge variant="secondary">ปิด / Off</Badge>}
-                    {u.mfaEnabled ? (
-                      <form action={mfaOffAction}>
-                        <ConfirmButton
-                          variant="outline" size="sm"
-                          confirmText="ปิด/รีเซ็ต MFA ของผู้ใช้นี้? ผู้ใช้จะต้องตั้งค่าใหม่เอง และ Session จะถูกยกเลิก"
-                        >
-                          ปิด/รีเซ็ต MFA
-                        </ConfirmButton>
-                      </form>
-                    ) : (
-                      <span className="text-[10px] text-muted-foreground">
-                        ผู้ใช้เปิดเองในโปรไฟล์
-                      </span>
-                    )}
-                  </div>
-                </TableCell>
-                <TableCell>
-                  <div className="flex flex-col gap-1">
-                    <StatusBadge status={u.status} />
-                    {isLocked && <Badge variant="destructive">ล็อกชั่วคราว</Badge>}
-                  </div>
-                </TableCell>
-                <TableCell className="text-xs text-muted-foreground">
-                  {u.lastLoginAt ? formatDateTime(u.lastLoginAt) : "-"}
-                </TableCell>
-                <TableCell>
-                  {u.id !== admin.id ? (
-                    <div className="flex flex-col gap-1.5">
-                      <form action={statusAction}>
-                        <input type="hidden" name="status" value={u.status === "ACTIVE" ? "DISABLED" : "ACTIVE"} />
-                        <ConfirmButton
-                          variant={u.status === "ACTIVE" ? "destructive" : "secondary"}
-                          size="sm"
-                          confirmText={u.status === "ACTIVE" ? "ปิดใช้งานบัญชีนี้? (Session ทั้งหมดจะถูกยกเลิก)" : "เปิดใช้งานบัญชีนี้?"}
-                        >
-                          {u.status === "ACTIVE" ? "ปิดใช้งาน / Disable" : "เปิดใช้งาน / Enable"}
-                        </ConfirmButton>
-                      </form>
-                      <form action={resetAction} className="flex flex-wrap gap-1">
-                        <Input
-                          name="password" type="password" required
-                          minLength={8} maxLength={12} pattern={PW_PATTERN} title={PW_RULE}
-                          placeholder="รหัสผ่านใหม่" className="h-7 w-28 text-xs" autoComplete="new-password"
-                        />
-                        <Input
-                          name="confirmPassword" type="password" required
-                          minLength={8} maxLength={12}
-                          placeholder="ยืนยัน" className="h-7 w-24 text-xs" autoComplete="new-password"
-                        />
-                        <ConfirmButton variant="outline" size="sm" confirmText="รีเซ็ตรหัสผ่าน? Session ทั้งหมดจะถูกยกเลิก">
-                          รีเซ็ต
-                        </ConfirmButton>
-                      </form>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex flex-col gap-1">
+                      <StatusBadge status={u.status} />
+                      {isLocked && <Badge variant="destructive">ล็อกชั่วคราว</Badge>}
                     </div>
-                  ) : (
-                    <span className="text-xs text-muted-foreground">(คุณ / you)</span>
-                  )}
-                </TableCell>
-              </TableRow>
-            );
-          })}
-        </TableBody>
-      </Table>
+                  </TableCell>
+                  <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
+                    {u.lastLoginAt ? formatDateTime(u.lastLoginAt) : "-"}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <Button asChild variant="outline" size="sm">
+                      <Link href={`/settings/users/${u.id}`}>
+                        จัดการ / Manage{u.id === admin.id ? " (คุณ)" : ""}
+                      </Link>
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
+      </div>
     </div>
   );
 }
