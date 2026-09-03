@@ -111,6 +111,7 @@ Production rules enforced by the app:
 | [SECURITY.md](SECURITY.md) | Auth, RBAC, secrets, data protection, known gaps |
 | [DEPLOYMENT.md](DEPLOYMENT.md) | Docker + GCP Cloud Run deploy runbook |
 | [GO_LIVE.md](GO_LIVE.md) | Pre-launch checklist with gcloud commands (cron, backups, domain, CSP) |
+| [UAT.md](UAT.md) | Per-role user-acceptance test script (tick-box) |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Dev setup, conventions, testing |
 | [ROADMAP.md](ROADMAP.md) | Built / next / out of scope |
 | [CHANGELOG.md](CHANGELOG.md) | Build history |
