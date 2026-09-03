@@ -9,19 +9,34 @@ export type LinkResult = {
   alreadyLinked: number;
 };
 
-// Leading honorifics stripped before comparing names (Thai + English).
-const TITLES = [
+// Leading honorifics stripped before comparing names (Thai + English). Matched
+// as a separate leading word ("<title> name") for either script — this avoids
+// eating real names that merely start with those letters (e.g. "Missy").
+const WORD_TITLES = [
   "นาย", "นาง", "นางสาว", "น.ส.", "ดร.", "ดร", "ว่าที่ร.ต.", "ว่าที่ ร.ต.",
   "mr.", "mr", "mrs.", "mrs", "ms.", "ms", "miss", "dr.", "dr",
 ];
+// Thai honorifics are very commonly written glued to the given name
+// (นายสมชาย, นางสาวสุดา, น.ส.สุดา). These may be stripped with no following
+// space. Distinctive prefixes only — bare "ดร" is excluded so it can't eat a
+// name like "ดรุณี" (only "ดร." with the period is glued-stripped).
+const GLUE_TITLES = ["ว่าที่ร.ต.", "นางสาว", "น.ส.", "ดร.", "นาย", "นาง"];
 
 /** Normalize a full name for comparison: strip a leading title, collapse
  * whitespace, lowercase. Returns "" when nothing usable remains. */
 function normName(raw: string): string {
   let s = raw.replace(/\s+/g, " ").trim();
   const lower = s.toLowerCase();
-  for (const t of TITLES) {
-    if (lower.startsWith(t + " ")) { s = s.slice(t.length).trim(); break; }
+  // 1) title as a separate leading word (longest first: "นางสาว" before "นาง").
+  let stripped = false;
+  for (const t of [...WORD_TITLES].sort((a, b) => b.length - a.length)) {
+    if (lower.startsWith(t + " ")) { s = s.slice(t.length).trim(); stripped = true; break; }
+  }
+  // 2) otherwise a glued Thai honorific (นายวิชัย -> วิชัย).
+  if (!stripped) {
+    for (const t of [...GLUE_TITLES].sort((a, b) => b.length - a.length)) {
+      if (s.startsWith(t)) { s = s.slice(t.length).trim(); break; }
+    }
   }
   return s.replace(/\s+/g, " ").trim().toLowerCase();
 }
