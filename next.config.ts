@@ -12,11 +12,15 @@ const baseSecurityHeaders = [
   },
 ];
 
-// Content-Security-Policy for the authenticated app (OPS-001). Shipped in
-// REPORT-ONLY mode first: it never blocks, only reports violations, so we can
-// observe what a strict policy would break before switching the header name to
-// "Content-Security-Policy" to enforce it. 'unsafe-inline' on scripts is a
-// stepping stone — replace it with per-request nonces when enforcing.
+// Content-Security-Policy for the authenticated app (OPS-001). ENFORCED by
+// default. A go-live safety valve: set CSP_REPORT_ONLY=true (a Cloud Run env
+// var, no redeploy needed) to fall back to report-only if an unforeseen
+// violation appears in production — it then only reports, never blocks.
+//
+// Known limitation: script-src keeps 'unsafe-inline' because the Next.js App
+// Router emits inline bootstrap scripts and we do not yet mint per-request
+// nonces. Everything else is locked down. The strict-CSP follow-up is
+// nonce-based script-src with 'strict-dynamic' (needs middleware + UAT).
 const appCsp = [
   "default-src 'self'",
   "base-uri 'self'",
@@ -28,12 +32,22 @@ const appCsp = [
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
   "script-src 'self' 'unsafe-inline'",
   "connect-src 'self'",
+  "frame-src 'self'",
+  "manifest-src 'self'",
+  "worker-src 'self' blob:",
+  "upgrade-insecure-requests",
 ].join("; ");
+
+// Enforce by default; flip to report-only only when CSP_REPORT_ONLY=true.
+const cspReportOnly = process.env.CSP_REPORT_ONLY === "true";
+const cspHeaderName = cspReportOnly
+  ? "Content-Security-Policy-Report-Only"
+  : "Content-Security-Policy";
 
 // The rest of the app must never be framed (clickjacking).
 const securityHeaders = [
   { key: "X-Frame-Options", value: "DENY" },
-  { key: "Content-Security-Policy-Report-Only", value: appCsp },
+  { key: cspHeaderName, value: appCsp },
   ...baseSecurityHeaders,
 ];
 

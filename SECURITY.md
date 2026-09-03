@@ -76,8 +76,12 @@
 - **Concurrency safety:** `$transaction` + `SELECT … FOR UPDATE` on asset/borrow
   state changes prevents double-issue / double-approve.
 - **CSV injection** neutralized on export; **XLSX** written as plain values.
-- **Security headers** including a `Content-Security-Policy` (report-only baseline
-  in `next.config.ts`).
+- **Security headers** including an **enforced** `Content-Security-Policy`
+  (`next.config.ts`): `default-src 'self'`, `object-src 'none'`,
+  `frame-ancestors 'none'`, `base-uri 'self'`, `form-action 'self'`,
+  `connect-src 'self'`, `upgrade-insecure-requests`. A safety valve —
+  `CSP_REPORT_ONLY=true` (a Cloud Run env var, no redeploy) — reverts to
+  report-only if a violation surfaces in production.
 - **Server Action inputs** carry decisions in hidden inputs, not submit-button
   `name`/`value` (which are not delivered to Server Actions in this Next/React
   version).
@@ -94,7 +98,9 @@
 
 - **No row-level DB security** — tenancy is app-enforced; a raw DB compromise
   bypasses it. (Mitigated by least-privilege DB creds and Cloud SQL isolation.)
-- **CSP is baseline / partly report-only** — tighten to strict per-route policies.
+- **CSP keeps `script-src 'unsafe-inline'`** — enforced, but the App Router's
+  inline bootstrap scripts still require it; the follow-up is nonce-based
+  `script-src` with `'strict-dynamic'` (needs middleware + UAT).
 - **Server-action version skew** — after a redeploy, an already-open browser tab
   references old action IDs and a click throws until the tab is reloaded; a
   borrow-segment error boundary + reload button mitigates the UX, but there is no
