@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { formatDateTime } from "@/lib/utils";
 import { createUserAction } from "../actions";
+import { CreateUserFields } from "./create-user-fields";
 
 export const dynamic = "force-dynamic";
 
@@ -73,14 +74,7 @@ export default async function UsersPage({
               <Label htmlFor="email">อีเมล / Email</Label>
               <Input id="email" name="email" type="email" required />
             </div>
-            <div className="space-y-1">
-              <Label htmlFor="name">ชื่อ / Name</Label>
-              <Input id="name" name="name" required />
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor="employeeCode">รหัสพนักงาน / Staff ID</Label>
-              <Input id="employeeCode" name="employeeCode" maxLength={50} placeholder="เช่น EMP001 (ไม่บังคับ)" />
-            </div>
+            <CreateUserFields />
             <div className="space-y-1">
               <Label htmlFor="password">รหัสผ่าน / Password</Label>
               <Input
