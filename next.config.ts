@@ -69,6 +69,7 @@ const nextConfig: NextConfig = {
   // Ensure the Thai PDF font ships with the standalone server bundle
   outputFileTracingIncludes: {
     "/api/reports/[report]": ["./src/assets/fonts/*.ttf"],
+    "/api/borrow/[id]/pdf": ["./src/assets/fonts/*.ttf"],
   },
   async headers() {
     return [

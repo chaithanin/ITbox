@@ -17,6 +17,15 @@ function loadThaiFont(): Buffer | null {
   }
 }
 
+/** Serif face for the Chaithanin (CHTNN) wordmark in the header. */
+function loadSerifFont(): Buffer | null {
+  try {
+    return fs.readFileSync(path.join(process.cwd(), "src/assets/fonts/IBMPlexSerif-Regular.ttf"));
+  } catch {
+    return null;
+  }
+}
+
 /** dd/mm/yyyy for the form's DD/MM/YYYY signature lines. */
 function ddmmyyyy(d: Date | null | undefined): string {
   if (!d) return "";
@@ -59,7 +68,7 @@ interface FormData {
 
 const EMPTY: Signer = { name: "", date: "" };
 
-function buildPdf(d: FormData, font: Buffer): Promise<Buffer> {
+function buildPdf(d: FormData, font: Buffer, serif: Buffer | null): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     const margin = 42;
     const doc = new PDFDocument({ size: "A4", margin, font: "" });
@@ -69,6 +78,9 @@ function buildPdf(d: FormData, font: Buffer): Promise<Buffer> {
     doc.on("error", reject);
 
     doc.registerFont("th", font);
+    // Serif for the wordmark; fall back to the Thai face (still legible) if absent.
+    const logoFont = serif ? "serif" : "th";
+    if (serif) doc.registerFont("serif", serif);
     doc.font("th");
 
     const left = margin;
@@ -162,16 +174,38 @@ function buildPdf(d: FormData, font: Buffer): Promise<Buffer> {
     };
 
     // ================= PAGE 1 =================
-    // Header: logo box + centered title + Ref No / Date
-    doc.rect(left, margin, 48, 26).lineWidth(1).strokeColor("#111827").stroke();
-    doc.fontSize(13).fillColor("#111827").text("CHTNN", left, margin + 7, { width: 48, align: "center", lineBreak: false });
-    doc.fontSize(13).fillColor("#111827").text("แบบฟอร์มการขอยืมใช้ทรัพย์สินด้านสารสนเทศ", left, margin + 1, { width, align: "center", lineBreak: false });
-    doc.fontSize(9.5).fillColor("#374151").text("Application form for borrowing information assets", left, margin + 17, { width, align: "center", lineBreak: false });
+    // Header: centered CHTNN wordmark logo, then centered title, then Ref No / Date.
+    // The logo is drawn as vector type (CH + oversized T + NN) so it stays crisp
+    // and needs no raster asset.
+    doc.fillColor("#111827");
+    const bigSize = 24;
+    const smallSize = 17;
+    const kern = 3;
+    doc.font(logoFont);
+    const wCH = doc.fontSize(smallSize).widthOfString("CH");
+    const wNN = doc.fontSize(smallSize).widthOfString("NN");
+    const wT = doc.fontSize(bigSize).widthOfString("T");
+    const groupW = wCH + kern + wT + kern + wNN;
+    let gx = left + (width - groupW) / 2;
+    const yBig = margin;
+    const ySmall = margin + (bigSize - smallSize) * 0.62; // baseline-align the smaller caps
+    doc.fontSize(smallSize).text("CH", gx, ySmall, { lineBreak: false });
+    gx += wCH + kern;
+    doc.fontSize(bigSize).text("T", gx, yBig, { lineBreak: false });
+    gx += wT + kern;
+    doc.fontSize(smallSize).text("NN", gx, ySmall, { lineBreak: false });
+    doc.fontSize(11).text("Chaithanin", left, margin + bigSize + 1, { width, align: "center", lineBreak: false });
 
-    let y = margin + 34;
+    // Title (back to the Thai face)
+    doc.font("th");
+    const titleY = margin + 42;
+    doc.fontSize(12).fillColor("#111827").text("แบบฟอร์มการขอยืมใช้ทรัพย์สินด้านสารสนเทศ", left, titleY, { width, align: "center", lineBreak: false });
+    doc.fontSize(9).fillColor("#374151").text("Application form for borrowing information assets", left, titleY + 16, { width, align: "center", lineBreak: false });
+
+    let y = titleY + 32;
     doc.fillColor("#111827").fontSize(9);
     doc.text(`Ref No : ${d.refNo}`, left, y, { lineBreak: false });
-    doc.text(`Date : ${d.date}`, left, y, { width, align: "right", lineBreak: false });
+    doc.text(`Date : ${d.date}`, left, y, { width, align: "center", lineBreak: false });
     y += 18;
 
     // Section 1 — Requester
@@ -235,7 +269,7 @@ function buildPdf(d: FormData, font: Buffer): Promise<Buffer> {
     // ================= PAGE 2 =================
     doc.addPage();
     doc.fillColor("#111827").fontSize(9).text(`Ref No : ${d.refNo}`, left, margin, { lineBreak: false });
-    doc.text(`Date : ${d.date}`, left, margin, { width, align: "right", lineBreak: false });
+    doc.text(`Date : ${d.date}`, left, margin, { width, align: "center", lineBreak: false });
     y = margin + 20;
 
     y = sectionTitle(y, "3. รับคืนสินทรัพย์ / Return Assets");
@@ -278,6 +312,7 @@ export const GET = apiHandler(async (req: Request, ctx: { params: Promise<{ id: 
 
   const font = loadThaiFont();
   if (!font) return NextResponse.json({ error: "pdf_font_missing" }, { status: 501 });
+  const serif = loadSerifFont();
 
   const approvalOf = (step: string) => r.approvals.find((a) => a.step === step);
   const mgr = approvalOf("MANAGER");
@@ -323,7 +358,7 @@ export const GET = apiHandler(async (req: Request, ctx: { params: Promise<{ id: 
     management2: EMPTY,
   };
 
-  const buffer = await buildPdf(data, font);
+  const buffer = await buildPdf(data, font, serif);
   await auditLog(user, { action: "EXPORT", entityType: "BORROW_REQUEST", entityId: id, detail: { refNo: r.refNo, format: "pdf" } });
 
   const url = new URL(req.url);
