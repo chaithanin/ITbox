@@ -240,64 +240,72 @@ export default async function AssetsPage({
         ]}
       />
 
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>แท็ก / Tag</TableHead>
-            <TableHead>ชื่อ / Name</TableHead>
-            <TableHead className="hidden md:table-cell">หมวดหมู่ / Category</TableHead>
-            <TableHead>สถานะ / Status</TableHead>
-            <TableHead className="hidden lg:table-cell">สภาพ / Condition</TableHead>
-            <TableHead className="hidden lg:table-cell">แผนก / Department</TableHead>
-            <TableHead className="hidden md:table-cell">สถานที่ / Location</TableHead>
-            <TableHead>ผู้ถือครอง / Assigned To</TableHead>
-            <TableHead className="hidden sm:table-cell">หมดประกัน / Warranty End</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {assets.length === 0 && (
+      <div className="overflow-x-auto">
+        <Table>
+          <TableHeader>
             <TableRow>
-              <TableCell colSpan={9} className="py-8 text-center text-muted-foreground">
-                ไม่พบทรัพย์สิน / No assets found
-              </TableCell>
+              <TableHead>แท็ก / assetTag</TableHead>
+              <TableHead>ชื่อ / name</TableHead>
+              <TableHead>ซีเรียล / serialNumber</TableHead>
+              <TableHead>หมวดหมู่ / category</TableHead>
+              <TableHead>สถานะ / status</TableHead>
+              <TableHead>สภาพ / condition</TableHead>
+              <TableHead>แผนก / department</TableHead>
+              <TableHead>สถานที่ / location</TableHead>
+              <TableHead>ผู้ถือครอง / assignedTo</TableHead>
+              <TableHead>วันซื้อ / purchaseDate</TableHead>
+              <TableHead className="text-right">ราคา / purchasePrice</TableHead>
+              <TableHead>หมดประกัน / warrantyEnd</TableHead>
             </TableRow>
-          )}
-          {assets.map((a) => {
-            const holder = a.assignments[0]?.employee;
-            const d = daysUntil(a.warrantyEnd);
-            return (
-              <TableRow key={a.id}>
-                <TableCell>
-                  <Link href={`/assets/${a.id}`} className="font-medium text-primary hover:underline">
-                    {a.assetTag}
-                  </Link>
-                </TableCell>
-                <TableCell>{a.name}</TableCell>
-                <TableCell className="hidden md:table-cell">{a.category?.name ?? "-"}</TableCell>
-                <TableCell>
-                  <StatusBadge status={a.status} />
-                </TableCell>
-                <TableCell className="hidden lg:table-cell">{a.condition}</TableCell>
-                <TableCell className="hidden lg:table-cell">{a.department?.name ?? "-"}</TableCell>
-                <TableCell className="hidden md:table-cell">{a.location?.name ?? "-"}</TableCell>
-                <TableCell>{holder ? `${holder.firstName} ${holder.lastName}` : "-"}</TableCell>
-                <TableCell
-                  className={cn(
-                    "hidden sm:table-cell",
-                    d !== null && d < 0 && "text-destructive",
-                    d !== null && d >= 0 && d < 30 && "text-amber-600 dark:text-amber-400"
-                  )}
-                >
-                  {formatDate(a.warrantyEnd)}
-                  {d !== null && d >= 0 && d < 30 && (
-                    <span className="ml-1 text-xs">({d} วัน / days)</span>
-                  )}
+          </TableHeader>
+          <TableBody>
+            {assets.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={12} className="py-8 text-center text-muted-foreground">
+                  ไม่พบทรัพย์สิน / No assets found
                 </TableCell>
               </TableRow>
-            );
-          })}
-        </TableBody>
-      </Table>
+            )}
+            {assets.map((a) => {
+              const holder = a.assignments[0]?.employee;
+              const d = daysUntil(a.warrantyEnd);
+              return (
+                <TableRow key={a.id}>
+                  <TableCell className="whitespace-nowrap">
+                    <Link href={`/assets/${a.id}`} className="font-mono text-xs font-medium text-primary hover:underline">
+                      {a.assetTag}
+                    </Link>
+                  </TableCell>
+                  <TableCell className="whitespace-nowrap">{a.name}</TableCell>
+                  <TableCell className="whitespace-nowrap font-mono text-xs">{a.serialNumber || "-"}</TableCell>
+                  <TableCell className="whitespace-nowrap">{a.category?.name ?? "-"}</TableCell>
+                  <TableCell><StatusBadge status={a.status} /></TableCell>
+                  <TableCell className="whitespace-nowrap">{a.condition}</TableCell>
+                  <TableCell className="whitespace-nowrap">{a.department?.name ?? "-"}</TableCell>
+                  <TableCell className="whitespace-nowrap">{a.location?.name ?? "-"}</TableCell>
+                  <TableCell className="whitespace-nowrap">{holder ? `${holder.firstName} ${holder.lastName}` : "-"}</TableCell>
+                  <TableCell className="whitespace-nowrap">{formatDate(a.purchaseDate)}</TableCell>
+                  <TableCell className="whitespace-nowrap text-right">
+                    {a.purchasePrice != null ? Number(a.purchasePrice).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "-"}
+                  </TableCell>
+                  <TableCell
+                    className={cn(
+                      "whitespace-nowrap",
+                      d !== null && d < 0 && "text-destructive",
+                      d !== null && d >= 0 && d < 30 && "text-amber-600 dark:text-amber-400"
+                    )}
+                  >
+                    {formatDate(a.warrantyEnd)}
+                    {d !== null && d >= 0 && d < 30 && (
+                      <span className="ml-1 text-xs">({d} วัน / days)</span>
+                    )}
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
+      </div>
 
       <Pagination
         page={page}
