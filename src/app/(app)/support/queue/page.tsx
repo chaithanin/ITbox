@@ -207,6 +207,23 @@ export default async function SupportQueuePage({
   const pageCount = Math.max(1, Math.ceil(total / take));
   const now = new Date();
 
+  // Enrich each case with its SLA state once, so the desktop table and the
+  // mobile card list render identical, pre-computed values.
+  const rows = cases.map((c) => {
+    const due = c.resolutionDueAt;
+    const isResolved = !NOT_RESOLVED.includes(c.status);
+    const breached = !isResolved && (c.resolutionBreached || (due != null && due < now));
+    const soon =
+      !breached && !isResolved && due != null && due.getTime() - now.getTime() < 2 * 60 * 60 * 1000;
+    const slaClass = breached
+      ? "text-destructive dark:text-red-400 font-medium"
+      : soon
+        ? "text-amber-600 dark:text-amber-400"
+        : "text-muted-foreground";
+    const slaText = breached ? "เกิน SLA" : due ? relativeSla(due, now) : "-";
+    return { c, isResolved, breached, soon, slaClass, slaText };
+  });
+
   const assigneeOptions = [
     { value: "me", label: "มอบหมายให้ฉัน / Assigned to me" },
     { value: "unassigned", label: "ยังไม่มอบหมาย / Unassigned" },
@@ -279,85 +296,109 @@ export default async function SupportQueuePage({
         ]}
       />
 
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>เลขเคส</TableHead>
-            <TableHead>หัวข้อ</TableHead>
-            <TableHead>ประเภท</TableHead>
-            <TableHead>ความสำคัญ</TableHead>
-            <TableHead>สถานะ</TableHead>
-            <TableHead>ผู้แจ้ง</TableHead>
-            <TableHead>ผู้รับผิดชอบ</TableHead>
-            <TableHead>SLA</TableHead>
-            <TableHead>อัปเดต</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {cases.length === 0 ? (
-            <TableRow>
-              <TableCell colSpan={9} className="py-8 text-center text-sm text-muted-foreground">
-                ไม่พบเคส / No cases found
-              </TableCell>
-            </TableRow>
-          ) : (
-            cases.map((c) => {
-              const due = c.resolutionDueAt;
-              const isResolved = !NOT_RESOLVED.includes(c.status);
-              const breached = !isResolved && (c.resolutionBreached || (due != null && due < now));
-              const soon =
-                !breached && !isResolved && due != null && due.getTime() - now.getTime() < 2 * 60 * 60 * 1000;
-              const slaClass = breached
-                ? "text-destructive dark:text-red-400 font-medium"
-                : soon
-                  ? "text-amber-600 dark:text-amber-400"
-                  : "text-muted-foreground";
-              return (
-                <TableRow key={c.id} className="cursor-pointer">
-                  <TableCell className="whitespace-nowrap font-mono text-xs">
-                    <Link href={`/support/${c.id}`} className="hover:underline">
-                      {c.caseNumber}
-                    </Link>
-                  </TableCell>
-                  <TableCell className="max-w-[16rem]">
-                    <Link href={`/support/${c.id}`} className="block truncate hover:underline">
-                      {c.subject}
-                    </Link>
-                  </TableCell>
-                  <TableCell className="whitespace-nowrap text-sm text-muted-foreground">
-                    {c.type ? c.type.nameTh || c.type.name : "-"}
-                  </TableCell>
-                  <TableCell>
-                    <StatusBadge status={c.priority} label={`${c.priority} · ${PRIORITY_LABEL[c.priority].th}`} />
-                  </TableCell>
-                  <TableCell>
-                    <StatusBadge status={c.status} />
-                  </TableCell>
-                  <TableCell className="whitespace-nowrap text-sm">{c.requester?.name ?? "-"}</TableCell>
-                  <TableCell className="whitespace-nowrap text-sm">
-                    {c.assignedUser?.name ?? (
-                      <span className="text-muted-foreground">— ยังไม่มอบหมาย</span>
-                    )}
-                  </TableCell>
-                  <TableCell className="whitespace-nowrap text-xs">
-                    <span className={slaClass}>
-                      {breached ? "เกิน SLA" : due ? relativeSla(due, now) : "-"}
+      {rows.length === 0 ? (
+        <p className="rounded-lg border bg-card py-10 text-center text-sm text-muted-foreground">
+          ไม่พบเคส / No cases found
+        </p>
+      ) : (
+        <>
+          {/* Mobile: tap-friendly cards */}
+          <ul className="space-y-2.5 md:hidden">
+            {rows.map(({ c, slaClass, slaText }) => (
+              <li key={c.id}>
+                <Link
+                  href={`/support/${c.id}`}
+                  className="block rounded-xl border bg-card p-3.5 active:bg-accent"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <span className="font-mono text-xs text-muted-foreground">{c.caseNumber}</span>
+                    <div className="flex shrink-0 flex-wrap justify-end gap-1">
+                      <StatusBadge status={c.priority} label={c.priority} />
+                      <StatusBadge status={c.status} />
+                    </div>
+                  </div>
+                  <p className="mt-1 line-clamp-2 text-sm font-medium">{c.subject}</p>
+                  <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                    <span>{c.type ? c.type.nameTh || c.type.name : "-"}</span>
+                    <span>
+                      ผู้รับผิดชอบ: {c.assignedUser?.name ?? <span className="text-amber-600 dark:text-amber-400">ยังไม่มอบหมาย</span>}
                     </span>
-                    {c.firstResponseBreached && (
-                      <span className="ml-1 rounded bg-destructive/10 px-1 py-0.5 text-[10px] font-semibold text-destructive dark:text-red-400">
-                        FR
-                      </span>
-                    )}
-                  </TableCell>
-                  <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
-                    {formatDateTime(c.updatedAt)}
-                  </TableCell>
+                    <span className={`ml-auto ${slaClass}`}>
+                      {slaText}
+                      {c.firstResponseBreached && (
+                        <span className="ml-1 rounded bg-destructive/10 px-1 py-0.5 text-[10px] font-semibold text-destructive dark:text-red-400">
+                          FR
+                        </span>
+                      )}
+                    </span>
+                  </div>
+                </Link>
+              </li>
+            ))}
+          </ul>
+
+          {/* Desktop: full table */}
+          <div className="hidden overflow-x-auto md:block">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>เลขเคส</TableHead>
+                  <TableHead>หัวข้อ</TableHead>
+                  <TableHead>ประเภท</TableHead>
+                  <TableHead>ความสำคัญ</TableHead>
+                  <TableHead>สถานะ</TableHead>
+                  <TableHead>ผู้แจ้ง</TableHead>
+                  <TableHead>ผู้รับผิดชอบ</TableHead>
+                  <TableHead>SLA</TableHead>
+                  <TableHead>อัปเดต</TableHead>
                 </TableRow>
-              );
-            })
-          )}
-        </TableBody>
-      </Table>
+              </TableHeader>
+              <TableBody>
+                {rows.map(({ c, slaClass, slaText }) => (
+                  <TableRow key={c.id} className="cursor-pointer">
+                    <TableCell className="whitespace-nowrap font-mono text-xs">
+                      <Link href={`/support/${c.id}`} className="hover:underline">
+                        {c.caseNumber}
+                      </Link>
+                    </TableCell>
+                    <TableCell className="max-w-[16rem]">
+                      <Link href={`/support/${c.id}`} className="block truncate hover:underline">
+                        {c.subject}
+                      </Link>
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap text-sm text-muted-foreground">
+                      {c.type ? c.type.nameTh || c.type.name : "-"}
+                    </TableCell>
+                    <TableCell>
+                      <StatusBadge status={c.priority} label={`${c.priority} · ${PRIORITY_LABEL[c.priority].th}`} />
+                    </TableCell>
+                    <TableCell>
+                      <StatusBadge status={c.status} />
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap text-sm">{c.requester?.name ?? "-"}</TableCell>
+                    <TableCell className="whitespace-nowrap text-sm">
+                      {c.assignedUser?.name ?? (
+                        <span className="text-muted-foreground">— ยังไม่มอบหมาย</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap text-xs">
+                      <span className={slaClass}>{slaText}</span>
+                      {c.firstResponseBreached && (
+                        <span className="ml-1 rounded bg-destructive/10 px-1 py-0.5 text-[10px] font-semibold text-destructive dark:text-red-400">
+                          FR
+                        </span>
+                      )}
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
+                      {formatDateTime(c.updatedAt)}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </>
+      )}
 
       <Pagination page={page} pageCount={pageCount} basePath="/support/queue" searchParams={sp} />
     </div>

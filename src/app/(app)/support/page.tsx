@@ -142,59 +142,87 @@ export default async function MyCasesPage({
         })}
       </div>
 
-      <div className="overflow-x-auto">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>เลขที่ / Case #</TableHead>
-              <TableHead>เรื่อง / Subject</TableHead>
-              <TableHead>ประเภท / Type</TableHead>
-              <TableHead>ความเร่งด่วน / Priority</TableHead>
-              <TableHead>สถานะ / Status</TableHead>
-              <TableHead>ผู้รับผิดชอบ / Agent</TableHead>
-              <TableHead>อัปเดต / Updated</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {cases.length === 0 && (
-              <TableRow>
-                <TableCell colSpan={7} className="py-10 text-center text-muted-foreground">
-                  ยังไม่มีเคส / No cases found.{" "}
-                  {canCreate && (
-                    <Link href="/support/new" className="text-primary hover:underline">
-                      เปิดเคสใหม่ / Open a new case
-                    </Link>
-                  )}
-                </TableCell>
-              </TableRow>
-            )}
+      {cases.length === 0 ? (
+        <p className="rounded-lg border bg-card py-10 text-center text-sm text-muted-foreground">
+          ยังไม่มีเคส / No cases found.{" "}
+          {canCreate && (
+            <Link href="/support/new" className="text-primary hover:underline">
+              เปิดเคสใหม่ / Open a new case
+            </Link>
+          )}
+        </p>
+      ) : (
+        <>
+          {/* Mobile: tap-friendly cards */}
+          <ul className="space-y-2.5 md:hidden">
             {cases.map((c) => (
-              <TableRow key={c.id}>
-                <TableCell>
-                  <Link
-                    href={`/support/${c.id}`}
-                    className="font-medium text-primary hover:underline"
-                  >
-                    {c.caseNumber}
-                  </Link>
-                </TableCell>
-                <TableCell className="max-w-[260px] truncate" title={c.subject}>
-                  {c.subject}
-                </TableCell>
-                <TableCell>{c.type ? c.type.nameTh ?? c.type.name : "-"}</TableCell>
-                <TableCell>
-                  <StatusBadge status={c.priority} />
-                </TableCell>
-                <TableCell>
-                  <StatusBadge status={c.status} />
-                </TableCell>
-                <TableCell>{c.assignedUser?.name ?? "-"}</TableCell>
-                <TableCell className="whitespace-nowrap">{formatDateTime(c.updatedAt)}</TableCell>
-              </TableRow>
+              <li key={c.id}>
+                <Link
+                  href={`/support/${c.id}`}
+                  className="block rounded-xl border bg-card p-3.5 active:bg-accent"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <span className="font-mono text-xs text-muted-foreground">{c.caseNumber}</span>
+                    <div className="flex shrink-0 flex-wrap justify-end gap-1">
+                      <StatusBadge status={c.priority} />
+                      <StatusBadge status={c.status} />
+                    </div>
+                  </div>
+                  <p className="mt-1 line-clamp-2 text-sm font-medium">{c.subject}</p>
+                  <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                    <span>{c.type ? c.type.nameTh ?? c.type.name : "-"}</span>
+                    <span>ผู้รับผิดชอบ: {c.assignedUser?.name ?? "-"}</span>
+                    <span className="ml-auto">{formatDateTime(c.updatedAt)}</span>
+                  </div>
+                </Link>
+              </li>
             ))}
-          </TableBody>
-        </Table>
-      </div>
+          </ul>
+
+          {/* Desktop: full table */}
+          <div className="hidden overflow-x-auto md:block">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>เลขที่ / Case #</TableHead>
+                  <TableHead>เรื่อง / Subject</TableHead>
+                  <TableHead>ประเภท / Type</TableHead>
+                  <TableHead>ความเร่งด่วน / Priority</TableHead>
+                  <TableHead>สถานะ / Status</TableHead>
+                  <TableHead>ผู้รับผิดชอบ / Agent</TableHead>
+                  <TableHead>อัปเดต / Updated</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {cases.map((c) => (
+                  <TableRow key={c.id}>
+                    <TableCell>
+                      <Link
+                        href={`/support/${c.id}`}
+                        className="font-medium text-primary hover:underline"
+                      >
+                        {c.caseNumber}
+                      </Link>
+                    </TableCell>
+                    <TableCell className="max-w-[260px] truncate" title={c.subject}>
+                      {c.subject}
+                    </TableCell>
+                    <TableCell>{c.type ? c.type.nameTh ?? c.type.name : "-"}</TableCell>
+                    <TableCell>
+                      <StatusBadge status={c.priority} />
+                    </TableCell>
+                    <TableCell>
+                      <StatusBadge status={c.status} />
+                    </TableCell>
+                    <TableCell>{c.assignedUser?.name ?? "-"}</TableCell>
+                    <TableCell className="whitespace-nowrap">{formatDateTime(c.updatedAt)}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </>
+      )}
 
       <Pagination page={page} pageCount={pageCount} basePath="/support" searchParams={sp} />
     </div>
