@@ -231,6 +231,10 @@ export const POST = apiHandler(async (req: Request) => {
 
   const form = await req.formData();
   const file = form.get("file");
+  // When set, an existing assetTag is NOT an error: instead, if the row carries
+  // an assignedToName that resolves to an employee and the asset has no active
+  // holder yet, assign it (no clobber of an existing custody).
+  const assignExisting = form.get("assignExisting") === "true";
   if (!(file instanceof File)) {
     return NextResponse.json(
       {
@@ -314,7 +318,14 @@ export const POST = apiHandler(async (req: Request) => {
   // ---- Prefetch org data for validation (one query each) ----
   const orgWhere = { organizationId: user.organizationId, deletedAt: null };
   const [existingAssets, categories, departments, locations, vendors, employees] = await Promise.all([
-    prisma.asset.findMany({ where: orgWhere, select: { assetTag: true } }),
+    prisma.asset.findMany({
+      where: orgWhere,
+      select: {
+        id: true,
+        assetTag: true,
+        assignments: { where: { status: "CHECKED_OUT" }, select: { id: true }, take: 1 },
+      },
+    }),
     prisma.assetCategory.findMany({ where: orgWhere, select: { id: true, name: true } }),
     prisma.department.findMany({ where: orgWhere, select: { id: true, code: true, name: true } }),
     prisma.location.findMany({ where: orgWhere, select: { id: true, code: true, name: true } }),
@@ -338,7 +349,14 @@ export const POST = apiHandler(async (req: Request) => {
   // assetTag(lower) -> employeeId for CHECKED_OUT assignment after asset creation
   const assignByTag = new Map<string, string>();
 
-  const existingTags = new Set(existingAssets.map((a) => a.assetTag.toLowerCase()));
+  const existingByTag = new Map(
+    existingAssets.map((a) => [a.assetTag.toLowerCase(), { id: a.id, assigned: a.assignments.length > 0 }])
+  );
+  const existingTags = new Set(existingByTag.keys());
+  // Existing assets to (re)assign a holder to, gathered during row validation.
+  const assignExistingList: { assetId: string; empId: string }[] = [];
+  let skippedExistingAssigned = 0; // existing + already has a holder → left untouched
+  let skippedExistingNoHolder = 0; // existing + no resolvable holder in the row
   // category / department / location resolve by NAME and are AUTO-CREATED when
   // missing (bulk-import friendly, consistent with the employee importer).
   const categoryByName = new Map(categories.map((c) => [c.name.toLowerCase(), c.id]));
@@ -395,7 +413,20 @@ export const POST = apiHandler(async (req: Request) => {
     } else if (seenTags.has(assetTag.toLowerCase())) {
       rowErrors.push("Duplicate assetTag within file / assetTag ซ้ำกันในไฟล์");
     } else if (existingTags.has(assetTag.toLowerCase())) {
-      rowErrors.push("assetTag already exists / assetTag มีอยู่แล้วในระบบ");
+      if (!assignExisting) {
+        rowErrors.push("assetTag already exists / assetTag มีอยู่แล้วในระบบ");
+      } else {
+        // Existing asset: assign its holder from assignedToName instead of
+        // erroring — but never clobber an asset that already has one.
+        const ex = existingByTag.get(assetTag.toLowerCase())!;
+        const empId = resolveEmployee(cell(r, "assignedToName"));
+        if (ex.assigned) skippedExistingAssigned++;
+        else if (!empId) skippedExistingNoHolder++;
+        else if (!assignExistingList.some((a) => a.assetId === ex.id)) {
+          assignExistingList.push({ assetId: ex.id, empId });
+        }
+        return; // handled as an assignment, not a new asset
+      }
     }
 
     // name
@@ -551,12 +582,42 @@ export const POST = apiHandler(async (req: Request) => {
     });
   }
 
+  // ---- Assign holders to pre-existing assets (assignExisting mode) ----
+  if (assignExistingList.length > 0) {
+    await prisma.$transaction(async (tx) => {
+      await tx.assetAssignment.createMany({
+        data: assignExistingList.map(({ assetId, empId }) => ({
+          organizationId: user.organizationId,
+          assetId,
+          employeeId: empId,
+          status: "CHECKED_OUT" as const,
+          assignedById: user.id,
+          purpose: "Bulk import (assign existing)",
+        })),
+      });
+      await tx.asset.updateMany({
+        where: { id: { in: assignExistingList.map((a) => a.assetId) } },
+        data: { status: "IN_USE" },
+      });
+      await tx.assetHistory.createMany({
+        data: assignExistingList.map(({ assetId }) => ({
+          organizationId: user.organizationId,
+          assetId,
+          action: "ASSIGN",
+          detail: "Bulk import — assigned existing asset",
+          actorId: user.id,
+        })),
+      });
+    });
+  }
+
   await auditLog(user, {
     action: "IMPORT",
     entityType: "ASSET",
     detail: {
       created: validRows.length,
       failed: errors.length,
+      assignedExisting: assignExistingList.length,
       fileName: file.name,
       format: sourceFormat,
     },
@@ -565,6 +626,9 @@ export const POST = apiHandler(async (req: Request) => {
   return NextResponse.json({
     created: validRows.length,
     failed: errors.length,
+    assignedExisting: assignExistingList.length,
+    skippedExistingAssigned,
+    skippedExistingNoHolder,
     errors: errors.slice(0, MAX_ERRORS_RETURNED),
   });
 });

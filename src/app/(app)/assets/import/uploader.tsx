@@ -22,6 +22,9 @@ interface RowError {
 interface ImportResult {
   created: number;
   failed: number;
+  assignedExisting?: number;
+  skippedExistingAssigned?: number;
+  skippedExistingNoHolder?: number;
   errors: RowError[];
 }
 
@@ -33,6 +36,7 @@ export function ImportUploader() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [fileName, setFileName] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [assignExisting, setAssignExisting] = useState(false);
   const [result, setResult] = useState<ImportResult | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -52,6 +56,7 @@ export function ImportUploader() {
     try {
       const formData = new FormData();
       formData.append("file", file);
+      if (assignExisting) formData.append("assignExisting", "true");
       const res = await fetch("/api/assets/import", { method: "POST", body: formData });
       const body: unknown = await res.json().catch(() => null);
       if (!res.ok) {
@@ -111,7 +116,22 @@ export function ImportUploader() {
           {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
           {loading ? "กำลังนำเข้า... / Importing..." : "นำเข้า / Import"}
         </Button>
+        <label className="flex w-full items-center gap-2 text-sm text-muted-foreground sm:w-auto">
+          <input
+            type="checkbox"
+            checked={assignExisting}
+            disabled={loading}
+            onChange={(e) => setAssignExisting(e.target.checked)}
+            className="h-4 w-4 rounded border-input"
+          />
+          อัปเดตผู้ถือครองให้ทรัพย์สินที่มีอยู่แล้ว / Also assign holders to existing assets
+        </label>
       </form>
+      {assignExisting && (
+        <p className="rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-xs text-amber-700 dark:text-amber-400">
+          แถวที่ assetTag มีอยู่แล้วจะไม่ถูกข้าม — ระบบจะผูกผู้ถือครอง (assignedTo) ให้ เฉพาะทรัพย์สินที่ยัง<strong>ไม่มีผู้ถือ</strong> และชื่อในไฟล์ตรงกับพนักงานในระบบ (ไม่ทับผู้ถือเดิม)
+        </p>
+      )}
 
       {errorMessage && (
         <p className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
@@ -138,6 +158,17 @@ export function ImportUploader() {
               </span>{" "}
               รายการ / items
             </p>
+            {(result.assignedExisting ?? 0) > 0 && (
+              <p>
+                ผูกผู้ถือให้ของเดิม / Assigned existing:{" "}
+                <span className="font-semibold text-primary">{result.assignedExisting}</span> รายการ / items
+              </p>
+            )}
+            {((result.skippedExistingAssigned ?? 0) > 0 || (result.skippedExistingNoHolder ?? 0) > 0) && (
+              <p className="mt-1 text-xs text-muted-foreground">
+                ของเดิมที่ข้ามผูก: มีผู้ถืออยู่แล้ว {result.skippedExistingAssigned ?? 0} · ไม่พบพนักงานตามชื่อ {result.skippedExistingNoHolder ?? 0}
+              </p>
+            )}
           </div>
 
           {result.errors.length > 0 && (
