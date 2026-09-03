@@ -52,49 +52,49 @@ gcloud run services describe "$SERVICE" --region "$REGION" \
 
 ถ้าไม่ตั้ง cron: **SLA / การแจ้งเตือน / เตือนยืมเกินกำหนด / สรุป CCTV รายวัน จะไม่ทำงานเลย**.
 
-ทั้ง 3 job ยิง `POST` ไปที่ Cloud Run พร้อม `Authorization: Bearer $CRON_SECRET`
+ทั้ง 3 job ยิง `POST` ไปที่ Cloud Run พร้อมส่ง header `Authorization: Bearer $CRON_SECRET`
 (ค่าเดียวกับที่อยู่ใน Secret Manager / env ของ service).
 
-- [ ] `CRON_SECRET` ถูกตั้งใน service แล้ว (ดูข้อ 5)
-- [ ] สร้าง service account ให้ Scheduler เรียก Cloud Run แบบ authenticated
+- [ ] `CRON_SECRET` ถูกตั้งใน service + Secret Manager แล้ว (ดูข้อ 5)
 - [ ] `itbox-checks` — รายวัน (เตือนยืมเกินกำหนด/ประกัน/ไลเซนส์/รอบเปลี่ยนรหัส)
 - [ ] `itbox-sla` — ทุก 10 นาที (เตือน/ยกระดับ SLA ของ Support)
 - [ ] `itbox-cctv-daily` — รายวัน (สรุปสุขภาพ CCTV)
 
+### วิธีที่แนะนำ — รันสคริปต์สำเร็จรูป
+
+เปิด **Google Cloud Shell** (ล็อกอินโปรเจกต์อยู่แล้ว) แล้วรันจาก repo:
+
 ```bash
-export URL=$(gcloud run services describe "$SERVICE" --region "$REGION" --format='value(status.url)')
-export CRON_SECRET='<ค่าเดียวกับใน Secret Manager>'
+./deploy/setup-scheduler.sh
+```
 
-# (ครั้งเดียว) SA สำหรับให้ Scheduler เรียก Cloud Run
-gcloud iam service-accounts create itbox-scheduler \
-  --display-name="ITBox Cloud Scheduler" || true
-gcloud run services add-iam-policy-binding "$SERVICE" --region "$REGION" \
-  --member="serviceAccount:itbox-scheduler@${PROJECT}.iam.gserviceaccount.com" \
-  --role="roles/run.invoker"
+สคริปต์นี้ **idempotent** (รันซ้ำได้): เปิด API, หา URL ของ service, **ดึง `CRON_SECRET`
+จาก Secret Manager ให้อัตโนมัติ** (ไม่ต้องพิมพ์ค่าลับ), แล้ว create/update ทั้ง 3 job
+พร้อมเตือนถ้า service ไม่ได้เป็น public. ปรับค่าได้ผ่าน env:
+`PROJECT=… REGION=… SERVICE=… TZ_NAME=… ./deploy/setup-scheduler.sh`.
 
-# รายวัน 07:00 เวลาไทย — ตรวจเตือนต่าง ๆ
-gcloud scheduler jobs create http itbox-checks \
-  --location="$REGION" --schedule="0 7 * * *" --time-zone="Asia/Bangkok" \
-  --uri="${URL}/api/cron/checks" --http-method=POST \
-  --headers="Authorization=Bearer ${CRON_SECRET}" \
-  --oidc-service-account-email="itbox-scheduler@${PROJECT}.iam.gserviceaccount.com" \
-  --oidc-token-audience="${URL}"
+> **ทำไมไม่ใช้ OIDC:** โค้ดตรวจ `Authorization: Bearer $CRON_SECRET` ตรง ๆ (constant-time).
+> ถ้าใส่ OIDC ให้ job, Cloud Scheduler จะ **เขียนทับ** header `Authorization` ด้วย token
+> ของ OIDC ทำให้แอปปฏิเสธ. ดังนั้นใช้ header ลับอย่างเดียว และ service ต้องเป็น public
+> (ซึ่งเป็นอยู่แล้วเพราะเป็นเว็บ login) — ความปลอดภัยของ endpoint มาจาก `CRON_SECRET`.
 
-# ทุก 10 นาที — SLA ของ Support
-gcloud scheduler jobs create http itbox-sla \
-  --location="$REGION" --schedule="*/10 * * * *" --time-zone="Asia/Bangkok" \
-  --uri="${URL}/api/cron/sla" --http-method=POST \
-  --headers="Authorization=Bearer ${CRON_SECRET}" \
-  --oidc-service-account-email="itbox-scheduler@${PROJECT}.iam.gserviceaccount.com" \
-  --oidc-token-audience="${URL}"
+### หรือทำเองทีละคำสั่ง
 
-# รายวัน 08:00 เวลาไทย — สรุป CCTV
-gcloud scheduler jobs create http itbox-cctv-daily \
-  --location="$REGION" --schedule="0 8 * * *" --time-zone="Asia/Bangkok" \
-  --uri="${URL}/api/cron/cctv-daily" --http-method=POST \
-  --headers="Authorization=Bearer ${CRON_SECRET}" \
-  --oidc-service-account-email="itbox-scheduler@${PROJECT}.iam.gserviceaccount.com" \
-  --oidc-token-audience="${URL}"
+```bash
+URL=$(gcloud run services describe "$SERVICE" --region "$REGION" --format='value(status.url)')
+CRON_SECRET=$(gcloud secrets versions access latest --secret=CRON_SECRET)   # ไม่ต้องพิมพ์ค่าลับ
+gcloud services enable cloudscheduler.googleapis.com
+
+for job in \
+  "itbox-checks|0 7 * * *|/api/cron/checks" \
+  "itbox-sla|*/10 * * * *|/api/cron/sla" \
+  "itbox-cctv-daily|0 8 * * *|/api/cron/cctv-daily"; do
+  IFS='|' read -r name sched path <<<"$job"
+  gcloud scheduler jobs create http "$name" \
+    --location="$REGION" --schedule="$sched" --time-zone="Asia/Bangkok" \
+    --uri="${URL}${path}" --http-method=POST --attempt-deadline=320s \
+    --headers="Authorization=Bearer ${CRON_SECRET}"
+done
 ```
 
 - [ ] ทดสอบยิงทันทีแล้วดู log ว่าได้ HTTP 200
@@ -105,10 +105,6 @@ gcloud logging read \
   'resource.type=cloud_run_revision AND httpRequest.requestUrl:"/api/cron/"' \
   --limit=20 --freshness=10m --format='value(httpRequest.status, httpRequest.requestUrl)'
 ```
-
-> **ปลอดภัยกว่า:** หากบางองค์กรใช้ token bearer ใน header แล้วมี proxy ตัด header ออก
-> สามารถพึ่ง OIDC (`--oidc-*`) เป็นชั้นยืนยันตัวหลักได้ — โค้ดยอมรับ Bearer `CRON_SECRET`;
-> เก็บทั้งสองไว้เพื่อความชัวร์.
 
 ---
 
