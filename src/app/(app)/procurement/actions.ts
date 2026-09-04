@@ -7,6 +7,15 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/session";
 import { auditLog } from "@/lib/audit";
+import { PROCUREMENT_ENABLED } from "@/lib/features";
+
+// When the module is switched off, no server action may run — even via a
+// hand-crafted POST. Every exported action calls this first.
+function assertProcurementEnabled() {
+  if (!PROCUREMENT_ENABLED) {
+    throw new Error("Procurement module is disabled");
+  }
+}
 
 const emptyToNull = (v: unknown) =>
   typeof v === "string" && v.trim() === "" ? null : v;
@@ -68,6 +77,7 @@ function isUniqueViolation(e: unknown): boolean {
 }
 
 export async function createPurchaseRequest(formData: FormData) {
+  assertProcurementEnabled();
   const user = await requirePermission("procurement:create");
 
   const reason = z.string().min(1).max(5000).parse(formData.get("reason"));
@@ -243,6 +253,7 @@ async function notifyRequester(
 }
 
 export async function approvePurchaseRequest(id: string, formData: FormData) {
+  assertProcurementEnabled();
   const user = await requirePermission("procurement:approve");
   const comment = z
     .preprocess(emptyToNull, z.string().max(2000).nullable())
@@ -302,6 +313,7 @@ export async function approvePurchaseRequest(id: string, formData: FormData) {
 }
 
 export async function rejectPurchaseRequest(id: string, formData: FormData) {
+  assertProcurementEnabled();
   const user = await requirePermission("procurement:approve");
   const comment = z
     .preprocess(emptyToNull, z.string().max(2000).nullable())
@@ -359,6 +371,7 @@ export async function rejectPurchaseRequest(id: string, formData: FormData) {
 }
 
 export async function markPurchaseOrdered(id: string) {
+  assertProcurementEnabled();
   const user = await requirePermission("procurement:approve");
   const request = await loadPendingRequest(user.organizationId, id);
   if (request.status !== "APPROVED") redirect(`/procurement/${id}`);
@@ -376,6 +389,7 @@ export async function markPurchaseOrdered(id: string) {
 }
 
 export async function markPurchaseReceived(id: string) {
+  assertProcurementEnabled();
   const user = await requirePermission("procurement:approve");
   const request = await loadPendingRequest(user.organizationId, id);
   if (request.status !== "ORDERED") redirect(`/procurement/${id}`);

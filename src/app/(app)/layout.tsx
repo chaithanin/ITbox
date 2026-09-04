@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/session";
 import { getT } from "@/lib/i18n";
 import { prisma } from "@/lib/prisma";
+import { PROCUREMENT_ENABLED } from "@/lib/features";
 import { AppShell } from "@/components/shell/app-shell";
 import type { NavGroup, NavItem } from "@/components/shell/sidebar";
 import { KpiPopup } from "@/components/kpi-popup";
@@ -130,7 +131,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   ];
 
   const procurement: NavItem[] = [
-    ...(has("procurement:read") ? [{ href: "/procurement", label: t("procurement"), icon: "procurement" }] : []),
+    ...(PROCUREMENT_ENABLED && has("procurement:read") ? [{ href: "/procurement", label: t("procurement"), icon: "procurement" }] : []),
     ...(has("vendor:read") ? [{ href: "/vendors", label: t("vendors"), icon: "vendors" }] : []),
     ...(has("license:read") ? [{ href: "/licenses", label: t("licenses"), icon: "licenses" }] : []),
     ...(has("subscription:read") ? [{ href: "/subscriptions", label: t("subscriptions"), icon: "subscriptions" }] : []),

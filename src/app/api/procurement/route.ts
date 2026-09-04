@@ -5,6 +5,7 @@ import { apiHandler } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/session";
 import { auditLog } from "@/lib/audit";
+import { PROCUREMENT_ENABLED } from "@/lib/features";
 
 const STATUSES = [
   "DRAFT",
@@ -20,6 +21,9 @@ const STATUSES = [
 ] as const;
 
 export const GET = apiHandler(async (req: Request) => {
+  if (!PROCUREMENT_ENABLED) {
+    return NextResponse.json({ error: "not_found" }, { status: 404 });
+  }
   const user = await requirePermission("procurement:read");
   const sp = new URL(req.url).searchParams;
   const page = Math.max(1, Number(sp.get("page")) || 1);
@@ -74,6 +78,9 @@ const createSchema = z.object({
 });
 
 export const POST = apiHandler(async (req: Request) => {
+  if (!PROCUREMENT_ENABLED) {
+    return NextResponse.json({ error: "not_found" }, { status: 404 });
+  }
   const user = await requirePermission("procurement:create");
   const input = createSchema.parse(await req.json());
 

@@ -1,5 +1,7 @@
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import { getCurrentUser } from "@/lib/session";
+import { PROCUREMENT_ENABLED } from "@/lib/features";
 import { prisma } from "@/lib/prisma";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
@@ -17,6 +19,7 @@ export default async function NewPurchaseRequestPage({
 }: {
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
+  if (!PROCUREMENT_ENABLED) notFound();
   const sp = await searchParams;
   const user = await getCurrentUser();
   if (!user || !user.permissions.has("procurement:create")) {

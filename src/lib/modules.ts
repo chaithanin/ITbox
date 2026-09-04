@@ -11,6 +11,7 @@
  * `icon` matches the lucide icon keys resolved in the dashboard grid.
  */
 import type { DictKey } from "@/lib/i18n";
+import { PROCUREMENT_ENABLED } from "@/lib/features";
 
 export interface ModuleDef {
   /** Stable module code (analytics / deep-links / future config). */
@@ -227,7 +228,7 @@ function allowed(perms: ReadonlySet<string>, need: ModuleDef["permission"]): boo
 
 /** Modules the given permission set may see, in display order. */
 export function visibleModules(perms: ReadonlySet<string>): ModuleDef[] {
-  return MODULES.filter((m) => allowed(perms, m.permission)).sort(
-    (a, b) => a.sortOrder - b.sortOrder
-  );
+  return MODULES.filter((m) => allowed(perms, m.permission))
+    .filter((m) => PROCUREMENT_ENABLED || m.code !== "procurement")
+    .sort((a, b) => a.sortOrder - b.sortOrder);
 }

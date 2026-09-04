@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { CheckCircle2, Clock, PackagePlus, XCircle } from "lucide-react";
 import { getCurrentUser } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
+import { PROCUREMENT_ENABLED } from "@/lib/features";
 import { PageHeader } from "@/components/page-header";
 import { StatusBadge } from "@/components/status-badge";
 import { Button } from "@/components/ui/button";
@@ -52,6 +53,7 @@ export default async function PurchaseRequestDetailPage({
   params: Promise<{ id: string }>;
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
+  if (!PROCUREMENT_ENABLED) notFound();
   const { id } = await params;
   const approvalError = APPROVAL_ERRORS[(await searchParams).error ?? ""];
   const user = await getCurrentUser();

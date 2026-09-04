@@ -9,6 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Select } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { BarChartCard, type BarRow } from "../bar-chart";
+import { PROCUREMENT_ENABLED } from "@/lib/features";
 
 export const dynamic = "force-dynamic";
 
@@ -356,12 +357,14 @@ export default async function OverviewPage({
           tone={maintenanceOpen > 0 ? "warning" : "default"}
           href="/maintenance"
         />
-        <StatCard
-          label="รออนุมัติ / Pending Approvals"
-          value={pendingApprovals}
-          tone={pendingApprovals > 0 ? "warning" : "default"}
-          href="/procurement"
-        />
+        {PROCUREMENT_ENABLED && (
+          <StatCard
+            label="รออนุมัติ / Pending Approvals"
+            value={pendingApprovals}
+            tone={pendingApprovals > 0 ? "warning" : "default"}
+            href="/procurement"
+          />
+        )}
         <StatCard
           label="เคส IT ค้าง / IT Cases Open"
           value={supportOpen}
