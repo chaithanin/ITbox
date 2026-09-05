@@ -99,6 +99,7 @@ const PERMISSIONS = [
   "cctv:view","cctv:manage",
   "user:manage","role:manage","settings:manage","offboarding:read","offboarding:manage",
   "sim:read","sim:manage",
+  "permprofile:manage","accessreq:read","accessreq:manage",
 ];
 
 const READ_ONLY = [
@@ -128,6 +129,7 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
     "cmdb:read","cmdb:manage",
     "onboarding:read","onboarding:manage","catalog:read","catalog:manage","monitoring:read",
     "cctv:view","cctv:manage",
+    "permprofile:manage","accessreq:read","accessreq:manage",
   ],
   IT_STAFF: [
     "asset:read","asset:create","asset:update","asset:assign","asset:return","asset:transfer",
@@ -142,6 +144,7 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
     "cmdb:read","cmdb:manage",
     "onboarding:read","onboarding:manage","catalog:read","catalog:manage","monitoring:read",
     "cctv:view","cctv:manage",
+    "accessreq:read","accessreq:manage",
   ],
   SECURITY_ADMIN: [
     "asset:read","employee:read","department:read","location:read",

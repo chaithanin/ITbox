@@ -54,6 +54,8 @@ export const PERMISSIONS = [
   "monitoring:read",
   // CCTV monitoring
   "cctv:view", "cctv:manage",
+  // Access-request profiles (RBAC matrix)
+  "permprofile:manage", "accessreq:read", "accessreq:manage",
   // Admin
   "user:manage", "role:manage", "settings:manage",
   "offboarding:read", "offboarding:manage",
@@ -97,6 +99,7 @@ export const ROLE_PERMISSIONS: Record<string, PermissionKey[]> = {
     "cmdb:read", "cmdb:manage",
     "onboarding:read", "onboarding:manage", "catalog:read", "catalog:manage", "monitoring:read",
     "cctv:view", "cctv:manage",
+    "permprofile:manage", "accessreq:read", "accessreq:manage",
   ],
   IT_STAFF: [
     "asset:read", "asset:create", "asset:update",
@@ -116,6 +119,7 @@ export const ROLE_PERMISSIONS: Record<string, PermissionKey[]> = {
     "cmdb:read", "cmdb:manage",
     "onboarding:read", "onboarding:manage", "catalog:read", "monitoring:read",
     "cctv:view", "cctv:manage",
+    "accessreq:read", "accessreq:manage",
   ],
   SECURITY_ADMIN: [
     "asset:read", "employee:read", "department:read", "location:read",

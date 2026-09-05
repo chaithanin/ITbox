@@ -30,6 +30,8 @@ model Organization {
   roles             Role[]
   employees         Employee[]
   simCards          SimCard[]
+  permissionProfiles PermissionProfile[]
+  accessRequests    AccessRequest[]
   departments       Department[]
   locations         Location[]
   assetCategories   AssetCategory[]
@@ -331,6 +333,7 @@ model Employee {
   supportCases       SupportCase[]  @relation("CaseRequesterEmployee")
   borrowRequests     BorrowRequest[] @relation("BorrowRequester")
   simCards           SimCard[]
+  accessRequests     AccessRequest[]
 
   @@unique([organizationId, employeeCode])
   @@index([organizationId, departmentId])
@@ -2886,4 +2889,144 @@ model SimCard {
   @@unique([organizationId, phoneNumber])
   @@index([organizationId, status])
   @@map("sim_cards")
+}
+
+// ============================ RBAC access-request profiles ============================
+
+enum JobLevel {
+  L0        // Outsource / Temporary
+  L1        // Staff / Officer
+  L2        // Senior / Executive
+  L3        // Supervisor
+  L4        // Assistant Manager
+  L5        // Manager / Department Head
+  L6        // Director / C-Level
+  IT_ADMIN  // System Administrator
+}
+
+enum PermissionDefaultStatus {
+  REQUIRED
+  OPTIONAL
+  RESTRICTED
+  NOT_ALLOWED
+}
+
+enum PermissionSource {
+  DEFAULT
+  ADDITIONAL
+  RESTRICTED
+}
+
+enum AccessRequestStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  REJECTED
+  PROVISIONED
+  REVOKED
+}
+
+enum ProvisionStatus {
+  PENDING
+  ACCOUNT_CREATED
+  ACCESS_GRANTED
+  FAILED
+  REVOKED
+}
+
+/// Admin-configured default-permission profile. Matched against a requester's
+/// company / department / position / job level (see the resolver's fallback).
+model PermissionProfile {
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String    @db.Uuid
+  name           String
+  company        String?
+  department     String?
+  position       String?
+  jobLevel       JobLevel?
+  isActive       Boolean   @default(true)
+
+  requiresManagerApproval     Boolean @default(true)
+  requiresSystemOwnerApproval Boolean @default(false)
+  requiresItManagerApproval   Boolean @default(false)
+  requiresManagementApproval  Boolean @default(false)
+
+  notes     String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  organization Organization            @relation(fields: [organizationId], references: [id])
+  items        PermissionProfileItem[]
+
+  @@index([organizationId, department, position, jobLevel])
+  @@map("permission_profiles")
+}
+
+model PermissionProfileItem {
+  id              String                  @id @default(uuid()) @db.Uuid
+  profileId       String                  @db.Uuid
+  system          String                  // matches a forms.ts group name, e.g. "facebook", "mango_it"
+  resource        String?                 // optional sub-item, e.g. "globaltopgroup"
+  permissionLevel String                  // Admin / Editor / Viewer / Approved / …
+  defaultStatus   PermissionDefaultStatus @default(OPTIONAL)
+  requiresApproval Boolean                @default(false)
+
+  profile PermissionProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@index([profileId])
+  @@map("permission_profile_items")
+}
+
+/// A submitted access request (the fill-in form persists here in addition to
+/// producing the PDF). Employee details are snapshotted so history is stable.
+model AccessRequest {
+  id             String              @id @default(uuid()) @db.Uuid
+  organizationId String              @db.Uuid
+  refNo          String?
+  employeeId     String?             @db.Uuid
+  employeeCode   String?
+  nameTh         String?
+  nameEn         String?
+  phone          String?
+  email          String?
+  company        String?
+  department     String?
+  position       String?
+  jobLevel       JobLevel?
+  effectiveDate  DateTime?
+  expiryDate     DateTime?
+  businessJustification String?
+  approvalChain  String?             // snapshot of the computed chain
+  status         AccessRequestStatus @default(DRAFT)
+  createdById    String?             @db.Uuid
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  organization Organization        @relation(fields: [organizationId], references: [id])
+  employee     Employee?           @relation(fields: [employeeId], references: [id])
+  items        AccessRequestItem[]
+
+  @@index([organizationId, status])
+  @@map("access_requests")
+}
+
+model AccessRequestItem {
+  id              String           @id @default(uuid()) @db.Uuid
+  accessRequestId String           @db.Uuid
+  system          String
+  resource        String?
+  permissionLevel String
+  source          PermissionSource @default(DEFAULT)
+  businessJustification String?
+  provisionStatus ProvisionStatus  @default(PENDING)
+  provisionedById String?          @db.Uuid
+  provisionedAt   DateTime?
+
+  request AccessRequest @relation(fields: [accessRequestId], references: [id], onDelete: Cascade)
+
+  @@index([accessRequestId])
+  @@map("access_request_items")
 }
