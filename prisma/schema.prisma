@@ -29,6 +29,7 @@ model Organization {
   users             User[]
   roles             Role[]
   employees         Employee[]
+  simCards          SimCard[]
   departments       Department[]
   locations         Location[]
   assetCategories   AssetCategory[]
@@ -329,6 +330,7 @@ model Employee {
   onboardings        Onboarding[]
   supportCases       SupportCase[]  @relation("CaseRequesterEmployee")
   borrowRequests     BorrowRequest[] @relation("BorrowRequester")
+  simCards           SimCard[]
 
   @@unique([organizationId, employeeCode])
   @@index([organizationId, departmentId])
@@ -356,6 +358,7 @@ model Department {
   purchaseRequests PurchaseRequest[]
   supportCases SupportCase[] @relation("CaseDepartment")
   borrowRequests BorrowRequest[]
+  simCards     SimCard[]
 
   @@unique([organizationId, code])
   @@map("departments")
@@ -2845,4 +2848,42 @@ model DigitalSignature {
 
   @@index([organizationId, borrowRequestId])
   @@map("digital_signatures")
+}
+
+// ============================ SIM / phone-line registry ============================
+
+enum SimStatus {
+  ACTIVE
+  UNUSED
+  SUSPENDED
+  TERMINATED
+}
+
+model SimCard {
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String    @db.Uuid
+  phoneNumber    String
+  carrier        String    // AIS, DTAC, TRUE, OTHER
+  accountName    String?   // billing account / group, e.g. GTG, Heliton
+  holder         String?   // free-text holder / purpose from the registry
+  employeeId     String?   @db.Uuid
+  departmentId   String?   @db.Uuid
+  status         SimStatus @default(ACTIVE)
+  simSerial      String?
+  plan           String?
+  monthlyFee     Decimal?  @db.Decimal(12, 2)
+  startDate      DateTime?
+  notes          String?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  employee     Employee?    @relation(fields: [employeeId], references: [id])
+  department   Department?  @relation(fields: [departmentId], references: [id])
+
+  @@unique([organizationId, phoneNumber])
+  @@index([organizationId, status])
+  @@map("sim_cards")
 }

@@ -98,6 +98,7 @@ const PERMISSIONS = [
   "onboarding:read","onboarding:manage","catalog:read","catalog:manage","monitoring:read",
   "cctv:view","cctv:manage",
   "user:manage","role:manage","settings:manage","offboarding:read","offboarding:manage",
+  "sim:read","sim:manage",
 ];
 
 const READ_ONLY = [
@@ -133,7 +134,7 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
     "borrow:read","borrow:create","borrow:issue","borrow:return",
     "employee:read","department:read","location:read",
     "vault:read","vault:create","vault:update","vault:reveal","vault:copy",
-    "license:read","subscription:read","vendor:read","maintenance:read","maintenance:manage",
+    "license:read","subscription:read","vendor:read","maintenance:read","maintenance:manage","sim:read","sim:manage",
     "procurement:read","procurement:create","report:read","offboarding:read","offboarding:manage",
     "support:create","support:read","support:work",
     "network:read","network:manage","change:read","change:manage","backup:read","backup:manage","contract:read",

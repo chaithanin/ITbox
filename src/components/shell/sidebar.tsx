@@ -8,7 +8,7 @@ import {
   RefreshCcw, Wrench, ShoppingCart, Store, BarChart3, Bell, ScrollText,
   ShieldAlert, Settings, UserMinus, Boxes, LifeBuoy,
   Router, GitPullRequest, DatabaseBackup, FileText, Bug, BookOpen, ShieldX, Network,
-  UserPlus, LayoutGrid, Activity, MonitorSmartphone, Cctv, HandHelping, ChevronDown,
+  UserPlus, LayoutGrid, Activity, MonitorSmartphone, Cctv, HandHelping, ChevronDown, Smartphone,
   Server, ShieldCheck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -66,6 +66,7 @@ const ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   catalog: LayoutGrid,
   monitoring: Activity,
   endpoints: MonitorSmartphone,
+  sim: Smartphone,
   cctv: Cctv,
   infrastructure: Server,
   people: Users,

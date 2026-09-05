@@ -21,6 +21,8 @@ export const PERMISSIONS = [
   // Licenses & subscriptions
   "license:read", "license:manage",
   "subscription:read", "subscription:manage",
+  // SIM / phone-line registry
+  "sim:read", "sim:manage",
   // Vendors / maintenance / procurement
   "vendor:read", "vendor:manage",
   "maintenance:read", "maintenance:manage",
@@ -64,7 +66,7 @@ const ALL = [...PERMISSIONS] as PermissionKey[];
 const READ_ONLY: PermissionKey[] = [
   "asset:read", "borrow:read", "employee:read", "department:read", "location:read",
   "license:read", "subscription:read", "vendor:read", "maintenance:read",
-  "procurement:read", "report:read",
+  "procurement:read", "report:read", "sim:read",
   "network:read", "change:read", "backup:read", "contract:read",
   "problem:read", "kb:read", "vuln:read", "cmdb:read",
   "onboarding:read", "catalog:read", "monitoring:read", "cctv:view",
@@ -84,6 +86,7 @@ export const ROLE_PERMISSIONS: Record<string, PermissionKey[]> = {
     "vault:manage", "vault:emergency", "vault:audit",
     "license:read", "license:manage", "subscription:read", "subscription:manage",
     "vendor:read", "vendor:manage", "maintenance:read", "maintenance:manage",
+    "sim:read", "sim:manage",
     "procurement:read", "procurement:create", "procurement:approve",
     "report:read", "report:export", "audit:read", "security:read",
     "support:create", "support:read", "support:work", "support:manage", "support:settings",
@@ -103,6 +106,7 @@ export const ROLE_PERMISSIONS: Record<string, PermissionKey[]> = {
     "vault:read", "vault:create", "vault:update", "vault:reveal", "vault:copy",
     "license:read", "subscription:read",
     "vendor:read", "maintenance:read", "maintenance:manage",
+    "sim:read", "sim:manage",
     "procurement:read", "procurement:create",
     "support:create", "support:read", "support:work",
     "report:read", "offboarding:read", "offboarding:manage",

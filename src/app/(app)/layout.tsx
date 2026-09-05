@@ -135,6 +135,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     ...(has("vendor:read") ? [{ href: "/vendors", label: t("vendors"), icon: "vendors" }] : []),
     ...(has("license:read") ? [{ href: "/licenses", label: t("licenses"), icon: "licenses" }] : []),
     ...(has("subscription:read") ? [{ href: "/subscriptions", label: t("subscriptions"), icon: "subscriptions" }] : []),
+    ...(has("sim:read") ? [{ href: "/sim", label: "เบอร์/ซิม / SIM", icon: "sim" }] : []),
     ...(has("contract:read") ? [{ href: "/contracts", label: "สัญญา / Contracts", icon: "contracts" }] : []),
   ];
 

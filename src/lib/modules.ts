@@ -129,6 +129,16 @@ export const MODULES: ModuleDef[] = [
     sortOrder: 80,
   },
   {
+    code: "sim",
+    labelKey: "sim",
+    descTh: "ทะเบียนเบอร์/ซิม",
+    descEn: "SIM & phone lines",
+    icon: "sim",
+    route: "/sim",
+    permission: "sim:read",
+    sortOrder: 95,
+  },
+  {
     code: "vendors",
     labelKey: "vendors",
     descTh: "ทะเบียนผู้ขาย",
