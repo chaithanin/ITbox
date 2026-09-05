@@ -54,6 +54,13 @@ export default async function SettingsPage() {
       desc: "ประเภทเคส, หมวดหมู่, Priority & SLA, ทีม, เวลาทำการ, การแจ้งเตือน",
       show: user.permissions.has("support:settings"),
     },
+    {
+      href: "/settings/permission-profiles",
+      icon: ShieldCheck,
+      title: "โปรไฟล์สิทธิ์ / Permission Profiles",
+      desc: "กำหนดสิทธิ์มาตรฐานตามแผนก/ตำแหน่ง/ระดับ สำหรับแบบฟอร์มขอสิทธิ์",
+      show: user.permissions.has("permprofile:manage"),
+    },
   ];
 
   return (
