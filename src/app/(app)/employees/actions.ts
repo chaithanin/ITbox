@@ -21,6 +21,7 @@ const employeeSchema = z.object({
   status: z.enum(["ACTIVE", "ON_LEAVE", "OFFBOARDING", "RESIGNED"]).default("ACTIVE"),
   startDate: z.string().optional(),
   endDate: z.string().optional(),
+  simCardId: z.uuid().optional().or(z.literal("")),
 });
 
 type EmployeeInput = z.infer<typeof employeeSchema>;
@@ -55,6 +56,31 @@ async function assertOrgRefs(user: CurrentUser, input: EmployeeInput, selfId?: s
   }
 }
 
+/**
+ * Link a SIM/phone line to an employee (and unlink any others they held).
+ * Only free SIMs (unassigned) or the employee's own may be linked. No-op unless
+ * the actor may manage SIMs.
+ */
+async function applySimLink(user: CurrentUser, employeeId: string, simCardId: string | null | undefined) {
+  if (!user.permissions.has("sim:manage")) return;
+  const orgId = user.organizationId;
+  const targetId = simCardId || null;
+  const current = await prisma.simCard.findMany({
+    where: { organizationId: orgId, employeeId, deletedAt: null }, select: { id: true },
+  });
+  for (const s of current) {
+    if (s.id !== targetId) await prisma.simCard.update({ where: { id: s.id }, data: { employeeId: null } });
+  }
+  if (targetId) {
+    const sim = await prisma.simCard.findFirst({
+      where: { id: targetId, organizationId: orgId, deletedAt: null }, select: { id: true, employeeId: true },
+    });
+    if (sim && (sim.employeeId === null || sim.employeeId === employeeId)) {
+      await prisma.simCard.update({ where: { id: targetId }, data: { employeeId, status: "ACTIVE" } });
+    }
+  }
+}
+
 function toData(input: EmployeeInput) {
   return {
     employeeCode: input.employeeCode,
@@ -86,6 +112,7 @@ export async function createEmployee(formData: FormData) {
   const row = await prisma.employee.create({
     data: { ...toData(input), organizationId: user.organizationId },
   });
+  await applySimLink(user, row.id, input.simCardId);
   await auditLog(user, {
     action: "CREATE",
     entityType: "EMPLOYEE",
@@ -120,6 +147,7 @@ export async function updateEmployee(formData: FormData) {
   if (dup) throw new Error("Employee code already exists");
 
   const row = await prisma.employee.update({ where: { id }, data: toData(input) });
+  await applySimLink(user, row.id, input.simCardId);
   await auditLog(user, {
     action: "UPDATE",
     entityType: "EMPLOYEE",

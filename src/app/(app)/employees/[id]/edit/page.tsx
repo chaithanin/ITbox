@@ -45,6 +45,17 @@ export default async function EditEmployeePage({
     }),
   ]);
 
+  // SIM lines: free ones + any already linked to this employee (so it shows selected).
+  const sims = user.permissions.has("sim:read")
+    ? await prisma.simCard.findMany({
+        where: { organizationId: user.organizationId, deletedAt: null, OR: [{ employeeId: null, status: { in: ["ACTIVE", "UNUSED"] } }, { employeeId: id }] },
+        select: { id: true, phoneNumber: true, carrier: true, employeeId: true },
+        orderBy: [{ carrier: "asc" }, { phoneNumber: "asc" }],
+        take: 1000,
+      })
+    : [];
+  const linkedSimId = sims.find((s) => s.employeeId === id)?.id ?? "";
+
   return (
     <div className="mx-auto max-w-3xl">
       <PageHeader
@@ -114,6 +125,18 @@ export default async function EditEmployeePage({
                 ))}
               </Select>
             </div>
+            {sims.length > 0 && (
+              <div className="space-y-1.5 sm:col-span-2">
+                <Label htmlFor="simCardId">เบอร์/ซิม / SIM &amp; Phone Line</Label>
+                <Select id="simCardId" name="simCardId" defaultValue={linkedSimId}>
+                  <option value="">- ไม่ผูก / None -</option>
+                  {sims.map((s) => (
+                    <option key={s.id} value={s.id}>{s.phoneNumber} ({s.carrier}){s.employeeId === id ? " · ปัจจุบัน" : ""}</option>
+                  ))}
+                </Select>
+                <p className="text-xs text-muted-foreground">แสดงเบอร์ที่ยังว่าง + เบอร์ที่ผูกกับพนักงานคนนี้อยู่</p>
+              </div>
+            )}
             <div className="space-y-1.5">
               <Label htmlFor="managerId">หัวหน้า / Manager</Label>
               <Select id="managerId" name="managerId" defaultValue={employee.managerId ?? ""}>

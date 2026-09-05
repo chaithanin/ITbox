@@ -4,6 +4,7 @@ import type { Prisma } from "@prisma/client";
 import { getCurrentUser } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import { PageHeader } from "@/components/page-header";
+import { StatCard } from "@/components/stat-card";
 import { StatusBadge } from "@/components/status-badge";
 import { SearchFilterBar, Pagination, parsePage } from "@/components/list-controls";
 import { Button } from "@/components/ui/button";
@@ -48,6 +49,15 @@ export default async function SimPage({ searchParams }: { searchParams: Promise<
   const canManage = user.permissions.has("sim:manage");
   const pageCount = Math.max(1, Math.ceil(total / take));
 
+  // Dashboard stats (org-wide, ignore filters)
+  const orgWhere = { organizationId: user.organizationId, deletedAt: null };
+  const [usedCount, freeCount, accountRows] = await Promise.all([
+    prisma.simCard.count({ where: { ...orgWhere, status: "ACTIVE" } }),
+    prisma.simCard.count({ where: { ...orgWhere, status: "UNUSED" } }),
+    prisma.simCard.findMany({ where: { ...orgWhere, accountName: { not: null } }, select: { accountName: true }, distinct: ["accountName"] }),
+  ]);
+  const accountCount = accountRows.filter((a) => (a.accountName ?? "").trim() !== "").length;
+
   return (
     <div>
       <PageHeader title="เบอร์/ซิม / SIM & Phone Lines" description={`ทั้งหมด ${total} เบอร์ / ${total} lines`}>
@@ -58,6 +68,12 @@ export default async function SimPage({ searchParams }: { searchParams: Promise<
           </>
         )}
       </PageHeader>
+
+      <div className="mb-4 grid gap-3 sm:grid-cols-3">
+        <StatCard label="ใช้แล้ว / In use (ACTIVE)" value={usedCount} tone="default" />
+        <StatCard label="ว่าง / Available (UNUSED)" value={freeCount} tone={freeCount > 0 ? "success" : "default"} />
+        <StatCard label="บัญชีที่ใช้งาน / Active accounts" value={accountCount} tone="default" />
+      </div>
 
       <SearchFilterBar
         action="/sim"

@@ -32,6 +32,16 @@ export default async function NewEmployeePage() {
     }),
   ]);
 
+  // Free SIM/phone lines (not linked to any employee) available to assign.
+  const availableSims = user.permissions.has("sim:read")
+    ? await prisma.simCard.findMany({
+        where: { organizationId: user.organizationId, deletedAt: null, employeeId: null, status: { in: ["ACTIVE", "UNUSED"] } },
+        select: { id: true, phoneNumber: true, carrier: true },
+        orderBy: [{ carrier: "asc" }, { phoneNumber: "asc" }],
+        take: 1000,
+      })
+    : [];
+
   return (
     <div className="mx-auto max-w-3xl">
       <PageHeader title="เพิ่มพนักงาน / New Employee" description="กรอกข้อมูลพนักงานใหม่ / Create a new employee record" />
@@ -97,6 +107,18 @@ export default async function NewEmployeePage() {
                 ))}
               </Select>
             </div>
+            {availableSims.length > 0 && (
+              <div className="space-y-1.5">
+                <Label htmlFor="simCardId">เบอร์/ซิม / SIM &amp; Phone Line</Label>
+                <Select id="simCardId" name="simCardId" defaultValue="">
+                  <option value="">- ไม่ผูก / None -</option>
+                  {availableSims.map((s) => (
+                    <option key={s.id} value={s.id}>{s.phoneNumber} ({s.carrier})</option>
+                  ))}
+                </Select>
+                <p className="text-xs text-muted-foreground">แสดงเฉพาะเบอร์ที่ยังว่าง / Only unassigned lines</p>
+              </div>
+            )}
             <div className="space-y-1.5">
               <Label htmlFor="managerId">หัวหน้า / Manager</Label>
               <Select id="managerId" name="managerId" defaultValue="">
