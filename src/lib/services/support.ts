@@ -180,16 +180,47 @@ export async function loadSlaContext(organizationId: string) {
  * Pick an assignee within a team by strategy. Returns userId or null.
  * ROUND_ROBIN advances the team cursor; LEAST_WORKLOAD counts open cases.
  */
+/** Today's date at UTC midnight — matches the @db.Date columns used for holidays. */
+function todayDateOnly(): Date {
+  const now = new Date();
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+}
+
 export async function pickAssignee(
   teamId: string,
   strategy: "ROUND_ROBIN" | "LEAST_WORKLOAD"
 ): Promise<string | null> {
+  const team = await prisma.supportTeam.findUnique({ where: { id: teamId }, select: { organizationId: true } });
+  const today = todayDateOnly();
+
+  // Company-wide holiday → nobody is working today; leave the case in the queue.
+  if (team) {
+    const orgHoliday = await prisma.holiday.findFirst({
+      where: { organizationId: team.organizationId, date: today },
+      select: { id: true },
+    });
+    if (orgHoliday) return null;
+  }
+
   const members = await prisma.supportTeamMember.findMany({
     where: { teamId },
     select: { userId: true },
     orderBy: { userId: "asc" },
   });
   if (members.length === 0) return null;
+
+  // Drop agents who are on a day off today; if all are off, leave it in the queue.
+  if (team) {
+    const off = await prisma.agentDayOff.findMany({
+      where: { organizationId: team.organizationId, date: today, userId: { in: members.map((m) => m.userId) } },
+      select: { userId: true },
+    });
+    const offSet = new Set(off.map((o) => o.userId));
+    const working = members.filter((m) => !offSet.has(m.userId));
+    if (working.length === 0) return null;
+    members.length = 0;
+    members.push(...working);
+  }
 
   if (strategy === "LEAST_WORKLOAD") {
     const counts = await prisma.supportCase.groupBy({

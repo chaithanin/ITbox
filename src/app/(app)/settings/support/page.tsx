@@ -7,6 +7,7 @@ import {
   Users,
   GitBranch,
   CalendarClock,
+  CalendarOff,
   Bell,
 } from "lucide-react";
 import { requirePermission } from "@/lib/session";
@@ -70,6 +71,12 @@ export default async function SupportSettingsHub() {
       icon: CalendarClock,
       title: "เวลาทำการและวันหยุด / Business Hours & Holidays",
       desc: "เวลาทำการรายวัน, เขตเวลา และวันหยุดที่ใช้คำนวณ SLA",
+    },
+    {
+      href: "/settings/support/agent-leave",
+      icon: CalendarOff,
+      title: "วันหยุดเจ้าหน้าที่ / Agent Days Off",
+      desc: "วันไหนเจ้าหน้าที่หยุด/ลา ระบบจะไม่มอบหมายเคสให้อัตโนมัติในวันนั้น",
     },
     {
       href: "/settings/support/notifications",

@@ -81,6 +81,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           ],
         }]
       : []),
+    ...(has("support:settings") ? [{ href: "/settings/support/agent-leave", label: "วันหยุดเจ้าหน้าที่ / Agent Days Off", icon: "offboarding" }] : []),
     ...(has("maintenance:read") ? [{ href: "/maintenance", label: "งานซ่อม / Maintenance", icon: "maintenance" }] : []),
     ...(has("catalog:read") ? [{ href: "/catalog", label: "Service Catalog", icon: "catalog" }] : []),
     ...(has("kb:read") ? [{ href: "/kb", label: "Knowledge Base", icon: "kb" }] : []),

@@ -609,3 +609,58 @@ export async function saveNotificationPolicy(formData: FormData) {
   revalidatePath("/settings/support/notifications");
   redirect("/settings/support/notifications?ok=notifications-saved");
 }
+
+// ============================================================
+// Agent days off (per-agent leave affecting auto-assignment)
+// ============================================================
+
+const agentDayOffSchema = z.object({
+  userId: z.string().uuid(),
+  date: z.coerce.date(),
+  reason: z.string().max(200).nullable(),
+});
+
+export async function addAgentDayOff(formData: FormData) {
+  const user = await requirePermission("support:settings");
+  const parsed = agentDayOffSchema.safeParse({
+    userId: str(formData.get("userId")),
+    date: str(formData.get("date")),
+    reason: nullableStr(formData.get("reason")),
+  });
+  if (!parsed.success) redirect("/settings/support/agent-leave?error=invalid-input");
+  const { userId, date, reason } = parsed.data;
+
+  // The agent must belong to this org.
+  const agent = await prisma.user.findFirst({
+    where: { id: userId, organizationId: user.organizationId, deletedAt: null },
+    select: { id: true },
+  });
+  if (!agent) redirect("/settings/support/agent-leave?error=invalid-agent");
+
+  const day = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+  const dup = await prisma.agentDayOff.findFirst({
+    where: { organizationId: user.organizationId, userId, date: day },
+    select: { id: true },
+  });
+  if (dup) redirect("/settings/support/agent-leave?error=dayoff-exists");
+
+  const row = await prisma.agentDayOff.create({
+    data: { organizationId: user.organizationId, userId, date: day, reason },
+  });
+  await auditLog(user, { action: "CREATE", entityType: "AGENT_DAY_OFF", entityId: row.id, detail: { userId, date: day.toISOString().slice(0, 10) } });
+  revalidatePath("/settings/support/agent-leave");
+  redirect("/settings/support/agent-leave?ok=dayoff-added");
+}
+
+export async function deleteAgentDayOff(id: string, _formData?: FormData) {
+  const user = await requirePermission("support:settings");
+  const existing = await prisma.agentDayOff.findFirst({
+    where: { id, organizationId: user.organizationId },
+    select: { id: true },
+  });
+  if (!existing) redirect("/settings/support/agent-leave?error=not-found");
+  await prisma.agentDayOff.delete({ where: { id } });
+  await auditLog(user, { action: "DELETE", entityType: "AGENT_DAY_OFF", entityId: id });
+  revalidatePath("/settings/support/agent-leave");
+  redirect("/settings/support/agent-leave?ok=dayoff-deleted");
+}

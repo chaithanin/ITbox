@@ -53,6 +53,7 @@ model Organization {
   slaPolicies       SlaPolicy[]
   supportTeams      SupportTeam[]
   holidays          Holiday[]
+  agentDaysOff      AgentDayOff[]
   kpiConfigs        KpiConfig[]
   signatureTemplates SignatureTemplate[]
   itHealthChecks    ItHealthCheck[]
@@ -137,6 +138,7 @@ model User {
   sessions     UserSession[]
   accounts     OAuthAccount[]
   webauthnCredentials WebAuthnCredential[]
+  agentDaysOff AgentDayOff[]
 
   vaultItemsOwned    VaultItem[]     @relation("VaultOwner")
   vaultSharesGranted VaultShare[]    @relation("SharedBy")
@@ -1364,6 +1366,26 @@ model Holiday {
 
   @@unique([organizationId, date])
   @@map("holidays")
+}
+
+/// A single day an individual support agent is off (leave / วันลา). On that
+/// date the auto-assignment engine skips this agent so new cases route to
+/// someone who is working.
+model AgentDayOff {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @db.Uuid
+  userId         String   @db.Uuid
+  date           DateTime @db.Date
+  reason         String?
+
+  createdAt DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  user         User         @relation(fields: [userId], references: [id])
+
+  @@unique([organizationId, userId, date])
+  @@index([organizationId, date])
+  @@map("agent_days_off")
 }
 
 model SupportTeam {
