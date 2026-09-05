@@ -507,6 +507,18 @@ export default async function CaseDetailPage({
                   รับเคสนี้ / Assign to me
                 </Button>
               </form>
+              <Label className="mt-1">ปิดเคส / Close</Label>
+              <form action={transitionAction.bind(null, c.id)}>
+                <input type="hidden" name="to" value="CLOSED" />
+                <ConfirmButton
+                  type="submit"
+                  className="w-full"
+                  disabled={!allowedTransitions.includes("CLOSED")}
+                  confirmText="ปิดเคสนี้? / Close this case?"
+                >
+                  <CheckCircle2 className="h-4 w-4" /> ปิดเคส / Close case
+                </ConfirmButton>
+              </form>
             </div>
           </CardContent>
         </Card>

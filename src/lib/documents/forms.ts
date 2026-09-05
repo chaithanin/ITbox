@@ -88,7 +88,7 @@ const TIMES = [
 /** Standard requester identity block. */
 function requester(extra: Field[] = [], opts: { id?: boolean } = { id: true }): Section {
   const fields: Field[] = [];
-  if (opts.id !== false) fields.push({ name: "idNumber", th: "หมายเลขบัตรประชาชน / Passport", type: "text" });
+  if (opts.id !== false) fields.push({ name: "employeeCode", th: "รหัสพนักงาน / Staff ID", type: "text" });
   fields.push(
     { name: "nameTh", th: "ชื่อ-สกุลภาษาไทย (นาย/นาง/นางสาว)", type: "text" },
     { name: "nameEn", th: "ชื่อ-สกุลภาษาอังกฤษ (Mr./Mrs./Ms.)", type: "text" },
@@ -211,6 +211,7 @@ export const FORMS: FormDef[] = [
     sections: [{
       title: "สำหรับผู้ขอสิทธิ์ / For the Requester",
       fields: [
+        { name: "employeeCode", th: "รหัสพนักงาน / Staff ID", type: "text" },
         { name: "nameTh", th: "ชื่อ-สกุลภาษาไทย (นาย/นาง/นางสาว)", type: "text" },
         { name: "nameEn", th: "ชื่อ-สกุลภาษาอังกฤษ (Mr./Mrs./Ms.)", type: "text" },
         { name: "department2", th: "แผนก / Department", type: "text", half: true },

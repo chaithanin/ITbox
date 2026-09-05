@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { getForm, type OptionGroup, type Section, type TableSpec } from "@/lib/documents/forms";
+import { StaffIdField } from "../staff-id-field";
 
 const ORIGINAL = (slug: string) => `/forms/${slug}-original.pdf`;
 
@@ -71,11 +72,17 @@ function SectionBlock({ s }: { s: Section }) {
       <CardContent className="space-y-3">
         {s.fields?.map((f) => (
           <div key={f.name} className={f.half ? "inline-block w-full sm:w-[calc(50%-0.5rem)] sm:pr-2 align-top" : ""}>
+            {f.name === "employeeCode" ? (
+              <StaffIdField name={f.name} label={f.th} />
+            ) : (
+            <>
             <Label htmlFor={f.name}>{f.th}</Label>
             {f.type === "textarea" ? (
               <Textarea id={f.name} name={f.name} rows={2} className="mt-1" />
             ) : (
               <Input id={f.name} name={f.name} type={f.type === "number" ? "number" : f.type === "date" ? "date" : f.type === "time" ? "time" : "text"} className="mt-1" />
+            )}
+            </>
             )}
           </div>
         ))}
