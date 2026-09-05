@@ -19,6 +19,24 @@ export interface ValueSource {
   getAll(name: string): string[];
 }
 
+/** Formats a date as DD/MM/YYYY. Accepts a YYYY-MM-DD string, any Date-parsable
+ *  string, or nothing (→ today). Returns "" if the input cannot be parsed. */
+function fmtDate(input?: string): string {
+  let d: Date;
+  if (!input || !input.trim()) {
+    d = new Date();
+  } else {
+    const iso = input.trim();
+    const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
+    if (m) return `${m[3]}/${m[2]}/${m[1]}`;
+    d = new Date(iso);
+    if (isNaN(d.getTime())) return "";
+  }
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  return `${dd}/${mm}/${d.getFullYear()}`;
+}
+
 export function buildDocumentPdf(form: FormDef, v: ValueSource): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     const thai = loadThaiFont();
@@ -220,10 +238,17 @@ export function buildDocumentPdf(form: FormDef, v: ValueSource): Promise<Buffer>
         for (let j = 0; j < 2 && i + j < roles.length; j++) {
           const role = roles[i + j];
           const bx = left + j * blockW;
+          const isRequester = role === "requester";
+          const name = isRequester ? (v.get("nameTh") || v.get("nameEn") || "").trim() : "";
+          const dateStr = isRequester ? fmtDate() : "";
           doc.font(body).fontSize(8).fillColor("#111827");
           doc.text("ลงชื่อ/Sign ............................................", bx, y + 4, { width: blockW, align: "center", lineBreak: false });
-          doc.text("(........................................................)", bx, y + 18, { width: blockW, align: "center", lineBreak: false });
-          doc.fontSize(7.5).fillColor("#6b7280").text("วันที่ / DD/MM/YYYY ...................", bx, y + 30, { width: blockW, align: "center", lineBreak: false });
+          if (name) {
+            doc.text(`( ${name} )`, bx, y + 18, { width: blockW, align: "center", lineBreak: false });
+          } else {
+            doc.text("(........................................................)", bx, y + 18, { width: blockW, align: "center", lineBreak: false });
+          }
+          doc.fontSize(7.5).fillColor("#6b7280").text(`วันที่ / DD/MM/YYYY ${dateStr || "..................."}`, bx, y + 30, { width: blockW, align: "center", lineBreak: false });
           doc.fontSize(8).fillColor("#111827").text(SIGNATURE_LABEL[role], bx, y + 40, { width: blockW, align: "center", lineBreak: false });
         }
         y += blockH + 6;
@@ -332,10 +357,17 @@ export function buildAccessRequestPdf(d: AccessPdfData): Promise<Buffer> {
       ensure(bh);
       for (let j = 0; j < 2 && i + j < roles.length; j++) {
         const bx = left + j * bw;
+        const isRequester = i + j === 0;
+        const name = isRequester ? (d.nameTh || d.nameEn || "").trim() : "";
+        const dateStr = isRequester ? (fmtDate(d.effectiveDate) || fmtDate()) : "";
         doc.font(body).fontSize(8).fillColor("#111827");
         doc.text("ลงชื่อ/Sign ............................................", bx, y + 4, { width: bw, align: "center", lineBreak: false });
-        doc.text("(........................................................)", bx, y + 18, { width: bw, align: "center", lineBreak: false });
-        doc.fontSize(7.5).fillColor("#6b7280").text("วันที่ / DD/MM/YYYY ...................", bx, y + 30, { width: bw, align: "center", lineBreak: false });
+        if (name) {
+          doc.text(`( ${name} )`, bx, y + 18, { width: bw, align: "center", lineBreak: false });
+        } else {
+          doc.text("(........................................................)", bx, y + 18, { width: bw, align: "center", lineBreak: false });
+        }
+        doc.fontSize(7.5).fillColor("#6b7280").text(`วันที่ / DD/MM/YYYY ${dateStr || "..................."}`, bx, y + 30, { width: bw, align: "center", lineBreak: false });
         doc.fontSize(8).fillColor("#111827").text(roles[i + j], bx, y + 40, { width: bw, align: "center", lineBreak: false });
       }
       y += bh + 6;
