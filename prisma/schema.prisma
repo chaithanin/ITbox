@@ -2185,6 +2185,11 @@ model Onboarding {
   softwareAssigned Boolean @default(false)
   accessGranted    Boolean @default(false)
   inductionDone    Boolean @default(false)
+  // Step data captured during onboarding
+  accountUsername          String?   // login/account name created for the joiner
+  emailAddress             String?   // work email created
+  emailPasswordVaultItemId String?   @db.Uuid // encrypted email password lives in the Vault
+  softwareInstalled        String[]  @default([]) // names of software installed
   note           String?
   startedById    String?   @db.Uuid
   completedAt    DateTime?

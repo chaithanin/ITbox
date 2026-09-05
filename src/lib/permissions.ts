@@ -105,7 +105,7 @@ export const ROLE_PERMISSIONS: Record<string, PermissionKey[]> = {
     "vendor:read", "maintenance:read", "maintenance:manage",
     "procurement:read", "procurement:create",
     "support:create", "support:read", "support:work",
-    "report:read", "offboarding:read",
+    "report:read", "offboarding:read", "offboarding:manage",
     "network:read", "network:manage", "change:read", "change:manage",
     "backup:read", "backup:manage", "contract:read",
     "problem:read", "problem:manage", "kb:read", "kb:manage", "vuln:read", "vuln:manage",

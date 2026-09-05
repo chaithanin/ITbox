@@ -134,7 +134,7 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
     "employee:read","department:read","location:read",
     "vault:read","vault:create","vault:update","vault:reveal","vault:copy",
     "license:read","subscription:read","vendor:read","maintenance:read","maintenance:manage",
-    "procurement:read","procurement:create","report:read","offboarding:read",
+    "procurement:read","procurement:create","report:read","offboarding:read","offboarding:manage",
     "support:create","support:read","support:work",
     "network:read","network:manage","change:read","change:manage","backup:read","backup:manage","contract:read",
     "problem:read","problem:manage","kb:read","kb:manage","vuln:read","vuln:manage",

@@ -1,4 +1,5 @@
-import { UserPlus, Plus } from "lucide-react";
+import Link from "next/link";
+import { UserPlus, Plus, ListChecks } from "lucide-react";
 import { getCurrentUser } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -80,7 +81,12 @@ export async function OnboardingBoard() {
                       {t.th}
                     </label>
                   ))}
-                  {canManage && <div className="flex justify-end pt-1"><Button type="submit" size="sm">บันทึก / Save</Button></div>}
+                  <div className="flex items-center justify-between pt-1">
+                    <Button type="button" variant="outline" size="sm" asChild>
+                      <Link href={`/onboarding/${o.id}`}><ListChecks className="h-4 w-4" /> กรอกรายละเอียด / Details</Link>
+                    </Button>
+                    {canManage && <Button type="submit" size="sm">บันทึก / Save</Button>}
+                  </div>
                 </form>
               </CardContent>
             </Card>
