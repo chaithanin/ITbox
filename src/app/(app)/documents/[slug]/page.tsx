@@ -15,16 +15,36 @@ const ORIGINAL = (slug: string) => `/forms/${slug}-original.pdf`;
 
 function GroupField({ g }: { g: OptionGroup }) {
   return (
-    <div className="space-y-1.5">
-      <p className="text-sm font-medium">{g.th}</p>
-      <div className="grid gap-1.5 sm:grid-cols-2 lg:grid-cols-3">
-        {g.options.map((o) => (
-          <label key={o.value} className="flex items-center gap-2 text-sm">
-            <input type={g.multi ? "checkbox" : "radio"} name={g.name} value={o.value} className="h-4 w-4" />
-            {o.th}
+    <div className="space-y-1.5 border-b pb-2 last:border-0">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+        {g.th && <p className="text-sm font-medium">{g.th}</p>}
+        {g.levels?.map((lv) => (
+          <label key={lv.value} className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <input type="checkbox" name={`${g.name}__level`} value={lv.value} className="h-3.5 w-3.5" />
+            {lv.th}
           </label>
         ))}
       </div>
+      {g.options.length > 0 && (
+        <div className={g.inline ? "flex flex-wrap gap-x-4 gap-y-1" : "grid gap-1.5 sm:grid-cols-2 lg:grid-cols-3"}>
+          {g.options.map((o) => (
+            <label key={o.value} className="flex items-center gap-2 text-sm">
+              <input type={g.multi ? "checkbox" : "radio"} name={g.name} value={o.value} className="h-4 w-4" />
+              {o.th}
+            </label>
+          ))}
+        </div>
+      )}
+      {g.matrix && g.matrix.length > 0 && (
+        <div className="flex flex-wrap gap-x-3 gap-y-1 pt-1">
+          {g.matrix.map((code) => (
+            <label key={code} className="flex items-center gap-1 text-[11px] text-muted-foreground">
+              <input type="checkbox" name={`${g.name}__mod`} value={code} className="h-3 w-3" />
+              {code}
+            </label>
+          ))}
+        </div>
+      )}
       {g.other && (
         <div className="flex items-center gap-2 pt-1">
           <span className="text-sm text-muted-foreground">อื่น ๆ / Other:</span>
@@ -137,12 +157,17 @@ export default async function DocumentFillPage({ params }: { params: Promise<{ s
 
           {form.sections.map((s, i) => <SectionBlock key={i} s={s} />)}
 
-          {form.signatures.length > 0 && (
-            <p className="rounded-md border bg-muted/40 p-3 text-xs text-muted-foreground">
-              <FileText className="mr-1 inline h-3.5 w-3.5" />
-              ช่องลงนาม ({form.signatures.length} ช่อง) จะถูกพิมพ์ในไฟล์ PDF ให้เซ็นบนกระดาษ
-            </p>
-          )}
+          {form.adminSection && <SectionBlock s={form.adminSection} />}
+
+          {(() => {
+            const sigCount = (form.requesterSignatures?.length ?? 0) + (form.adminSignatures?.length ?? 0);
+            return sigCount > 0 ? (
+              <p className="rounded-md border bg-muted/40 p-3 text-xs text-muted-foreground">
+                <FileText className="mr-1 inline h-3.5 w-3.5" />
+                ช่องลงนาม ({sigCount} ช่อง) จะถูกพิมพ์ในไฟล์ PDF ให้เซ็นบนกระดาษ
+              </p>
+            ) : null;
+          })()}
 
           <div className="sticky bottom-0 flex justify-end gap-2 border-t bg-background/95 py-3">
             <Button type="submit"><Download className="h-4 w-4" /> สร้าง PDF / Generate PDF</Button>
