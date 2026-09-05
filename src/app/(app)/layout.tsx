@@ -67,6 +67,16 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         }]
       : []),
     ...(has("maintenance:read") ? [{ href: "/maintenance", label: t("maintenance"), icon: "maintenance" }] : []),
+    ...(has("network:read") ? [{
+      href: "/network", label: "เครือข่าย / Network", icon: "network",
+      children: [
+        { href: "/network", label: "อุปกรณ์ / Devices" },
+        { href: "/network/ipam", label: "IP / Subnet / VLAN" },
+      ],
+    }] : []),
+    ...(has("license:read") ? [{ href: "/licenses", label: t("licenses"), icon: "licenses" }] : []),
+    ...(has("subscription:read") ? [{ href: "/subscriptions", label: t("subscriptions"), icon: "subscriptions" }] : []),
+    ...(has("contract:read") ? [{ href: "/contracts", label: "สัญญา / Contracts", icon: "contracts" }] : []),
   ];
 
   const support: NavItem[] = [
@@ -98,13 +108,6 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   ];
 
   const infrastructure: NavItem[] = [
-    ...(has("network:read") ? [{
-      href: "/network", label: "เครือข่าย / Network", icon: "network",
-      children: [
-        { href: "/network", label: "อุปกรณ์ / Devices" },
-        { href: "/network/ipam", label: "IP / Subnet / VLAN" },
-      ],
-    }] : []),
     ...(has("change:read") ? [{ href: "/changes", label: "Change Management", icon: "changes" }] : []),
     ...(has("problem:read") ? [{ href: "/problems", label: "Problem Management", icon: "problems" }] : []),
     ...(has("kb:read") ? [{ href: "/kb", label: "Knowledge Base", icon: "kb" }] : []),
@@ -133,10 +136,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const procurement: NavItem[] = [
     ...(PROCUREMENT_ENABLED && has("procurement:read") ? [{ href: "/procurement", label: t("procurement"), icon: "procurement" }] : []),
     ...(has("vendor:read") ? [{ href: "/vendors", label: t("vendors"), icon: "vendors" }] : []),
-    ...(has("license:read") ? [{ href: "/licenses", label: t("licenses"), icon: "licenses" }] : []),
-    ...(has("subscription:read") ? [{ href: "/subscriptions", label: t("subscriptions"), icon: "subscriptions" }] : []),
     ...(has("sim:read") ? [{ href: "/sim", label: "เบอร์/ซิม / SIM", icon: "sim" }] : []),
-    ...(has("contract:read") ? [{ href: "/contracts", label: "สัญญา / Contracts", icon: "contracts" }] : []),
   ];
 
   const security: NavItem[] = [
