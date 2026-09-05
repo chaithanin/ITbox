@@ -163,6 +163,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   // Reports & Documents
   const reports: NavItem[] = [
+    ...(has("report:read") ? [{ href: "/dashboard/it-dashboard", label: "IT Dashboard", icon: "reports" }] : []),
     ...(has("report:read") ? [{ href: "/it-report", label: "IT Support Report", icon: "reports" }] : []),
     ...(has("report:read") ? [{ href: "/reports", label: "Reports", icon: "reports" }] : []),
     { href: "/documents", label: "Documents", icon: "contracts" },
