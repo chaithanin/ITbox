@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/table";
 import {
   returnAllAssets,
+  returnSelectedAssets,
   revokeAllLicenses,
   revokeVaultAccess,
   disableAccount,
@@ -164,6 +165,57 @@ export default async function OffboardingDetailPage({
         <CardContent className="space-y-3">
           {openAssignments.length === 0 ? (
             <p className="text-sm text-muted-foreground">ไม่มีทรัพย์สินค้างคืน / Nothing outstanding</p>
+          ) : canManage && isOpen ? (
+            // Selectable list: tick the assets that were physically returned, then
+            // "Return selected" — or "Return all" in one go.
+            <form action={returnSelectedAssets} className="space-y-3">
+              <input type="hidden" name="offboardingId" value={offboarding.id} />
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-10">เลือก</TableHead>
+                    <TableHead>Tag</TableHead>
+                    <TableHead>ทรัพย์สิน / Asset</TableHead>
+                    <TableHead>วันที่เบิก / Assigned</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {openAssignments.map((a) => (
+                    <TableRow key={a.id}>
+                      <TableCell>
+                        <input
+                          type="checkbox"
+                          name="assignmentId"
+                          value={a.id}
+                          aria-label={`เลือก ${a.asset.assetTag}`}
+                          className="h-4 w-4"
+                        />
+                      </TableCell>
+                      <TableCell className="font-mono text-xs">{a.asset.assetTag}</TableCell>
+                      <TableCell>
+                        <Link href={`/assets/${a.asset.id}`} className="text-primary hover:underline">
+                          {a.asset.name}
+                        </Link>
+                      </TableCell>
+                      <TableCell>{formatDate(a.assignedAt)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+              <div className="flex flex-wrap gap-2">
+                <ConfirmButton type="submit" confirmText="รับคืนทรัพย์สินที่เลือก? / Return the selected assets?">
+                  รับคืนที่เลือก / Return selected
+                </ConfirmButton>
+                <ConfirmButton
+                  type="submit"
+                  variant="outline"
+                  formAction={returnAllAssets}
+                  confirmText="รับคืนทรัพย์สินทั้งหมด? / Return all assets?"
+                >
+                  รับคืนทั้งหมด / Return all
+                </ConfirmButton>
+              </div>
+            </form>
           ) : (
             <Table>
               <TableHeader>
@@ -187,14 +239,6 @@ export default async function OffboardingDetailPage({
                 ))}
               </TableBody>
             </Table>
-          )}
-          {canManage && isOpen && openAssignments.length > 0 && (
-            <form action={returnAllAssets}>
-              <input type="hidden" name="offboardingId" value={offboarding.id} />
-              <ConfirmButton confirmText="รับคืนทรัพย์สินทั้งหมด? / Return all assets?">
-                รับคืนทั้งหมด / Return all
-              </ConfirmButton>
-            </form>
           )}
         </CardContent>
       </Card>

@@ -95,6 +95,77 @@ export async function returnAllAssets(formData: FormData) {
   revalidatePath(`/offboarding/${offboarding.id}`);
 }
 
+/** a2. คืนเฉพาะรายการที่เลือก / Return only the selected outstanding assets. */
+export async function returnSelectedAssets(formData: FormData) {
+  const user = await requirePermission("offboarding:manage");
+  const offboarding = await getOffboardingOrThrow(user, formData);
+  const now = new Date();
+
+  const selectedIds = Array.from(new Set(
+    formData.getAll("assignmentId").filter((v): v is string => typeof v === "string" && v.trim() !== "")
+  ));
+  if (selectedIds.length === 0) {
+    redirect(`/offboarding/${offboarding.id}?error=noselection`);
+  }
+
+  // Only touch assignments that are genuinely open and belong to this employee.
+  const open = await prisma.assetAssignment.findMany({
+    where: {
+      id: { in: selectedIds },
+      organizationId: user.organizationId,
+      employeeId: offboarding.employeeId,
+      status: "CHECKED_OUT",
+    },
+    select: { id: true, assetId: true },
+  });
+
+  for (const a of open) {
+    await prisma.$transaction([
+      prisma.assetAssignment.update({
+        where: { id: a.id },
+        data: { status: "RETURNED", returnedAt: now, returnedById: user.id, remark: "Offboarding" },
+      }),
+      prisma.asset.update({
+        where: { id: a.assetId },
+        data: { status: "AVAILABLE", assignedToId: null },
+      }),
+      prisma.assetHistory.create({
+        data: {
+          organizationId: user.organizationId,
+          assetId: a.assetId,
+          action: "RETURN",
+          detail: `Returned during offboarding of ${offboarding.employee.employeeCode}`,
+          actorId: user.id,
+        },
+      }),
+    ]);
+  }
+
+  const remaining = await prisma.assetAssignment.count({
+    where: {
+      organizationId: user.organizationId,
+      employeeId: offboarding.employeeId,
+      status: "CHECKED_OUT",
+    },
+  });
+  if (remaining === 0) {
+    await prisma.offboarding.update({
+      where: { id: offboarding.id },
+      data: { assetsReturned: true },
+    });
+  }
+  await markInProgress(offboarding.id, offboarding.status);
+
+  await auditLog(user, {
+    action: "RETURN",
+    entityType: "OFFBOARDING",
+    entityId: offboarding.id,
+    detail: { employeeId: offboarding.employeeId, returnedCount: open.length, selected: selectedIds.length },
+  });
+  revalidatePath(`/offboarding/${offboarding.id}`);
+  redirect(`/offboarding/${offboarding.id}?ok=returned`);
+}
+
 /** b. เพิกถอนไลเซนส์ทั้งหมด / Revoke all active license assignments. */
 export async function revokeAllLicenses(formData: FormData) {
   const user = await requirePermission("offboarding:manage");

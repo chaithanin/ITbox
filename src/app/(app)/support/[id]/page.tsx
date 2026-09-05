@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Paperclip, Star } from "lucide-react";
+import { Paperclip, Star, CheckCircle2 } from "lucide-react";
 import type { CaseStatus } from "@prisma/client";
 import { requireUser } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
@@ -20,6 +20,7 @@ import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { cn, formatDate, formatDateTime } from "@/lib/utils";
+import { ConfirmButton } from "@/components/confirm-button";
 import {
   addCommentAction,
   confirmResolutionAction,
@@ -141,6 +142,18 @@ export default async function CaseDetailPage({
       <PageHeader title={`${c.caseNumber}`} description={c.subject}>
         <StatusBadge status={c.status} />
         <StatusBadge status={c.priority} label={`${c.priority} · ${PRIORITY_LABEL[c.priority].th}`} />
+        {canWork && allowedTransitions.includes("CLOSED") && (
+          <form action={transitionAction.bind(null, c.id)}>
+            <input type="hidden" name="to" value="CLOSED" />
+            <ConfirmButton
+              type="submit"
+              variant="default"
+              confirmText="ปิดเคสนี้? / Close this case?"
+            >
+              <CheckCircle2 className="h-4 w-4" /> ปิดเคส / Close case
+            </ConfirmButton>
+          </form>
+        )}
         <Button variant="outline" asChild>
           <Link href="/support">กลับ / Back</Link>
         </Button>
