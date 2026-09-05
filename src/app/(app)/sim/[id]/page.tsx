@@ -24,14 +24,16 @@ export default async function SimDetailPage({
   const sim = await prisma.simCard.findFirst({ where: { id, organizationId: user.organizationId, deletedAt: null } });
   if (!sim) notFound();
 
-  const [employees, departments] = await Promise.all([
+  const [employees, departments, assetRows] = await Promise.all([
     prisma.employee.findMany({ where: { organizationId: user.organizationId, deletedAt: null, status: "ACTIVE" }, select: { id: true, firstName: true, lastName: true, employeeCode: true }, orderBy: { employeeCode: "asc" }, take: 1000 }),
     prisma.department.findMany({ where: { organizationId: user.organizationId, deletedAt: null }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
+    prisma.asset.findMany({ where: { organizationId: user.organizationId, deletedAt: null }, select: { id: true, assetTag: true, name: true, category: { select: { name: true } } }, orderBy: { assetTag: "asc" }, take: 2000 }),
   ]);
+  const assets = assetRows.map((a) => ({ id: a.id, assetTag: a.assetTag, name: a.name, category: a.category?.name ?? null }));
 
   const d = {
     phoneNumber: sim.phoneNumber, carrier: sim.carrier, accountName: sim.accountName, holder: sim.holder,
-    employeeId: sim.employeeId, departmentId: sim.departmentId, status: sim.status, simSerial: sim.simSerial,
+    employeeId: sim.employeeId, departmentId: sim.departmentId, assetId: sim.assetId, status: sim.status, simSerial: sim.simSerial,
     plan: sim.plan, monthlyFee: sim.monthlyFee != null ? String(sim.monthlyFee) : null,
     startDate: sim.startDate ? sim.startDate.toISOString().slice(0, 10) : null, notes: sim.notes,
   };
@@ -53,7 +55,7 @@ export default async function SimDetailPage({
         <div className="mb-4 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">เบอร์นี้ซ้ำกับรายการอื่น / Phone number already exists</div>
       )}
       <form action={update}>
-        <Card><CardContent className="pt-4"><SimFields d={d} employees={employees} departments={departments} /></CardContent></Card>
+        <Card><CardContent className="pt-4"><SimFields d={d} employees={employees} departments={departments} assets={assets} /></CardContent></Card>
         {canManage && <div className="mt-4 flex justify-end"><Button type="submit">บันทึก / Save</Button></div>}
       </form>
     </div>

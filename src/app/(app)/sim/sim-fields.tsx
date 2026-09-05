@@ -8,17 +8,18 @@ const CARRIERS = ["AIS", "DTAC", "TRUE", "NT", "OTHER"];
 
 export interface SimDefaults {
   phoneNumber?: string; carrier?: string; accountName?: string | null; holder?: string | null;
-  employeeId?: string | null; departmentId?: string | null; status?: string;
+  employeeId?: string | null; departmentId?: string | null; assetId?: string | null; status?: string;
   simSerial?: string | null; plan?: string | null; monthlyFee?: string | null;
   startDate?: string | null; notes?: string | null;
 }
 
 export function SimFields({
-  d = {}, employees, departments,
+  d = {}, employees, departments, assets = [],
 }: {
   d?: SimDefaults;
   employees: { id: string; firstName: string; lastName: string; employeeCode: string }[];
   departments: { id: string; name: string }[];
+  assets?: { id: string; assetTag: string; name: string; category: string | null }[];
 }) {
   return (
     <div className="grid gap-4 sm:grid-cols-2">
@@ -50,6 +51,17 @@ export function SimFields({
         <Select id="employeeId" name="employeeId" defaultValue={d.employeeId ?? ""} className="mt-1">
           <option value="">— ไม่ผูก / None —</option>
           {employees.map((e) => <option key={e.id} value={e.id}>{e.firstName} {e.lastName} ({e.employeeCode})</option>)}
+        </Select>
+      </div>
+      <div>
+        <Label htmlFor="assetId">ใช้กับอุปกรณ์ / Used in Device (มือถือ/แท็บเล็ต)</Label>
+        <Select id="assetId" name="assetId" defaultValue={d.assetId ?? ""} className="mt-1">
+          <option value="">— ไม่ผูกอุปกรณ์ / None —</option>
+          {assets.map((a) => (
+            <option key={a.id} value={a.id}>
+              {a.assetTag} · {a.name}{a.category ? ` (${a.category})` : ""}
+            </option>
+          ))}
         </Select>
       </div>
       <div>

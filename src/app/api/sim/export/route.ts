@@ -38,14 +38,14 @@ export const GET = apiHandler(async (req: Request) => {
 
   const rows = await prisma.simCard.findMany({
     where,
-    include: { employee: { select: { firstName: true, lastName: true, employeeCode: true } }, department: { select: { name: true } } },
+    include: { employee: { select: { firstName: true, lastName: true, employeeCode: true } }, department: { select: { name: true } }, asset: { select: { assetTag: true, name: true } } },
     orderBy: [{ carrier: "asc" }, { phoneNumber: "asc" }],
     take: 10000,
   });
 
   const headers = [
     "phoneNumber", "carrier", "accountName", "holder", "employee", "employeeCode",
-    "department", "status", "simSerial", "plan", "monthlyFee", "startDate", "notes",
+    "department", "device", "status", "simSerial", "plan", "monthlyFee", "startDate", "notes",
   ];
   const lines = [headers.map(csvCell).join(",")];
   for (const s of rows) {
@@ -53,7 +53,9 @@ export const GET = apiHandler(async (req: Request) => {
       s.phoneNumber, s.carrier, s.accountName ?? "", s.holder ?? "",
       s.employee ? `${s.employee.firstName} ${s.employee.lastName}` : "",
       s.employee?.employeeCode ?? "",
-      s.department?.name ?? "", s.status, s.simSerial ?? "", s.plan ?? "",
+      s.department?.name ?? "",
+      s.asset ? `${s.asset.assetTag} · ${s.asset.name}` : "",
+      s.status, s.simSerial ?? "", s.plan ?? "",
       s.monthlyFee != null ? String(s.monthlyFee) : "",
       s.startDate ? s.startDate.toISOString().slice(0, 10) : "",
       s.notes ?? "",

@@ -497,6 +497,7 @@ model Asset {
   endpointPostures EndpointPosture[]
   cctvRecorders CctvRecorder[]
   borrowItems BorrowRequestItem[]
+  simCards    SimCard[]
 
   @@unique([organizationId, assetTag])
   supportCases SupportCase[]  @relation("CaseAsset")
@@ -2871,6 +2872,7 @@ model SimCard {
   holder         String?   // free-text holder / purpose from the registry
   employeeId     String?   @db.Uuid
   departmentId   String?   @db.Uuid
+  assetId        String?   @db.Uuid // device (mobile/tablet) this SIM is used in
   status         SimStatus @default(ACTIVE)
   simSerial      String?
   plan           String?
@@ -2885,9 +2887,11 @@ model SimCard {
   organization Organization @relation(fields: [organizationId], references: [id])
   employee     Employee?    @relation(fields: [employeeId], references: [id])
   department   Department?  @relation(fields: [departmentId], references: [id])
+  asset        Asset?       @relation(fields: [assetId], references: [id])
 
   @@unique([organizationId, phoneNumber])
   @@index([organizationId, status])
+  @@index([organizationId, assetId])
   @@map("sim_cards")
 }
 
