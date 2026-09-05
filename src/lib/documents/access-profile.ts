@@ -7,15 +7,17 @@ import { getForm } from "@/lib/documents/forms";
  * access-request form definition so the matrix always matches the form.
  * Each system carries its permission levels and optional sub-resources.
  */
-export function accessSystems(): { key: string; label: string; levels: string[]; resources: string[] }[] {
+export interface AccessSystem { key: string; label: string; section: string; levels: string[]; resources: string[] }
+
+export function accessSystems(): AccessSystem[] {
   const form = getForm("access-request");
   if (!form) return [];
-  const out: { key: string; label: string; levels: string[]; resources: string[] }[] = [];
+  const out: AccessSystem[] = [];
   for (const section of form.sections) {
     for (const g of section.groups ?? []) {
       const levels = (g.levels ?? []).map((l) => l.th);
-      const fallback = levels.length ? levels : ["Admin", "Editor", "Viewer"];
-      out.push({ key: g.name, label: g.th || g.name, levels: fallback, resources: g.options.map((o) => o.th) });
+      const fallback = levels.length ? levels : ["Admin Permission", "Editor Permission", "Viewer Permission"];
+      out.push({ key: g.name, label: g.th || g.name, section: section.title ?? "Permissions", levels: fallback, resources: g.options.map((o) => o.th) });
     }
   }
   return out;

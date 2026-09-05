@@ -140,6 +140,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   ];
 
   const security: NavItem[] = [
+    ...(has("accessreq:read") ? [{ href: "/access-requests", label: "คำขอสิทธิ์ / Access Requests", icon: "sim" }] : []),
     ...(has("vault:read")
       ? [{
           href: "/vault", label: t("vault"), icon: "vault",

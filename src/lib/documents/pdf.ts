@@ -230,6 +230,7 @@ export function buildDocumentPdf(form: FormDef, v: ValueSource): Promise<Buffer>
       }
     };
 
+    // (access-request enhanced PDF is produced by buildAccessRequestPdf below)
     // ---- render ------------------------------------------------------------
     if (form.topGroups) for (const g of form.topGroups) drawGroup(g);
     for (const s of form.sections) drawSection(s);
@@ -237,6 +238,108 @@ export function buildDocumentPdf(form: FormDef, v: ValueSource): Promise<Buffer>
     if (form.adminSection) drawSection(form.adminSection);
     drawSignatures(form.adminSignatures ?? []);
 
+    doc.end();
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Enhanced Access Request PDF (RBAC): employee info + permissions grouped by
+// source (Default / Additional / Restricted) + justification + approval chain.
+// ---------------------------------------------------------------------------
+export interface AccessPdfItem { systemLabel: string; permissionLevel: string; resource?: string | null; source: "DEFAULT" | "ADDITIONAL" | "RESTRICTED" }
+export interface AccessPdfData {
+  refNo?: string; employeeCode?: string; nameTh?: string; nameEn?: string; phone?: string; email?: string;
+  company?: string; department?: string; position?: string; jobLevel?: string;
+  effectiveDate?: string; expiryDate?: string; businessJustification?: string;
+  approvalChain?: string[]; items: AccessPdfItem[];
+}
+
+export function buildAccessRequestPdf(d: AccessPdfData): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const thai = loadThaiFont();
+    const serif = loadSerifFont();
+    const margin = 40;
+    const doc = new PDFDocument({ size: "A4", margin, font: "" });
+    const chunks: Buffer[] = [];
+    doc.on("data", (c) => chunks.push(c));
+    doc.on("end", () => resolve(Buffer.concat(chunks)));
+    doc.on("error", reject);
+    if (thai) doc.registerFont("th", thai);
+    const logoFont = serif ? "serif" : thai ? "th" : "Helvetica";
+    if (serif) doc.registerFont("serif", serif);
+    const body = thai ? "th" : "Helvetica";
+    const left = margin, width = doc.page.width - margin * 2, bottom = doc.page.height - margin;
+    let y = margin;
+    const ensure = (h: number) => { if (y + h > bottom) { doc.addPage(); y = margin; } };
+
+    // header
+    doc.font(logoFont).fillColor("#111827");
+    const big = 22, sm = 15, kern = 3;
+    const wCH = doc.fontSize(sm).widthOfString("CH"), wT = doc.fontSize(big).widthOfString("T"), wNN = doc.fontSize(sm).widthOfString("NN");
+    let gx = left + (width - (wCH + kern + wT + kern + wNN)) / 2;
+    doc.fontSize(sm).text("CH", gx, margin + (big - sm) * 0.62, { lineBreak: false }); gx += wCH + kern;
+    doc.fontSize(big).text("T", gx, margin, { lineBreak: false }); gx += wT + kern;
+    doc.fontSize(sm).text("NN", gx, margin + (big - sm) * 0.62, { lineBreak: false });
+    doc.font(logoFont).fontSize(10).text("Chaithanin Co.,Ltd.", left, margin + big + 1, { width, align: "center", lineBreak: false });
+    doc.font(body).fontSize(8).fillColor("#374151").text(`Ref No : ${d.refNo || "________"}`, left, margin + 2, { width, align: "right", lineBreak: false });
+    y = margin + 40;
+    doc.font(body).fillColor("#111827").fontSize(13).text("แบบฟอร์มขอสิทธิ์การใช้งานระบบสารสนเทศ", left, y, { width, align: "center" });
+    y = doc.y + 1;
+    doc.fontSize(9).fillColor("#4b5563").text("Information System Access Request (RBAC)", left, y, { width, align: "center" });
+    y = doc.y + 8; doc.fillColor("#111827");
+
+    const bar = (t: string) => { ensure(18); doc.rect(left, y, width, 15).fill("#e5edff"); doc.fillColor("#1e3a8a").font(body).fontSize(9).text(t, left + 5, y + 3, { width: width - 10, lineBreak: false }); y += 20; doc.fillColor("#111827"); };
+    const kv = (label: string, val: string, x: number, w: number) => { doc.font(body).fontSize(8.5).fillColor("#111827").text(`${label}: `, x, y, { continued: true, lineBreak: false }); doc.fillColor("#1d4ed8").text(val || "—", { lineBreak: false }); doc.fillColor("#111827"); };
+
+    // employee info
+    bar("ข้อมูลพนักงาน / Employee Information");
+    ensure(15); kv("รหัสพนักงาน / Staff ID", d.employeeCode || "", left, width / 2); kv("บริษัท / Company", d.company || "", left + width / 2, width / 2); y += 15;
+    ensure(15); kv("ชื่อ (TH)", d.nameTh || "", left, width / 2); kv("ชื่อ (EN)", d.nameEn || "", left + width / 2, width / 2); y += 15;
+    ensure(15); kv("แผนก / Department", d.department || "", left, width / 2); kv("ตำแหน่ง / Position", d.position || "", left + width / 2, width / 2); y += 15;
+    ensure(15); kv("ระดับ / Job Level", d.jobLevel || "", left, width / 2); kv("โทร/อีเมล", `${d.phone || ""} ${d.email || ""}`.trim(), left + width / 2, width / 2); y += 15;
+    ensure(15); kv("วันที่มีผล / Effective", d.effectiveDate || "", left, width / 2); kv("วันหมดอายุ / Expiry", d.expiryDate || "", left + width / 2, width / 2); y += 15;
+
+    const groupItems = (src: AccessPdfItem["source"]) => d.items.filter((i) => i.source === src);
+    const section = (title: string, src: AccessPdfItem["source"]) => {
+      const items = groupItems(src);
+      bar(title);
+      if (items.length === 0) { ensure(13); doc.font(body).fontSize(8).fillColor("#6b7280").text("— ไม่มี / none —", left + 4, y); y += 14; doc.fillColor("#111827"); return; }
+      for (const it of items) {
+        ensure(13);
+        doc.font(body).fontSize(8.5).fillColor("#111827").text(`•  ${it.systemLabel}${it.resource ? ` (${it.resource})` : ""}`, left + 4, y, { width: width * 0.7, lineBreak: false });
+        doc.fillColor("#1d4ed8").text(it.permissionLevel, left + width * 0.72, y, { width: width * 0.28, lineBreak: false });
+        doc.fillColor("#111827"); y += 13;
+      }
+      y += 4;
+    };
+    section("1. สิทธิ์มาตรฐาน / Default Access", "DEFAULT");
+    section("2. สิทธิ์ที่ขอเพิ่มเติม / Additional Access Request", "ADDITIONAL");
+    section("3. สิทธิ์พิเศษ (ต้องอนุมัติเพิ่ม) / Restricted Access", "RESTRICTED");
+
+    if (d.businessJustification) {
+      bar("เหตุผลในการขอสิทธิ์เพิ่มเติม / Business Justification");
+      ensure(24); doc.font(body).fontSize(8.5).fillColor("#111827").text(d.businessJustification, left + 4, y, { width: width - 8 }); y = doc.y + 6;
+    }
+    if (d.approvalChain && d.approvalChain.length) {
+      ensure(20); doc.font(body).fontSize(8.5).fillColor("#111827").text("สายการอนุมัติ / Required Approval: ", left, y, { continued: true, lineBreak: false });
+      doc.fillColor("#1d4ed8").text(d.approvalChain.join("  →  "), { lineBreak: false }); doc.fillColor("#111827"); y += 18;
+    }
+
+    // signatures
+    const roles = ["ผู้ขอสิทธิ์ / Requester", "ผู้จัดการแผนก / Dept Manager", "ผู้ตรวจสอบ / IT Support", "หัวหน้าแผนก / IT Manager", "ฝ่ายบริหาร / Management"];
+    y += 6; const bw = width / 2, bh = 46;
+    for (let i = 0; i < roles.length; i += 2) {
+      ensure(bh);
+      for (let j = 0; j < 2 && i + j < roles.length; j++) {
+        const bx = left + j * bw;
+        doc.font(body).fontSize(8).fillColor("#111827");
+        doc.text("ลงชื่อ/Sign ............................................", bx, y + 4, { width: bw, align: "center", lineBreak: false });
+        doc.text("(........................................................)", bx, y + 18, { width: bw, align: "center", lineBreak: false });
+        doc.fontSize(7.5).fillColor("#6b7280").text("วันที่ / DD/MM/YYYY ...................", bx, y + 30, { width: bw, align: "center", lineBreak: false });
+        doc.fontSize(8).fillColor("#111827").text(roles[i + j], bx, y + 40, { width: bw, align: "center", lineBreak: false });
+      }
+      y += bh + 6;
+    }
     doc.end();
   });
 }
