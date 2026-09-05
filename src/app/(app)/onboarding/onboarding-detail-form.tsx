@@ -203,14 +203,22 @@ export function OnboardingDetailForm({
       <Card>
         <StepHeader icon={ShieldCheck} title="ให้สิทธิ์เข้าถึง / Access" hint="ทำในเฟสต่อไป — ใช้แบบฟอร์มขอสิทธิ์การใช้งานระบบสารสนเทศ" />
         <CardContent className="space-y-3">
-          <a
-            href={accessFormUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium text-primary hover:bg-accent"
-          >
-            <Download className="h-4 w-4" /> แบบฟอร์มขอสิทธิ์ / Access request form (PDF)
-          </a>
+          <div className="flex flex-wrap gap-2">
+            <a
+              href="/documents/access-request"
+              className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+            >
+              <ShieldCheck className="h-4 w-4" /> เปิดฟอร์มขอสิทธิ์ (RBAC) / Open Access Request
+            </a>
+            <a
+              href={accessFormUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium text-primary hover:bg-accent"
+            >
+              <Download className="h-4 w-4" /> แบบฟอร์มต้นฉบับ / Original form (PDF)
+            </a>
+          </div>
           <label className="flex items-center gap-2 text-sm">
             <input type="checkbox" name="accessGranted" defaultChecked={initial.accessGranted} disabled={disabled} className="h-4 w-4" />
             ให้สิทธิ์เข้าถึงเรียบร้อยแล้ว / Access granted

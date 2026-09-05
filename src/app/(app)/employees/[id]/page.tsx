@@ -113,6 +113,25 @@ export default async function EmployeeDetailPage({
       }),
     ]);
 
+  // SIM/phone lines + access requests linked to this employee.
+  const [simCards, accessRequests] = await Promise.all([
+    user.permissions.has("sim:read")
+      ? prisma.simCard.findMany({
+          where: { organizationId: user.organizationId, employeeId: employee.id, deletedAt: null },
+          select: { id: true, phoneNumber: true, carrier: true, accountName: true, status: true },
+          orderBy: { phoneNumber: "asc" },
+        })
+      : Promise.resolve([]),
+    user.permissions.has("accessreq:read")
+      ? prisma.accessRequest.findMany({
+          where: { organizationId: user.organizationId, employeeId: employee.id, deletedAt: null },
+          select: { id: true, status: true, createdAt: true, _count: { select: { items: true } } },
+          orderBy: { createdAt: "desc" },
+          take: 10,
+        })
+      : Promise.resolve([]),
+  ]);
+
   const fullName = `${employee.firstName} ${employee.lastName}`;
 
   return (
@@ -382,6 +401,64 @@ export default async function EmployeeDetailPage({
           )}
         </CardContent>
       </Card>
+
+      {user.permissions.has("sim:read") && (
+        <Card>
+          <CardHeader>
+            <CardTitle>เบอร์/ซิม / SIM &amp; Phone Lines ({simCards.length})</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {simCards.length === 0 ? (
+              <p className="text-sm text-muted-foreground">ไม่มีเบอร์ที่ผูกไว้ / No SIM linked</p>
+            ) : (
+              <Table>
+                <TableHeader><TableRow>
+                  <TableHead>เบอร์ / Number</TableHead><TableHead>ค่าย / Carrier</TableHead>
+                  <TableHead>บัญชี / Account</TableHead><TableHead>สถานะ</TableHead>
+                </TableRow></TableHeader>
+                <TableBody>
+                  {simCards.map((s) => (
+                    <TableRow key={s.id}>
+                      <TableCell className="font-mono text-sm"><Link href={`/sim/${s.id}`} className="text-primary hover:underline">{s.phoneNumber}</Link></TableCell>
+                      <TableCell>{s.carrier}</TableCell>
+                      <TableCell>{s.accountName ?? "-"}</TableCell>
+                      <TableCell><StatusBadge status={s.status} /></TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {user.permissions.has("accessreq:read") && (
+        <Card>
+          <CardHeader>
+            <CardTitle>คำขอสิทธิ์ / Access Requests ({accessRequests.length})</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {accessRequests.length === 0 ? (
+              <p className="text-sm text-muted-foreground">ไม่มีคำขอสิทธิ์ / No access requests</p>
+            ) : (
+              <Table>
+                <TableHeader><TableRow>
+                  <TableHead>วันที่ / Date</TableHead><TableHead className="text-right">รายการ / Items</TableHead><TableHead>สถานะ</TableHead>
+                </TableRow></TableHeader>
+                <TableBody>
+                  {accessRequests.map((r) => (
+                    <TableRow key={r.id}>
+                      <TableCell><Link href={`/access-requests/${r.id}`} className="text-primary hover:underline">{formatDate(r.createdAt)}</Link></TableCell>
+                      <TableCell className="text-right">{r._count.items}</TableCell>
+                      <TableCell><StatusBadge status={r.status} /></TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader>

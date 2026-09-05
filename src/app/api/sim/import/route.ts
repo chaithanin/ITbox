@@ -113,6 +113,33 @@ export const POST = apiHandler(async (req: Request) => {
   const deptMap = new Map(depts.map((d) => [d.name.toLowerCase(), d.id]));
   const cell = (r: string[], c: string) => (idx[c] === undefined ? "" : (r[idx[c]] ?? "").trim());
 
+  // Optional: match the holder text (e.g. "K.Ann-Acc") to an employee.
+  const matchHolders = form.get("matchHolders") === "true";
+  let matchedToEmployee = 0;
+  const employees = matchHolders
+    ? await prisma.employee.findMany({ where: { organizationId: orgId, deletedAt: null }, select: { id: true, firstName: true, lastName: true } })
+    : [];
+  const empByFirst = new Map<string, string[]>();
+  const empByFull = new Map<string, string[]>();
+  for (const e of employees) {
+    const fn = (e.firstName || "").trim().toLowerCase();
+    const full = `${e.firstName || ""} ${e.lastName || ""}`.trim().toLowerCase();
+    if (fn) (empByFirst.get(fn) ?? empByFirst.set(fn, []).get(fn)!).push(e.id);
+    if (full) (empByFull.get(full) ?? empByFull.set(full, []).get(full)!).push(e.id);
+  }
+  // Clean a holder token: drop honorifics (K. / K' / คุณ / Khun) and a trailing "-dept".
+  function matchHolder(holder: string): string | null {
+    let h = holder.trim().toLowerCase();
+    h = h.replace(/^(k\.?|k'|khun|คุณ|น\.?ส\.?|นาย|นาง(สาว)?)\s*/i, "");
+    h = h.split(/[-/(]/)[0].trim(); // drop "-Acc", "(POOK)", etc.
+    if (h.length < 2) return null;
+    const full = empByFull.get(h);
+    if (full && full.length === 1) return full[0];
+    const first = empByFirst.get(h);
+    if (first && first.length === 1) return first[0];
+    return null;
+  }
+
   const errors: { row: number; phoneNumber: string; error: string }[] = [];
   const seen = new Set<string>();
   let created = 0, updated = 0;
@@ -146,15 +173,26 @@ export const POST = apiHandler(async (req: Request) => {
       notes: cell(r, "notes") || null,
     };
 
+    const matchedEmpId = matchHolders && payload.holder ? matchHolder(payload.holder) : null;
+
     try {
-      const existing = await prisma.simCard.findFirst({ where: { organizationId: orgId, phoneNumber }, select: { id: true } });
-      if (existing) { await prisma.simCard.update({ where: { id: existing.id }, data: { ...payload, deletedAt: null } }); updated++; }
-      else { await prisma.simCard.create({ data: { organizationId: orgId, phoneNumber, ...payload } }); created++; }
+      const existing = await prisma.simCard.findFirst({ where: { organizationId: orgId, phoneNumber }, select: { id: true, employeeId: true } });
+      if (existing) {
+        // Only set the holder link when the line has none, to avoid clobbering.
+        const linkData = matchedEmpId && !existing.employeeId ? { employeeId: matchedEmpId } : {};
+        if (matchedEmpId && !existing.employeeId) matchedToEmployee++;
+        await prisma.simCard.update({ where: { id: existing.id }, data: { ...payload, ...linkData, deletedAt: null } });
+        updated++;
+      } else {
+        if (matchedEmpId) matchedToEmployee++;
+        await prisma.simCard.create({ data: { organizationId: orgId, phoneNumber, ...payload, employeeId: matchedEmpId } });
+        created++;
+      }
     } catch (e) {
       errors.push({ row: rowNo, phoneNumber, error: (e as Error).message.slice(0, 200) });
     }
   }
 
-  await auditLog(user, { action: "IMPORT", entityType: "SIM", detail: { created, updated, failed: errors.length } });
-  return NextResponse.json({ created, updated, failed: errors.length, errors: errors.slice(0, 500) });
+  await auditLog(user, { action: "IMPORT", entityType: "SIM", detail: { created, updated, failed: errors.length, matchedToEmployee } });
+  return NextResponse.json({ created, updated, failed: errors.length, matchedToEmployee, errors: errors.slice(0, 500) });
 });

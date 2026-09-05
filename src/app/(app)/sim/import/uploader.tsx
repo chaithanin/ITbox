@@ -5,12 +5,13 @@ import Link from "next/link";
 import { Loader2, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-interface Result { created: number; updated: number; failed: number; errors: { row: number; phoneNumber: string; error: string }[] }
+interface Result { created: number; updated: number; failed: number; matchedToEmployee?: number; errors: { row: number; phoneNumber: string; error: string }[] }
 
 export function SimUploader() {
   const ref = useRef<HTMLInputElement>(null);
   const [name, setName] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [matchHolders, setMatchHolders] = useState(true);
   const [result, setResult] = useState<Result | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
@@ -21,6 +22,7 @@ export function SimUploader() {
     setLoading(true); setResult(null); setErr(null);
     try {
       const fd = new FormData(); fd.append("file", file);
+      if (matchHolders) fd.append("matchHolders", "true");
       const res = await fetch("/api/sim/import", { method: "POST", body: fd });
       const body = await res.json().catch(() => null);
       if (!res.ok) { setErr(body?.message ?? "นำเข้าล้มเหลว"); return; }
@@ -38,6 +40,10 @@ export function SimUploader() {
           {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
           {loading ? "กำลังนำเข้า..." : "นำเข้า / Import"}
         </Button>
+        <label className="flex w-full items-center gap-2 text-sm text-muted-foreground sm:w-auto">
+          <input type="checkbox" checked={matchHolders} disabled={loading} onChange={(e) => setMatchHolders(e.target.checked)} className="h-4 w-4" />
+          จับคู่ผู้ถือกับพนักงานอัตโนมัติ / Auto-match holder to employee
+        </label>
       </form>
       <p className="text-xs text-muted-foreground">
         คอลัมน์ที่รองรับ: <code>phoneNumber</code> (จำเป็น), <code>carrier</code> หรือ <code>provider</code> (เช่น GTG(AIS)), <code>accountName</code>, <code>holder</code>, <code>status</code> (in-use/unused), <code>simSerial</code>, <code>plan</code>, <code>monthlyFee</code>, <code>department</code>, <code>notes</code>
@@ -49,6 +55,7 @@ export function SimUploader() {
             <p>สร้างใหม่ / Created: <span className="font-semibold text-primary">{result.created}</span></p>
             <p>อัปเดต / Updated: <span className="font-semibold text-primary">{result.updated}</span></p>
             <p>ข้าม / Failed: <span className={result.failed > 0 ? "font-semibold text-destructive" : "font-semibold"}>{result.failed}</span></p>
+            {(result.matchedToEmployee ?? 0) > 0 && <p>จับคู่พนักงาน / Matched to employee: <span className="font-semibold text-primary">{result.matchedToEmployee}</span></p>}
           </div>
           {result.errors.length > 0 && (
             <div className="rounded-md border p-3 text-xs">
