@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Plus, Upload } from "lucide-react";
+import { Plus, Upload, Download } from "lucide-react";
 import type { Prisma } from "@prisma/client";
 import { getCurrentUser } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
@@ -61,6 +61,11 @@ export default async function SimPage({ searchParams }: { searchParams: Promise<
   return (
     <div>
       <PageHeader title="เบอร์/ซิม / SIM & Phone Lines" description={`ทั้งหมด ${total} เบอร์ / ${total} lines`}>
+        <Button variant="outline" asChild>
+          <a href={`/api/sim/export?${new URLSearchParams({ ...(sp.q ? { q: sp.q } : {}), ...(sp.carrier ? { carrier: sp.carrier } : {}), ...(sp.status ? { status: sp.status } : {}) }).toString()}`}>
+            <Download className="h-4 w-4" /> ส่งออก / Export
+          </a>
+        </Button>
         {canManage && (
           <>
             <Button variant="outline" asChild><Link href="/sim/import"><Upload className="h-4 w-4" /> นำเข้า / Import</Link></Button>
