@@ -85,6 +85,87 @@ export async function updateSim(id: string, formData: FormData) {
   redirect(`/sim/${id}`);
 }
 
+/** Clean a holder token: drop honorifics (K. / คุณ / นาย…) and a trailing "-dept". */
+function cleanHolder(holder: string): string {
+  let h = holder.trim().toLowerCase();
+  h = h.replace(/^(k\.?|k'|khun|คุณ|น\.?ส\.?|นาย|นาง(สาว)?)\s*/i, "");
+  h = h.split(/[-/(]/)[0].trim();
+  return h;
+}
+
+/**
+ * Auto-connect existing SIM lines to their device (asset) and holder (employee)
+ * using data already in each line. Only fills links that are currently empty,
+ * so it never clobbers manual assignments and is safe to re-run.
+ *  - device: matches "SN:xxx" / IMEI found in the line's notes to an asset's
+ *    serialNumber / imei.
+ *  - employee: matches the holder text to an employee name.
+ */
+export async function autoConnectSims() {
+  const user = await requirePermission("sim:manage");
+  const orgId = user.organizationId;
+
+  const [sims, assets, employees] = await Promise.all([
+    prisma.simCard.findMany({ where: { organizationId: orgId, deletedAt: null }, select: { id: true, notes: true, holder: true, employeeId: true, assetId: true } }),
+    prisma.asset.findMany({ where: { organizationId: orgId, deletedAt: null }, select: { id: true, serialNumber: true, imei: true } }),
+    prisma.employee.findMany({ where: { organizationId: orgId, deletedAt: null }, select: { id: true, firstName: true, lastName: true } }),
+  ]);
+
+  const normSerial = (s: string) => s.trim().toLowerCase().replace(/[\s-]+/g, "");
+  const bySerial = new Map<string, string[]>();
+  const byImei = new Map<string, string[]>();
+  for (const a of assets) {
+    if (a.serialNumber) { const k = normSerial(a.serialNumber); if (k) (bySerial.get(k) ?? bySerial.set(k, []).get(k)!).push(a.id); }
+    if (a.imei) { const k = a.imei.replace(/\D/g, ""); if (k) (byImei.get(k) ?? byImei.set(k, []).get(k)!).push(a.id); }
+  }
+
+  const empByFirst = new Map<string, string[]>();
+  const empByFull = new Map<string, string[]>();
+  for (const e of employees) {
+    const fn = (e.firstName || "").trim().toLowerCase();
+    const full = `${e.firstName || ""} ${e.lastName || ""}`.trim().toLowerCase();
+    if (fn) (empByFirst.get(fn) ?? empByFirst.set(fn, []).get(fn)!).push(e.id);
+    if (full) (empByFull.get(full) ?? empByFull.set(full, []).get(full)!).push(e.id);
+  }
+
+  let linkedDevice = 0, linkedEmployee = 0;
+
+  for (const s of sims) {
+    const data: { assetId?: string; employeeId?: string } = {};
+
+    // device via SN then IMEI in notes
+    if (!s.assetId && s.notes) {
+      const snMatch = /SN\s*:\s*([A-Za-z0-9-]+)/i.exec(s.notes);
+      if (snMatch) { const hit = bySerial.get(normSerial(snMatch[1])); if (hit && hit.length === 1) data.assetId = hit[0]; }
+      if (!data.assetId) {
+        const imeiMatch = /IMEI\s*:\s*([0-9]{14,16})/i.exec(s.notes);
+        if (imeiMatch) { const hit = byImei.get(imeiMatch[1]); if (hit && hit.length === 1) data.assetId = hit[0]; }
+      }
+    }
+
+    // employee via holder text
+    if (!s.employeeId && s.holder) {
+      const h = cleanHolder(s.holder);
+      if (h.length >= 2) {
+        const full = empByFull.get(h);
+        const first = empByFirst.get(h);
+        if (full && full.length === 1) data.employeeId = full[0];
+        else if (first && first.length === 1) data.employeeId = first[0];
+      }
+    }
+
+    if (data.assetId || data.employeeId) {
+      await prisma.simCard.update({ where: { id: s.id }, data });
+      if (data.assetId) linkedDevice++;
+      if (data.employeeId) linkedEmployee++;
+    }
+  }
+
+  await auditLog(user, { action: "UPDATE", entityType: "SIM", detail: { autoConnect: true, linkedDevice, linkedEmployee } });
+  revalidatePath("/sim");
+  redirect(`/sim?connected=${linkedDevice}&emp=${linkedEmployee}`);
+}
+
 export async function deleteSim(id: string) {
   const user = await requirePermission("sim:manage");
   const existing = await prisma.simCard.findFirst({ where: { id, organizationId: user.organizationId, deletedAt: null }, select: { id: true, phoneNumber: true } });

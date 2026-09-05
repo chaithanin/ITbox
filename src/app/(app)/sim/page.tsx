@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Plus, Upload, Download } from "lucide-react";
+import { Plus, Upload, Download, Link2 } from "lucide-react";
 import type { Prisma } from "@prisma/client";
 import { getCurrentUser } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
@@ -9,6 +9,7 @@ import { StatusBadge } from "@/components/status-badge";
 import { SearchFilterBar, Pagination, parsePage } from "@/components/list-controls";
 import { Button } from "@/components/ui/button";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
+import { autoConnectSims } from "./actions";
 
 const STATUSES = ["ACTIVE", "UNUSED", "SUSPENDED", "TERMINATED"] as const;
 
@@ -39,7 +40,7 @@ export default async function SimPage({ searchParams }: { searchParams: Promise<
   const [rows, total, carriers] = await Promise.all([
     prisma.simCard.findMany({
       where,
-      include: { employee: { select: { firstName: true, lastName: true } }, department: { select: { name: true } } },
+      include: { employee: { select: { firstName: true, lastName: true } }, department: { select: { name: true } }, asset: { select: { assetTag: true, name: true } } },
       orderBy: [{ carrier: "asc" }, { phoneNumber: "asc" }],
       skip, take,
     }),
@@ -68,11 +69,20 @@ export default async function SimPage({ searchParams }: { searchParams: Promise<
         </Button>
         {canManage && (
           <>
+            <form action={autoConnectSims}>
+              <Button type="submit" variant="outline"><Link2 className="h-4 w-4" /> เชื่อมข้อมูลอัตโนมัติ / Auto-connect</Button>
+            </form>
             <Button variant="outline" asChild><Link href="/sim/import"><Upload className="h-4 w-4" /> นำเข้า / Import</Link></Button>
             <Button asChild><Link href="/sim/new"><Plus className="h-4 w-4" /> เพิ่มเบอร์ / New</Link></Button>
           </>
         )}
       </PageHeader>
+
+      {(sp.connected !== undefined || sp.emp !== undefined) && (
+        <div className="mb-4 rounded-md border border-emerald-500/40 bg-emerald-500/10 p-3 text-sm text-emerald-700 dark:text-emerald-400">
+          เชื่อมข้อมูลอัตโนมัติเสร็จแล้ว / Auto-connect done — ผูกอุปกรณ์ {sp.connected ?? 0} รายการ, ผูกพนักงาน {sp.emp ?? 0} รายการ
+        </div>
+      )}
 
       <div className="mb-4 grid gap-3 sm:grid-cols-3">
         <StatCard label="ใช้แล้ว / In use (ACTIVE)" value={usedCount} tone="default" />
@@ -98,13 +108,14 @@ export default async function SimPage({ searchParams }: { searchParams: Promise<
               <TableHead>ค่าย / Carrier</TableHead>
               <TableHead>บัญชี / Account</TableHead>
               <TableHead>ผู้ถือครอง / Holder</TableHead>
+              <TableHead>อุปกรณ์ / Device</TableHead>
               <TableHead>แผนก / Dept</TableHead>
               <TableHead>สถานะ / Status</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {rows.length === 0 && (
-              <TableRow><TableCell colSpan={6} className="py-8 text-center text-muted-foreground">ไม่พบข้อมูล / No SIM lines</TableCell></TableRow>
+              <TableRow><TableCell colSpan={7} className="py-8 text-center text-muted-foreground">ไม่พบข้อมูล / No SIM lines</TableCell></TableRow>
             )}
             {rows.map((s) => (
               <TableRow key={s.id}>
@@ -114,6 +125,7 @@ export default async function SimPage({ searchParams }: { searchParams: Promise<
                 <TableCell>{s.carrier}</TableCell>
                 <TableCell>{s.accountName ?? "-"}</TableCell>
                 <TableCell>{s.employee ? `${s.employee.firstName} ${s.employee.lastName}` : (s.holder ?? "-")}</TableCell>
+                <TableCell className="text-sm">{s.asset ? `${s.asset.assetTag} · ${s.asset.name}` : "-"}</TableCell>
                 <TableCell>{s.department?.name ?? "-"}</TableCell>
                 <TableCell><StatusBadge status={s.status} /></TableCell>
               </TableRow>
