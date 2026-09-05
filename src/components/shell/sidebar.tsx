@@ -139,12 +139,14 @@ function NavLink({
 }
 
 export function Sidebar({
+  header = [],
   groups,
   footer,
   appName,
   open,
   onClose,
 }: {
+  header?: NavItem[];
   groups: NavGroup[];
   footer: NavItem[];
   appName: string;
@@ -196,6 +198,13 @@ export function Sidebar({
           <span className="text-lg font-bold tracking-tight">{appName}</span>
         </div>
         <nav className="flex-1 space-y-1 overflow-y-auto p-2">
+          {header.length > 0 && (
+            <div className="mb-1 space-y-0.5">
+              {header.map((item) => (
+                <NavLink key={item.href} item={item} pathname={pathname} onClose={onClose} />
+              ))}
+            </div>
+          )}
           {groups.map((group) => {
             const GroupIcon = ICONS[group.icon] ?? ICONS.default;
             const active = groupIsActive(pathname, group);

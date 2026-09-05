@@ -5,6 +5,7 @@ import { Sidebar, type NavGroup, type NavItem } from "./sidebar";
 import { Topbar } from "./topbar";
 
 export function AppShell({
+  navHeader = [],
   navGroups,
   navFooter,
   appName,
@@ -15,6 +16,7 @@ export function AppShell({
   labels,
   children,
 }: {
+  navHeader?: NavItem[];
   navGroups: NavGroup[];
   navFooter: NavItem[];
   appName: string;
@@ -29,6 +31,7 @@ export function AppShell({
   return (
     <div className="min-h-screen">
       <Sidebar
+        header={navHeader}
         groups={navGroups}
         footer={navFooter}
         appName={appName}
