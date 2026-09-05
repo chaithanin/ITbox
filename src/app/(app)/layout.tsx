@@ -161,6 +161,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     ...(has("report:read") ? [{ href: "/reports", label: t("reports"), icon: "reports" }] : []),
   ];
 
+  // IT document templates (fill-in → PDF). Available to every signed-in user.
+  const documents: NavItem[] = [
+    { href: "/documents", label: "เอกสาร / Documents", icon: "contracts" },
+  ];
+
   const groupDefs: NavGroup[] = [
     { id: "overview", label: t("wsOverview"), icon: "dashboard", items: overview },
     { id: "people", label: t("wsPeople"), icon: "people", items: people },
@@ -170,6 +175,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     { id: "procurement", label: t("wsProcurement"), icon: "procurement", items: procurement },
     { id: "security", label: t("wsSecurity"), icon: "securityWs", items: security },
     { id: "reports", label: t("wsReports"), icon: "reports", items: reports },
+    { id: "documents", label: "เอกสาร / Documents", icon: "contracts", items: documents },
   ];
   const navGroups = groupDefs.filter((g) => g.items.length > 0);
 
