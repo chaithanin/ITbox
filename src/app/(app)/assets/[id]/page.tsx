@@ -5,6 +5,7 @@ import {
   KeyRound,
   Pencil,
   Printer,
+  Smartphone,
   UserMinus,
   UserPlus,
 } from "lucide-react";
@@ -81,12 +82,28 @@ export default async function AssetDetailPage({
           },
         },
       },
+      simCards: {
+        where: { deletedAt: null },
+        select: {
+          id: true, phoneNumber: true, carrier: true, accountName: true, status: true, holder: true,
+          employee: { select: { firstName: true, lastName: true } },
+        },
+        orderBy: { phoneNumber: "asc" },
+      },
     },
   });
   if (!asset) notFound();
 
   const openAssignment = asset.assignments.find((a) => a.status === "CHECKED_OUT");
-  const holder = openAssignment?.employee;
+  // Current holder: prefer the open assignment; fall back to the denormalized
+  // assignedToId (set on bulk-imported assets that have no assignment records).
+  let holder = openAssignment?.employee ?? null;
+  if (!holder && asset.assignedToId) {
+    holder = await prisma.employee.findFirst({
+      where: { id: asset.assignedToId, organizationId: user.organizationId },
+      select: { firstName: true, lastName: true, employeeCode: true },
+    });
+  }
   const vaultLinks = asset.vaultLinks.filter((l) => !l.vaultItem.deletedAt);
   const warrantyDays = daysUntil(asset.warrantyEnd);
   const has = (p: string) => user.permissions.has(p);
@@ -186,6 +203,8 @@ export default async function AssetDetailPage({
               <InfoRow label="ศูนย์ต้นทุน / Cost Center" value={asset.costCenter} />
               <InfoRow label="โครงการ / Project" value={asset.project} />
               <InfoRow label="IP Address" value={asset.ipAddress} />
+              <InfoRow label="MAC Address" value={asset.macAddress} />
+              <InfoRow label="IMEI" value={asset.imei} />
               <InfoRow label="สร้างเมื่อ / Created" value={formatDateTime(asset.createdAt)} />
               <InfoRow label="แก้ไขล่าสุด / Updated" value={formatDateTime(asset.updatedAt)} />
             </dl>
@@ -254,11 +273,11 @@ export default async function AssetDetailPage({
 
         <Card>
           <CardHeader>
-            <CardTitle>การมอบหมาย / Assignments</CardTitle>
+            <CardTitle>ประวัติการถือครอง / Ownership History</CardTitle>
           </CardHeader>
           <CardContent>
-            {asset.assignments.length === 0 ? (
-              <p className="text-sm text-muted-foreground">ยังไม่มีการมอบหมาย / No assignments yet</p>
+            {asset.assignments.length === 0 && !holder ? (
+              <p className="text-sm text-muted-foreground">ยังไม่มีประวัติการถือครอง / No ownership history yet</p>
             ) : (
               <Table>
                 <TableHeader>
@@ -270,6 +289,17 @@ export default async function AssetDetailPage({
                   </TableRow>
                 </TableHeader>
                 <TableBody>
+                  {asset.assignments.length === 0 && holder && (
+                    <TableRow>
+                      <TableCell>
+                        {holder.firstName} {holder.lastName}
+                        {"employeeCode" in holder && holder.employeeCode ? ` (${holder.employeeCode})` : ""}
+                      </TableCell>
+                      <TableCell><StatusBadge status="CHECKED_OUT" /></TableCell>
+                      <TableCell>-</TableCell>
+                      <TableCell>-</TableCell>
+                    </TableRow>
+                  )}
                   {asset.assignments.map((a) => (
                     <TableRow key={a.id}>
                       <TableCell>
@@ -318,6 +348,45 @@ export default async function AssetDetailPage({
                         <StatusBadge status={m.status} />
                       </TableCell>
                       <TableCell>{formatDate(m.createdAt)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Smartphone className="h-4 w-4" />
+              เบอร์/ซิมที่ผูก / Linked SIM Lines
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {asset.simCards.length === 0 ? (
+              <p className="text-sm text-muted-foreground">ไม่มีเบอร์/ซิมที่ผูก / No linked SIM lines</p>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>เบอร์ / Number</TableHead>
+                    <TableHead>ค่าย / Carrier</TableHead>
+                    <TableHead>ผู้ถือครอง / Holder</TableHead>
+                    <TableHead>สถานะ / Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {asset.simCards.map((s) => (
+                    <TableRow key={s.id}>
+                      <TableCell>
+                        <Link href={`/sim/${s.id}`} className="font-mono text-sm font-medium text-primary hover:underline">
+                          {s.phoneNumber}
+                        </Link>
+                      </TableCell>
+                      <TableCell>{s.carrier}{s.accountName ? ` · ${s.accountName}` : ""}</TableCell>
+                      <TableCell>{s.employee ? `${s.employee.firstName} ${s.employee.lastName}` : (s.holder ?? "-")}</TableCell>
+                      <TableCell><StatusBadge status={s.status} /></TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
