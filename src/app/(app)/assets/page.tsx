@@ -71,7 +71,9 @@ export default async function AssetsPage({
   const [assets, total, categories, departments, locations, statusGroups, categoryGroups, valueAgg, orgTotal] = await Promise.all([
     prisma.asset.findMany({
       where,
-      orderBy: { assetTag: "asc" },
+      // Follow the manual display order from the master sheet; assets without an
+      // order (newer ones) fall to the end, then alphabetically by tag.
+      orderBy: [{ displayOrder: { sort: "asc", nulls: "last" } }, { assetTag: "asc" }],
       skip,
       take,
       include: {

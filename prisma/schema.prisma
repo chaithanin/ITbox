@@ -462,6 +462,9 @@ model Asset {
   warrantyEnd    DateTime?
   status         AssetStatus    @default(AVAILABLE)
   condition      AssetCondition @default(NEW)
+  // Manual display order for the asset list (lower = shown first). Nulls sort
+  // last, then by assetTag. Backfilled from the master asset spreadsheet.
+  displayOrder   Int?
   costCenter     String?
   project        String?
   notes          String?
