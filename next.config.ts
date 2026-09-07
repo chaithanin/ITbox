@@ -71,6 +71,7 @@ const nextConfig: NextConfig = {
     "/api/reports/[report]": ["./src/assets/fonts/*.ttf"],
     "/api/borrow/[id]/pdf": ["./src/assets/fonts/*.ttf"],
     "/api/doc-forms/[slug]/pdf": ["./src/assets/fonts/*.ttf"],
+    "/api/it-report/export": ["./src/assets/fonts/*.ttf"],
   },
   async headers() {
     return [
