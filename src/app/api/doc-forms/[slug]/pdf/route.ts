@@ -7,6 +7,35 @@ import { buildDocumentPdf, buildAccessRequestPdf, type ValueSource, type AccessP
 export const dynamic = "force-dynamic";
 
 /**
+ * GET /api/doc-forms/[slug]/pdf
+ * Renders a BLANK A4 PDF of the template (no submitted values) for printing
+ * and filling in by hand. Uses the same renderer as the filled version, so it
+ * always matches the on-screen form and never depends on a static file.
+ */
+export const GET = apiHandler(async (_req: Request, ctx: { params: Promise<{ slug: string }> }) => {
+  await requireUser();
+  const { slug } = await ctx.params;
+  const form = getForm(slug);
+  if (!form || form.referenceOnly) {
+    return NextResponse.json({ error: "not_found" }, { status: 404 });
+  }
+  const empty: ValueSource = { get: () => "", getAll: () => [] };
+  const pdf =
+    slug === "access-request"
+      ? await buildAccessRequestPdf({ items: [] })
+      : await buildDocumentPdf(form, empty);
+  const filename = `${slug}-blank.pdf`;
+  return new NextResponse(new Uint8Array(pdf), {
+    status: 200,
+    headers: {
+      "Content-Type": "application/pdf",
+      "Content-Disposition": `attachment; filename="${filename}"`,
+      "Cache-Control": "no-store",
+    },
+  });
+});
+
+/**
  * POST /api/documents/[slug]/pdf
  * Renders a filled A4 PDF of the IT document template from the submitted fields.
  * The fill page posts here (target=_blank) so the PDF opens in a new tab.

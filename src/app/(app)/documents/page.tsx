@@ -43,15 +43,24 @@ export default async function DocumentsPage() {
                       <p className="flex-1 text-xs text-muted-foreground">{f.descTh}</p>
                       <div className="flex flex-wrap gap-2">
                         {!f.referenceOnly && (
-                          <Button size="sm" asChild>
-                            <Link href={`/documents/${f.slug}`}><PencilLine className="h-4 w-4" /> กรอก / Fill</Link>
+                          <>
+                            <Button size="sm" asChild>
+                              <Link href={`/documents/${f.slug}`}><PencilLine className="h-4 w-4" /> กรอก / Fill</Link>
+                            </Button>
+                            <Button size="sm" variant="outline" asChild>
+                              <a href={`/api/doc-forms/${f.slug}/pdf`} target="_blank" rel="noopener noreferrer">
+                                <Download className="h-4 w-4" /> ฟอร์มเปล่า / Blank
+                              </a>
+                            </Button>
+                          </>
+                        )}
+                        {f.referenceOnly && (
+                          <Button size="sm" variant="outline" asChild>
+                            <a href={`/forms/${f.slug}-original.pdf`} target="_blank" rel="noopener noreferrer">
+                              <Download className="h-4 w-4" /> ต้นฉบับ
+                            </a>
                           </Button>
                         )}
-                        <Button size="sm" variant="outline" asChild>
-                          <a href={`/forms/${f.slug}-original.pdf`} target="_blank" rel="noopener noreferrer">
-                            <Download className="h-4 w-4" /> ต้นฉบับ
-                          </a>
-                        </Button>
                       </div>
                     </CardContent>
                   </Card>
