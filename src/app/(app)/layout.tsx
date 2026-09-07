@@ -39,10 +39,12 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   // บุคลากรและสิทธิ์ / People & Access
   const people: NavItem[] = [
     ...(has("employee:read") ? [{ href: "/employees", label: "พนักงาน / Employees", icon: "employees" }] : []),
+    ...(has("employee:read") ? [{ href: "/positions", label: "ตำแหน่งงาน / Positions", icon: "people" }] : []),
     ...(has("user:manage") ? [{ href: "/settings/users", label: "ผู้ใช้งาน / Users", icon: "people" }] : []),
     ...(has("department:read") ? [{ href: "/departments", label: "แผนก / Departments", icon: "departments" }] : []),
     ...(has("role:manage") ? [{ href: "/settings/roles", label: "Roles & Permissions", icon: "security" }] : []),
-    ...(has("accessreq:read") ? [{ href: "/access-requests", label: "คำขอสิทธิ์ / Access Requests", icon: "onboarding" }] : []),
+    ...(has("permprofile:manage") ? [{ href: "/settings/permission-profiles", label: "Default Permission", icon: "security" }] : []),
+    ...(has("accessreq:read") ? [{ href: "/access-requests", label: "คำขอสิทธิ์ / Permission Requests", icon: "onboarding" }] : []),
     ...((has("onboarding:read") || has("offboarding:read"))
       ? [{
           href: "/employees?tab=onboarding", label: "Onboarding / Offboarding", icon: "offboarding",

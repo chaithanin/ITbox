@@ -54,6 +54,7 @@ model Organization {
   supportTeams      SupportTeam[]
   holidays          Holiday[]
   agentDaysOff      AgentDayOff[]
+  positions         Position[]
   kpiConfigs        KpiConfig[]
   signatureTemplates SignatureTemplate[]
   itHealthChecks    ItHealthCheck[]
@@ -364,6 +365,7 @@ model Department {
   supportCases SupportCase[] @relation("CaseDepartment")
   borrowRequests BorrowRequest[]
   simCards     SimCard[]
+  positions    Position[]
 
   @@unique([organizationId, code])
   @@map("departments")
@@ -2965,14 +2967,53 @@ enum ProvisionStatus {
 
 /// Admin-configured default-permission profile. Matched against a requester's
 /// company / department / position / job level (see the resolver's fallback).
+/// Project/data scope a default profile grants — least-privilege by default.
+enum ProjectScope {
+  OWN_DATA
+  OWN_TEAM
+  ASSIGNED_PROJECTS
+  SELECTED_PROJECTS
+  DEPARTMENT
+  ALL_PROJECTS
+  COMPANY_WIDE
+}
+
+/// Master list of job positions per organization. Backward compatible: the
+/// free-text Employee.position stays; this only powers dropdowns and the
+/// default-permission matching. No existing data is migrated or required.
+model Position {
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String    @db.Uuid
+  code           String?
+  name           String
+  departmentId   String?   @db.Uuid
+  jobLevel       JobLevel?
+  isActive       Boolean   @default(true)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  department   Department?  @relation(fields: [departmentId], references: [id])
+
+  @@index([organizationId, departmentId])
+  @@map("positions")
+}
+
 model PermissionProfile {
   id             String    @id @default(uuid()) @db.Uuid
   organizationId String    @db.Uuid
   name           String
+  code           String?
   company        String?
   department     String?
   position       String?
   jobLevel       JobLevel?
+  // In-app ITBox Role key auto-assigned by this profile (additive, never Admin
+  // by default). Null = no in-app role, external-system items only.
+  roleKey        String?
+  projectScope   ProjectScope?
   isActive       Boolean   @default(true)
 
   requiresManagerApproval     Boolean @default(true)
