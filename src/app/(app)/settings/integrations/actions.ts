@@ -9,6 +9,9 @@ import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/session";
 import { auditLog } from "@/lib/audit";
 import { encryptSecret, decryptSecret } from "@/lib/crypto/envelope";
+import { resolveIngestOrg } from "@/lib/ingest-auth";
+
+const TEST_COOKIE = "hr_test_result";
 
 const SETTING_KEY = "itreport.ingest";
 const COOKIE = "itreport_newkey";
@@ -117,4 +120,48 @@ export async function revokeHrKeyAction() {
 /** Reveal the current HR sync key again (decrypt + show once). */
 export async function revealHrKeyAction() {
   await revealKey(HR_SETTING_KEY, HR_COOKIE, "hr_revealed");
+}
+
+/**
+ * Self-test the HR sync connection without leaving the server or needing the
+ * plaintext key on the client. Decrypts the stored key and runs it through the
+ * real ingest auth resolver (the exact code the /api/hr/employees/sync endpoint
+ * uses) against a synthetic request — proving the key is configured, decrypts,
+ * and authenticates to this org. Purely a read; nothing is written. Result is
+ * surfaced via a short-lived cookie the page renders.
+ */
+export async function testHrConnectionAction() {
+  const user = await requirePermission("settings:manage");
+  const jar = await cookies();
+  const put = (code: string) =>
+    jar.set(TEST_COOKIE, code, { httpOnly: true, secure: true, sameSite: "lax", maxAge: 60, path: "/settings/integrations" });
+
+  const s = await prisma.systemSetting.findFirst({
+    where: { organizationId: user.organizationId, key: HR_SETTING_KEY },
+    select: { value: true },
+  });
+  const v = (s?.value ?? null) as { keyEnc?: { ciphertext: string; iv: string; authTag: string; dekEnc: string } } | null;
+
+  let result: string;
+  if (!v) {
+    result = "nokey";
+  } else if (!v.keyEnc) {
+    result = "legacy";
+  } else {
+    try {
+      const key = await decryptSecret(v.keyEnc);
+      const req = new Request("https://self.internal/api/hr/employees/sync", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${key}`, "x-real-ip": "self-test" },
+      });
+      const auth = await resolveIngestOrg(req, { keys: [HR_SETTING_KEY, SETTING_KEY] });
+      result = auth.ok && auth.orgId === user.organizationId ? "ok" : "mismatch";
+    } catch {
+      result = "error";
+    }
+  }
+
+  put(result);
+  await auditLog(user, { action: "VIEW", entityType: "SYSTEM_SETTING", detail: { key: HR_SETTING_KEY, test: result } });
+  redirect("/settings/integrations?ok=hr_tested");
 }

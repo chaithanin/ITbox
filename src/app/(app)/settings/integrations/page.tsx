@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ConfirmButton } from "@/components/confirm-button";
-import { generateIngestKeyAction, revokeIngestKeyAction, revealIngestKeyAction, generateHrKeyAction, revokeHrKeyAction, revealHrKeyAction } from "./actions";
+import { generateIngestKeyAction, revokeIngestKeyAction, revealIngestKeyAction, generateHrKeyAction, revokeHrKeyAction, revealHrKeyAction, testHrConnectionAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -48,6 +48,16 @@ export default async function IntegrationsPage({
   const newKey = jar.get("itreport_newkey")?.value ?? null;
   const hrNewKey = jar.get("hr_newkey")?.value ?? null;
 
+  // HR connection self-test result (short-lived cookie set by testHrConnectionAction).
+  const TEST: Record<string, { text: string; ok: boolean }> = {
+    ok: { text: "✅ ทดสอบสำเร็จ — HR Sync key ใช้งานได้ ระบบพร้อมรับข้อมูลจาก HR-ATS (ตรวจสิทธิ์ผ่าน)", ok: true },
+    nokey: { text: "⚠️ ยังไม่มี HR Sync key — กดสร้างก่อนจึงจะทดสอบได้", ok: false },
+    legacy: { text: "⚠️ คีย์นี้สร้างก่อนรองรับการทดสอบ — กด “สร้างใหม่ (Rotate)” หนึ่งครั้งแล้วทดสอบอีกครั้ง", ok: false },
+    mismatch: { text: "❌ ทดสอบไม่ผ่าน — คีย์ไม่ตรงกับองค์กรนี้ (ลองสร้างใหม่)", ok: false },
+    error: { text: "❌ ทดสอบไม่ผ่าน — ถอดรหัสคีย์ไม่ได้ (ตรวจการตั้งค่า KMS) ", ok: false },
+  };
+  const hrTest = (sp.ok === "hr_tested" && jar.get("hr_test_result")?.value) ? TEST[jar.get("hr_test_result")!.value] : null;
+
   return (
     <div>
       <PageHeader
@@ -60,6 +70,7 @@ export default async function IntegrationsPage({
       </PageHeader>
 
       {msg && <p className={`mb-4 rounded-md px-3 py-2 text-sm ${msg.error ? "bg-amber-500/10 text-amber-700 dark:text-amber-400" : "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"}`}>{msg.text}</p>}
+      {hrTest && <p className={`mb-4 rounded-md px-3 py-2 text-sm ${hrTest.ok ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400" : "bg-amber-500/10 text-amber-700 dark:text-amber-400"}`}>{hrTest.text}</p>}
 
       {newKey && (
         <Card className="mb-4 border-emerald-500/40">
@@ -152,6 +163,11 @@ export default async function IntegrationsPage({
               <form action={generateHrKeyAction}>
                 <Button type="submit">{hrV ? "สร้างใหม่ (Rotate)" : "สร้าง HR Key"}</Button>
               </form>
+              {hrV && (
+                <form action={testHrConnectionAction}>
+                  <Button type="submit" variant="secondary">ทดสอบการเชื่อมต่อ / Test</Button>
+                </form>
+              )}
               {hrV?.keyEnc != null && (
                 <form action={revealHrKeyAction}>
                   <Button type="submit" variant="outline">แสดงคีย์ / Reveal</Button>
