@@ -45,8 +45,8 @@ export default async function EditProfilePage({ params, searchParams }: { params
 
       <form action={update} className="space-y-4">
         <Card><CardContent className="pt-4"><ProfileFields departments={departments} d={{
-          name: profile.name, company: profile.company, department: profile.department, position: profile.position,
-          jobLevel: profile.jobLevel, isActive: profile.isActive,
+          name: profile.name, code: profile.code, company: profile.company, department: profile.department, position: profile.position,
+          jobLevel: profile.jobLevel, roleKey: profile.roleKey, projectScope: profile.projectScope, isActive: profile.isActive,
           requiresManagerApproval: profile.requiresManagerApproval, requiresSystemOwnerApproval: profile.requiresSystemOwnerApproval,
           requiresItManagerApproval: profile.requiresItManagerApproval, requiresManagementApproval: profile.requiresManagementApproval, notes: profile.notes,
         }} /></CardContent></Card>

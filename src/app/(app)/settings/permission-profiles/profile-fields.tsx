@@ -4,9 +4,30 @@ import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { JOB_LEVELS } from "@/lib/documents/access-profile";
 
+// In-app roles a profile may auto-assign. ADMIN / SUPER_ADMIN are intentionally
+// excluded — an admin role is never auto-granted to a business profile.
+const ASSIGNABLE_ROLES = [
+  { value: "", label: "— ไม่ผูก role ในระบบ / No in-app role —" },
+  { value: "EMPLOYEE", label: "EMPLOYEE · พนักงานทั่วไป" },
+  { value: "MANAGER", label: "MANAGER · ผู้จัดการ (Approver)" },
+  { value: "IT_STAFF", label: "IT_STAFF · เจ้าหน้าที่ไอที" },
+  { value: "IT_MANAGER", label: "IT_MANAGER · หัวหน้าไอที (Technical)" },
+  { value: "HR", label: "HR · ฝ่ายบุคคล" },
+  { value: "FINANCE", label: "FINANCE · การเงิน/บัญชี" },
+  { value: "SECURITY_ADMIN", label: "SECURITY_ADMIN · ความปลอดภัย" },
+  { value: "AUDITOR", label: "AUDITOR · ผู้ตรวจสอบ" },
+  { value: "VIEWER", label: "VIEWER · ดูอย่างเดียว" },
+];
+const SCOPES = [
+  { value: "", label: "— ไม่ระบุ / None —" },
+  { value: "OWN_DATA", label: "Own Data" }, { value: "OWN_TEAM", label: "Own Team" },
+  { value: "ASSIGNED_PROJECTS", label: "Assigned Projects" }, { value: "SELECTED_PROJECTS", label: "Selected Projects" },
+  { value: "DEPARTMENT", label: "Department" }, { value: "ALL_PROJECTS", label: "All Projects" }, { value: "COMPANY_WIDE", label: "Company Wide" },
+];
+
 export interface ProfileDefaults {
-  name?: string; company?: string | null; department?: string | null; position?: string | null;
-  jobLevel?: string | null; isActive?: boolean;
+  name?: string; code?: string | null; company?: string | null; department?: string | null; position?: string | null;
+  jobLevel?: string | null; roleKey?: string | null; projectScope?: string | null; isActive?: boolean;
   requiresManagerApproval?: boolean; requiresSystemOwnerApproval?: boolean;
   requiresItManagerApproval?: boolean; requiresManagementApproval?: boolean; notes?: string | null;
 }
@@ -21,9 +42,25 @@ export function ProfileFields({ d = {}, departments }: { d?: ProfileDefaults; de
   return (
     <div className="space-y-4">
       <div className="grid gap-4 sm:grid-cols-2">
-        <div className="sm:col-span-2">
+        <div>
           <Label htmlFor="name">ชื่อโปรไฟล์ / Profile name *</Label>
-          <Input id="name" name="name" required defaultValue={d.name ?? ""} className="mt-1" placeholder="เช่น Online Marketing · Social Media Specialist · L1" />
+          <Input id="name" name="name" required defaultValue={d.name ?? ""} className="mt-1" placeholder="เช่น Social Media Specialist" />
+        </div>
+        <div>
+          <Label htmlFor="code">รหัสโปรไฟล์ / Profile Code</Label>
+          <Input id="code" name="code" defaultValue={d.code ?? ""} className="mt-1" placeholder="เช่น MKT-SOCIAL-STAFF" />
+        </div>
+        <div>
+          <Label htmlFor="roleKey">สิทธิ์ในระบบ (Role) / In-app Role</Label>
+          <Select id="roleKey" name="roleKey" defaultValue={d.roleKey ?? ""} className="mt-1">
+            {ASSIGNABLE_ROLES.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
+          </Select>
+        </div>
+        <div>
+          <Label htmlFor="projectScope">ขอบเขตข้อมูล / Project Scope</Label>
+          <Select id="projectScope" name="projectScope" defaultValue={d.projectScope ?? ""} className="mt-1">
+            {SCOPES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+          </Select>
         </div>
         <div>
           <Label htmlFor="company">บริษัท / Company</Label>

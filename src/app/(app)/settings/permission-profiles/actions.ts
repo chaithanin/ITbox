@@ -12,12 +12,17 @@ const optStr = z.preprocess(emptyToNull, z.string().max(500).nullable().optional
 const LEVELS = ["L0", "L1", "L2", "L3", "L4", "L5", "L6", "IT_ADMIN"] as const;
 const STATUSES = ["REQUIRED", "OPTIONAL", "RESTRICTED", "NOT_ALLOWED"] as const;
 
+const SCOPES = ["OWN_DATA", "OWN_TEAM", "ASSIGNED_PROJECTS", "SELECTED_PROJECTS", "DEPARTMENT", "ALL_PROJECTS", "COMPANY_WIDE"] as const;
+
 const profileSchema = z.object({
   name: z.string().min(1).max(200),
+  code: optStr,
   company: optStr,
   department: optStr,
   position: optStr,
   jobLevel: z.preprocess((v) => (typeof v === "string" && (LEVELS as readonly string[]).includes(v) ? v : null), z.enum(LEVELS).nullable().optional()),
+  roleKey: optStr,
+  projectScope: z.preprocess((v) => (typeof v === "string" && (SCOPES as readonly string[]).includes(v) ? v : null), z.enum(SCOPES).nullable().optional()),
   isActive: z.preprocess((v) => v === "on" || v === "true" || v === true, z.boolean()),
   requiresManagerApproval: z.preprocess((v) => v === "on" || v === "true", z.boolean()),
   requiresSystemOwnerApproval: z.preprocess((v) => v === "on" || v === "true", z.boolean()),
@@ -46,8 +51,8 @@ function parseItems(raw: FormDataEntryValue | null): z.infer<typeof itemSchema>[
 
 function toProfileData(i: z.infer<typeof profileSchema>) {
   return {
-    name: i.name, company: i.company ?? null, department: i.department ?? null, position: i.position ?? null,
-    jobLevel: i.jobLevel ?? null, isActive: i.isActive,
+    name: i.name, code: i.code ?? null, company: i.company ?? null, department: i.department ?? null, position: i.position ?? null,
+    jobLevel: i.jobLevel ?? null, roleKey: i.roleKey ?? null, projectScope: i.projectScope ?? null, isActive: i.isActive,
     requiresManagerApproval: i.requiresManagerApproval, requiresSystemOwnerApproval: i.requiresSystemOwnerApproval,
     requiresItManagerApproval: i.requiresItManagerApproval, requiresManagementApproval: i.requiresManagementApproval,
     notes: i.notes ?? null,
@@ -123,4 +128,34 @@ export async function deleteProfile(id: string) {
   await auditLog(user, { action: "DELETE", entityType: "PERMISSION_PROFILE", entityId: id, detail: { name: existing.name } });
   revalidatePath("/settings/permission-profiles");
   redirect("/settings/permission-profiles");
+}
+
+// ===========================================================================
+// Seed the standard Default Access Profiles (idempotent, by code). Safety: an
+// admin-tier in-app role is never auto-attached to a business profile.
+// ===========================================================================
+export async function seedDefaultProfiles() {
+  const user = await requirePermission("permprofile:manage");
+  const org = user.organizationId;
+  const { DEFAULT_PROFILES } = await import("@/lib/documents/default-profiles");
+  const BLOCKED_ROLES = new Set(["ADMIN", "SUPER_ADMIN"]);
+
+  let created = 0, skipped = 0;
+  for (const def of DEFAULT_PROFILES) {
+    const exists = await prisma.permissionProfile.findFirst({ where: { organizationId: org, code: def.code, deletedAt: null }, select: { id: true } });
+    if (exists) { skipped++; continue; }
+    const roleKey = BLOCKED_ROLES.has(def.roleKey) ? null : def.roleKey; // never seed admin roles
+    await prisma.permissionProfile.create({
+      data: {
+        organizationId: org, code: def.code, name: def.name, department: def.department, position: def.position ?? null,
+        roleKey, projectScope: def.scope, isActive: true,
+        notes: "Seeded default profile (least privilege). Edit before use.",
+        items: { create: def.items.map((it) => ({ system: it.system, permissionLevel: it.level, defaultStatus: it.status, requiresApproval: it.status === "RESTRICTED" })) },
+      },
+    });
+    created++;
+  }
+  await auditLog(user, { action: "CREATE", entityType: "PERMISSION_PROFILE", detail: { seed: true, created, skipped } });
+  revalidatePath("/settings/permission-profiles");
+  redirect(`/settings/permission-profiles?seeded=${created}`);
 }
