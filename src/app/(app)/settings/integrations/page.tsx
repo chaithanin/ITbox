@@ -8,15 +8,19 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ConfirmButton } from "@/components/confirm-button";
-import { generateIngestKeyAction, revokeIngestKeyAction, generateHrKeyAction, revokeHrKeyAction } from "./actions";
+import { generateIngestKeyAction, revokeIngestKeyAction, revealIngestKeyAction, generateHrKeyAction, revokeHrKeyAction, revealHrKeyAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 
 const MSG: Record<string, { text: string; error?: boolean }> = {
   generated: { text: "สร้าง API key ใหม่แล้ว — คัดลอกเก็บไว้ทันที (แสดงครั้งเดียว)", error: false },
   revoked: { text: "ยกเลิก API key แล้ว", error: false },
+  revealed: { text: "แสดงคีย์ปัจจุบันด้านล่าง — ปิดหน้านี้แล้วจะซ่อนอีกครั้ง", error: false },
+  revealed_none: { text: "คีย์นี้สร้างก่อนรองรับการแสดงซ้ำ — กด “สร้างใหม่ (Rotate)” เพื่อให้แสดง/คัดลอกซ้ำได้", error: true },
   hr_generated: { text: "สร้าง HR Sync key ใหม่แล้ว — คัดลอกเก็บไว้ทันที (แสดงครั้งเดียว)", error: false },
   hr_revoked: { text: "ยกเลิก HR Sync key แล้ว", error: false },
+  hr_revealed: { text: "แสดง HR Sync key ปัจจุบันด้านล่าง — ปิดหน้านี้แล้วจะซ่อนอีกครั้ง", error: false },
+  hr_revealed_none: { text: "HR key นี้สร้างก่อนรองรับการแสดงซ้ำ — กด “สร้างใหม่ (Rotate)” เพื่อให้แสดง/คัดลอกซ้ำได้", error: true },
 };
 
 export default async function IntegrationsPage({
@@ -32,13 +36,13 @@ export default async function IntegrationsPage({
     where: { organizationId: user.organizationId, key: "itreport.ingest" },
     select: { value: true, updatedAt: true },
   });
-  const v = (setting?.value ?? null) as { keyPrefix?: string; createdAt?: string; createdBy?: string } | null;
+  const v = (setting?.value ?? null) as { keyPrefix?: string; createdAt?: string; createdBy?: string; keyEnc?: unknown } | null;
 
   const hrSetting = await prisma.systemSetting.findFirst({
     where: { organizationId: user.organizationId, key: "hr.ingest" },
     select: { value: true, updatedAt: true },
   });
-  const hrV = (hrSetting?.value ?? null) as { keyPrefix?: string; createdAt?: string; createdBy?: string } | null;
+  const hrV = (hrSetting?.value ?? null) as { keyPrefix?: string; createdAt?: string; createdBy?: string; keyEnc?: unknown } | null;
 
   const jar = await cookies();
   const newKey = jar.get("itreport_newkey")?.value ?? null;
@@ -55,24 +59,24 @@ export default async function IntegrationsPage({
         </Button>
       </PageHeader>
 
-      {msg && <p className="mb-4 rounded-md bg-emerald-500/10 px-3 py-2 text-sm text-emerald-700 dark:text-emerald-400">{msg.text}</p>}
+      {msg && <p className={`mb-4 rounded-md px-3 py-2 text-sm ${msg.error ? "bg-amber-500/10 text-amber-700 dark:text-amber-400" : "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"}`}>{msg.text}</p>}
 
       {newKey && (
         <Card className="mb-4 border-emerald-500/40">
-          <CardHeader className="pb-2"><CardTitle className="text-sm text-emerald-700 dark:text-emerald-400">🔑 API Key ใหม่ (แสดงครั้งเดียว)</CardTitle></CardHeader>
+          <CardHeader className="pb-2"><CardTitle className="text-sm text-emerald-700 dark:text-emerald-400">🔑 Collector API Key (คัดลอกตอนนี้)</CardTitle></CardHeader>
           <CardContent>
             <code className="block break-all rounded-md bg-muted p-3 font-mono text-sm">{newKey}</code>
-            <p className="mt-2 text-xs text-muted-foreground">คัดลอกไปตั้งค่าในสคริปต์ Collector (ตัวแปร TECHCORE_KEY) — จะไม่แสดงอีกหลังออกจากหน้านี้</p>
+            <p className="mt-2 text-xs text-muted-foreground">คัดลอกไปตั้งค่าในสคริปต์ Collector (ตัวแปร TECHCORE_KEY) — จะซ่อนอีกครั้งหลังออกจากหน้านี้ (กด “แสดงคีย์ / Reveal” เพื่อดูซ้ำได้)</p>
           </CardContent>
         </Card>
       )}
 
       {hrNewKey && (
         <Card className="mb-4 border-emerald-500/40">
-          <CardHeader className="pb-2"><CardTitle className="text-sm text-emerald-700 dark:text-emerald-400">🔑 HR Sync Key ใหม่ (แสดงครั้งเดียว)</CardTitle></CardHeader>
+          <CardHeader className="pb-2"><CardTitle className="text-sm text-emerald-700 dark:text-emerald-400">🔑 HR Sync Key (คัดลอกตอนนี้)</CardTitle></CardHeader>
           <CardContent>
             <code className="block break-all rounded-md bg-muted p-3 font-mono text-sm">{hrNewKey}</code>
-            <p className="mt-2 text-xs text-muted-foreground">คัดลอกไปตั้งใน HR-ATS (ตัวแปร TECHCORE_KEY) — จะไม่แสดงอีกหลังออกจากหน้านี้</p>
+            <p className="mt-2 text-xs text-muted-foreground">คัดลอกไปตั้งใน HR-ATS (ตัวแปร TECHCORE_KEY) — จะซ่อนอีกครั้งหลังออกจากหน้านี้ (กด “แสดงคีย์ / Reveal” เพื่อดูซ้ำได้)</p>
           </CardContent>
         </Card>
       )}
@@ -93,6 +97,11 @@ export default async function IntegrationsPage({
               <form action={generateIngestKeyAction}>
                 <Button type="submit">{v ? "สร้างใหม่ (Rotate)" : "สร้าง API Key"}</Button>
               </form>
+              {v?.keyEnc != null && (
+                <form action={revealIngestKeyAction}>
+                  <Button type="submit" variant="outline">แสดงคีย์ / Reveal</Button>
+                </form>
+              )}
               {v && (
                 <form action={revokeIngestKeyAction}>
                   <ConfirmButton variant="outline" confirmText="ยกเลิก API key นี้? Collector จะส่งข้อมูลไม่ได้จนกว่าจะสร้างใหม่">ยกเลิก / Revoke</ConfirmButton>
@@ -143,6 +152,11 @@ export default async function IntegrationsPage({
               <form action={generateHrKeyAction}>
                 <Button type="submit">{hrV ? "สร้างใหม่ (Rotate)" : "สร้าง HR Key"}</Button>
               </form>
+              {hrV?.keyEnc != null && (
+                <form action={revealHrKeyAction}>
+                  <Button type="submit" variant="outline">แสดงคีย์ / Reveal</Button>
+                </form>
+              )}
               {hrV && (
                 <form action={revokeHrKeyAction}>
                   <ConfirmButton variant="outline" confirmText="ยกเลิก HR key นี้? HR จะ sync ไม่ได้จนกว่าจะสร้างใหม่ (หรือสลับไปใช้คีย์ Collector)">ยกเลิก / Revoke</ConfirmButton>
