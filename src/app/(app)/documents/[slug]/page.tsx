@@ -10,10 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { getForm, type OptionGroup, type Section, type TableSpec } from "@/lib/documents/forms";
 import { StaffIdField } from "../staff-id-field";
-import { prisma } from "@/lib/prisma";
-import { accessSystems, JOB_LEVELS } from "@/lib/documents/access-profile";
-import { AccessRequestBuilder } from "../access-request-builder";
-import { submitAccessRequest } from "../access-actions";
+import { AccessMatrixForm } from "../access-matrix-form";
 
 const ORIGINAL = (slug: string) => `/forms/${slug}-original.pdf`;
 
@@ -128,24 +125,17 @@ export default async function DocumentFillPage({ params }: { params: Promise<{ s
   // by department/position/level, Default/Additional/Restricted, submit + PDF).
   if (slug === "access-request") {
     const user = await requireUser();
-    const departments = await prisma.department.findMany({ where: { organizationId: user.organizationId, deletedAt: null }, select: { name: true }, orderBy: { name: "asc" } });
     return (
-      <div className="mx-auto max-w-4xl">
-        <Button variant="ghost" size="sm" asChild className="mb-2">
+      <div className="mx-auto max-w-6xl">
+        <Button variant="ghost" size="sm" asChild className="mb-2 no-print">
           <Link href="/documents"><ArrowLeft className="h-4 w-4" /> กลับ / Back</Link>
         </Button>
-        <PageHeader title={form.titleTh} description={form.titleEn}>
-          <a href={ORIGINAL(slug)} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 rounded-md border px-3 py-1.5 text-sm font-medium text-primary hover:bg-accent">
+        <PageHeader title="แบบฟอร์มขอสิทธิ์การใช้งานระบบสารสนเทศ / Information System Access Request" description="เลือกสิทธิ์รายเมนูตามระบบ ERP และระบบภายนอก แล้วส่งคำขอหรือพิมพ์เป็น PDF">
+          <a href={ORIGINAL(slug)} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 rounded-md border px-3 py-1.5 text-sm font-medium text-primary hover:bg-accent no-print">
             <Download className="h-4 w-4" /> ต้นฉบับ / Original
           </a>
         </PageHeader>
-        <AccessRequestBuilder
-          submitAction={submitAccessRequest}
-          systems={accessSystems().map((s) => ({ key: s.key, label: s.label, section: s.section, levels: s.levels }))}
-          departments={departments}
-          jobLevels={JOB_LEVELS.map((l) => ({ value: l.value, th: l.th }))}
-          accessFormUrl={ORIGINAL(slug)}
-        />
+        <AccessMatrixForm defaults={{ name: user.name }} />
       </div>
     );
   }
