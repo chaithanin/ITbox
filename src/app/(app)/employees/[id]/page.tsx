@@ -149,9 +149,6 @@ export default async function EmployeeDetailPage({
       {deleteError && (
         <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">{deleteError}</p>
       )}
-      {sp.access === "applied" && (
-        <p className="rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-700 dark:text-emerald-400">ใช้โปรไฟล์สิทธิ์เริ่มต้นแล้ว (เพิ่มแบบไม่ทับของเดิม){sp.role ? ` · role: ${sp.role}` : ""} — บันทึกใน Audit Log</p>
-      )}
       {sp.access === "no-profile" && (
         <p className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-400">ไม่พบ Default Profile ที่ตรงกับแผนก/ตำแหน่งนี้ — สร้าง/ปรับได้ที่ Default Permission</p>
       )}
@@ -452,7 +449,7 @@ export default async function EmployeeDetailPage({
         <Card>
           <CardHeader>
             <CardTitle>สิทธิ์การใช้งาน / Access & Permissions</CardTitle>
-            <CardDescription>สิทธิ์ในระบบปัจจุบัน และโปรไฟล์เริ่มต้นตามตำแหน่ง (Least Privilege)</CardDescription>
+            <CardDescription>ใช้สร้าง “เอกสารคำขอสิทธิ์” จากโปรไฟล์ตามตำแหน่ง — ไม่เปลี่ยนสิทธิ์จริงของผู้ใช้</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid gap-4 sm:grid-cols-2">
@@ -481,10 +478,10 @@ export default async function EmployeeDetailPage({
             </div>
             {defaultProfile?.matched && (
               <form action={applyProfile}>
-                <Button type="submit" size="sm" variant="outline" disabled={!employee.user && !defaultProfile.items.length}>
-                  ใช้โปรไฟล์เริ่มต้น (เพิ่มแบบไม่ทับของเดิม) / Apply default (additive)
+                <Button type="submit" size="sm" variant="outline">
+                  สร้างเอกสารคำขอสิทธิ์จากโปรไฟล์ / Create request document
                 </Button>
-                <span className="ml-2 text-xs text-muted-foreground">เพิ่ม role ในระบบ + เตรียมคำขอสิทธิ์ระบบภายนอก · ไม่ลบสิทธิ์เดิม · บันทึก Audit</span>
+                <span className="ml-2 text-xs text-muted-foreground">สร้างเอกสารคำขอ (ร่าง) ตามโปรไฟล์ — ไม่แตะสิทธิ์จริงของผู้ใช้</span>
               </form>
             )}
           </CardContent>

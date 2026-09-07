@@ -320,10 +320,10 @@ export async function startOffboarding(formData: FormData) {
 }
 
 // ===========================================================================
-// Apply the position's Default Permission profile to an employee's login user.
-// ADDITIVE ONLY — it never removes existing roles (manual grants are preserved),
-// never assigns an admin role, and audits every grant. External-system items
-// are filed as an AccessRequest for the normal provisioning workflow.
+// Build an access-request DOCUMENT from the position's default profile.
+// Document-only: this NEVER changes the user's real in-app permissions — it
+// just pre-fills a paperwork AccessRequest (the in-app role is recorded as an
+// informational line) so it can be printed / approved via /access-requests.
 // ===========================================================================
 export async function applyDefaultProfile(employeeId: string) {
   const user = await requirePermission("permprofile:manage");
@@ -332,45 +332,29 @@ export async function applyDefaultProfile(employeeId: string) {
 
   const emp = await prisma.employee.findFirst({
     where: { id: employeeId, organizationId: org, deletedAt: null },
-    select: { id: true, firstName: true, lastName: true, position: true, userId: true, employeeCode: true, department: { select: { name: true } } },
+    select: { id: true, firstName: true, lastName: true, position: true, employeeCode: true, department: { select: { name: true } } },
   });
   if (!emp) redirect("/employees");
 
   const resolved = await resolveAccessProfile(org, { department: emp.department?.name ?? null, position: emp.position ?? null });
   if (!resolved.matched) redirect(`/employees/${employeeId}?access=no-profile`);
 
-  const BLOCKED = new Set(["ADMIN", "SUPER_ADMIN"]);
-  let grantedRole: string | null = null;
+  // The in-app role is captured as a document line only (no UserRole is written).
+  const roleLine = resolved.roleKey ? [{ system: "ITBox Role (สิทธิ์ในระบบ)", resource: null as string | null, permissionLevel: resolved.roleKey }] : [];
+  const extItems = resolved.items.filter((i) => i.defaultStatus !== "NOT_ALLOWED").map((i) => ({ system: i.system, resource: i.resource, permissionLevel: i.permissionLevel }));
+  const rows = [...roleLine, ...extItems];
 
-  // 1) In-app role (additive) — only if the employee has a linked login account.
-  if (emp.userId && resolved.roleKey && !BLOCKED.has(resolved.roleKey)) {
-    const role = await prisma.role.findFirst({ where: { organizationId: org, key: resolved.roleKey }, select: { id: true } });
-    if (role) {
-      const already = await prisma.userRole.findFirst({ where: { userId: emp.userId, roleId: role.id }, select: { userId: true } });
-      if (!already) {
-        await prisma.userRole.create({ data: { userId: emp.userId, roleId: role.id } });
-        grantedRole = resolved.roleKey;
-        await auditLog(user, { action: "PERMISSION_GRANTED", entityType: "USER", entityId: emp.userId, detail: { role: resolved.roleKey, source: "DEFAULT_POSITION_PROFILE", profile: resolved.code ?? resolved.profileName, employeeId } });
-      }
-    }
-  }
-
-  // 2) External-system items → a persisted AccessRequest (provisioning workflow).
-  const extItems = resolved.items.filter((i) => i.defaultStatus !== "NOT_ALLOWED");
-  if (extItems.length) {
-    const req = await prisma.accessRequest.create({
-      data: {
-        organizationId: org, employeeId: emp.id, employeeCode: emp.employeeCode,
-        nameTh: `${emp.firstName} ${emp.lastName}`, department: emp.department?.name ?? null, position: emp.position ?? null,
-        businessJustification: `Auto-prepared from default profile ${resolved.code ?? resolved.profileName}`,
-        status: "SUBMITTED", createdById: user.id,
-        items: { create: extItems.map((i) => ({ system: i.system, resource: i.resource, permissionLevel: i.permissionLevel, source: "DEFAULT" as const })) },
-      },
-      select: { id: true },
-    });
-    await auditLog(user, { action: "PROFILE_ASSIGNED", entityType: "ACCESS_REQUEST", entityId: req.id, detail: { profile: resolved.code ?? resolved.profileName, items: extItems.length, employeeId } });
-  }
-
-  revalidatePath(`/employees/${employeeId}`);
-  redirect(`/employees/${employeeId}?access=applied&role=${grantedRole ?? ""}`);
+  const req = await prisma.accessRequest.create({
+    data: {
+      organizationId: org, employeeId: emp.id, employeeCode: emp.employeeCode,
+      nameTh: `${emp.firstName} ${emp.lastName}`, department: emp.department?.name ?? null, position: emp.position ?? null,
+      businessJustification: `เอกสารคำขอสิทธิ์จากโปรไฟล์ ${resolved.code ?? resolved.profileName}${resolved.projectScope ? ` · scope: ${resolved.projectScope}` : ""}`,
+      status: "DRAFT", createdById: user.id,
+      items: { create: rows.map((r) => ({ system: r.system, resource: r.resource, permissionLevel: r.permissionLevel, source: "DEFAULT" as const })) },
+    },
+    select: { id: true },
+  });
+  await auditLog(user, { action: "CREATE", entityType: "ACCESS_REQUEST", entityId: req.id, detail: { document: true, profile: resolved.code ?? resolved.profileName, items: rows.length, employeeId } });
+  revalidatePath("/access-requests");
+  redirect(`/access-requests/${req.id}?ok=created`);
 }
