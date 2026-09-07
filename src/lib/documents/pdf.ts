@@ -457,21 +457,22 @@ export function buildAccessMatrixPdf(d: DecodedMatrix): Promise<Buffer> {
 
     // Signature block (width-aware so it works 2-up and 3-up).
     const nameTh = (r.nameTh || r.nameEn || "").trim();
-    const today = fmtDate();
-    const sig = (bx: number, w: number, name: string, dateStr: string, role: string) => {
+    const sig = (bx: number, w: number, name: string, role: string) => {
       doc.font(body).fontSize(8).fillColor("#111827");
-      doc.text("ลงชื่อ/Sign ...............................", bx, y + 4, { width: w, align: "center", lineBreak: false });
-      doc.text(name ? `( ${name} )` : "(..............................................)", bx, y + 18, { width: w, align: "center", lineBreak: false });
-      doc.fontSize(7.5).fillColor("#6b7280").text(`วันที่ / Date ${dateStr || "..............................."}`, bx, y + 30, { width: w, align: "center", lineBreak: false });
-      doc.fontSize(8).fillColor("#111827").text(role, bx, y + 42, { width: w, align: "center", lineBreak: false });
+      doc.text("ลงชื่อ/Sign ...............................", bx, y + 2, { width: w, align: "center", lineBreak: false });
+      doc.text(name ? `( ${name} )` : "(..............................................)", bx, y + 16, { width: w, align: "center", lineBreak: false });
+      doc.fontSize(7.5).fillColor("#6b7280");
+      doc.text("วันที่ /date", bx, y + 28, { width: w, align: "center", lineBreak: false });
+      doc.text("DD/MM/YYYY .............................", bx, y + 37, { width: w, align: "center", lineBreak: false });
+      doc.fontSize(8).fillColor("#111827").text(role, bx, y + 49, { width: w, align: "center", lineBreak: false });
     };
 
     // Requester + Department Manager signatures.
-    ensure(60); y += 8;
+    ensure(64); y += 8;
     const bw2 = width / 2;
-    sig(left, bw2, nameTh, today, "ผู้ขอสิทธิ์ใช้งาน / License Requester");
-    sig(left + bw2, bw2, "", "", "ผู้จัดการแผนก / Department Manager");
-    y += 60;
+    sig(left, bw2, nameTh, "ผู้ขอสิทธิ์ใช้งาน / License Requester");
+    sig(left + bw2, bw2, "", "ผู้จัดการแผนก / Department Manager");
+    y += 64;
 
     // Conditions (1)–(4), bilingual.
     const note = (th: string, en: string) => {
@@ -496,12 +497,12 @@ export function buildAccessMatrixPdf(d: DecodedMatrix): Promise<Buffer> {
     bullet("ตรวจสอบความถูกต้อง / Check the Correctness");
     bullet("ยกเลิกสิทธิ์ หรือ บันทึก User & Password เรียบร้อยแล้ว / Close permissions or Save User & Password successfully");
     y += 8;
-    ensure(60);
+    ensure(64);
     const bw3 = width / 3;
-    sig(left, bw3, "", "", "ผู้ตรวจสอบ / IT Support");
-    sig(left + bw3, bw3, "", "", "หัวหน้าแผนก / IT Manager");
-    sig(left + bw3 * 2, bw3, "", "", "ฝ่ายบริหาร / Management");
-    y += 60;
+    sig(left, bw3, "", "ผู้ตรวจสอบ / IT Support");
+    sig(left + bw3, bw3, "", "หัวหน้าแผนก / IT Manager");
+    sig(left + bw3 * 2, bw3, "", "ฝ่ายบริหาร / Management");
+    y += 64;
 
     doc.end();
   });

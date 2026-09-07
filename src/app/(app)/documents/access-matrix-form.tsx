@@ -187,13 +187,13 @@ export function AccessMatrixForm({ defaults }: { defaults?: { name?: string } })
           <div className="text-center text-xs">
             <p>ลงชื่อ /Sign ..............................................</p>
             <p className="mt-3">(........................................................)</p>
-            <p className="mt-2 text-muted-foreground">วันที่ / Date .............................</p>
+            <p className="mt-2 text-muted-foreground">วันที่ /date<br />DD/MM/YYYY .............................</p>
             <p className="mt-1 font-medium">ผู้ขอสิทธิ์ใช้งาน / License Requester</p>
           </div>
           <div className="text-center text-xs">
             <p>ลงชื่อ /Sign ..............................................</p>
             <p className="mt-3">(........................................................)</p>
-            <p className="mt-2 text-muted-foreground">วันที่ / Date .............................</p>
+            <p className="mt-2 text-muted-foreground">วันที่ /date<br />DD/MM/YYYY .............................</p>
             <p className="mt-1 font-medium">ผู้จัดการแผนก / Department Manager</p>
           </div>
         </CardContent>
@@ -223,7 +223,7 @@ export function AccessMatrixForm({ defaults }: { defaults?: { name?: string } })
               <div key={role} className="text-center text-xs">
                 <p>ลงชื่อ /Sign ...................................</p>
                 <p className="mt-3">(..............................................)</p>
-                <p className="mt-2 text-muted-foreground">วันที่ / Date .......................</p>
+                <p className="mt-2 text-muted-foreground">วันที่ /date<br />DD/MM/YYYY .............................</p>
                 <p className="mt-1 font-medium">{role}</p>
               </div>
             ))}
