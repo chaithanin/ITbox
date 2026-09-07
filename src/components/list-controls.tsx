@@ -1,51 +1,11 @@
 import Link from "next/link";
-import { ChevronLeft, ChevronRight, Search } from "lucide-react";
-import { Input } from "@/components/ui/input";
-import { Select } from "@/components/ui/select";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-/** GET-based search/filter bar for server-rendered list pages. */
-export function SearchFilterBar({
-  action,
-  q,
-  placeholder = "ค้นหา / Search...",
-  filters = [],
-  extra,
-}: {
-  action: string;
-  q?: string;
-  placeholder?: string;
-  filters?: {
-    name: string;
-    value?: string;
-    options: { value: string; label: string }[];
-    allLabel: string;
-  }[];
-  extra?: React.ReactNode;
-}) {
-  return (
-    <form action={action} method="get" className="mb-4 flex flex-wrap items-center gap-2">
-      <div className="relative min-w-[200px] flex-1 sm:max-w-xs">
-        <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-        <Input name="q" defaultValue={q} placeholder={placeholder} className="pl-9" />
-      </div>
-      {filters.map((f) => (
-        <Select key={f.name} name={f.name} defaultValue={f.value ?? ""} className="w-auto min-w-[10rem]">
-          <option value="">{f.allLabel}</option>
-          {f.options.map((o) => (
-            <option key={o.value} value={o.value}>
-              {o.label}
-            </option>
-          ))}
-        </Select>
-      ))}
-      <Button type="submit" variant="secondary">
-        <Search className="h-4 w-4" />
-      </Button>
-      {extra}
-    </form>
-  );
-}
+// The live search/filter bar is a client component; re-exported here so the
+// many pages that `import { SearchFilterBar } from "@/components/list-controls"`
+// keep working, while parsePage stays server-callable.
+export { SearchFilterBar } from "@/components/search-filter-bar";
 
 /** Pagination controls preserving existing query params. */
 export function Pagination({

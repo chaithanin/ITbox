@@ -5,6 +5,7 @@ import { requirePermission } from "@/lib/session";
 import { PageHeader } from "@/components/page-header";
 import { StatusBadge } from "@/components/status-badge";
 import { SearchFilterBar, Pagination, parsePage } from "@/components/list-controls";
+import { Highlight } from "@/components/highlight";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -62,6 +63,8 @@ export default async function EmployeesPage({
             { lastName: { contains: q, mode: "insensitive" } },
             { employeeCode: { contains: q, mode: "insensitive" } },
             { email: { contains: q, mode: "insensitive" } },
+            { position: { contains: q, mode: "insensitive" } },
+            { department: { is: { name: { contains: q, mode: "insensitive" } } } },
           ],
         }
       : {}),
@@ -172,14 +175,14 @@ export default async function EmployeesPage({
           )}
           {rows.map((e) => (
             <TableRow key={e.id}>
-              <TableCell className="font-mono text-xs">{e.employeeCode}</TableCell>
+              <TableCell className="font-mono text-xs"><Highlight text={e.employeeCode} term={q} /></TableCell>
               <TableCell>
                 <Link href={`/employees/${e.id}`} className="font-medium text-primary hover:underline">
-                  {e.firstName} {e.lastName}
+                  <Highlight text={`${e.firstName} ${e.lastName}`} term={q} />
                 </Link>
               </TableCell>
-              <TableCell>{e.position ?? "-"}</TableCell>
-              <TableCell>{e.department?.name ?? "-"}</TableCell>
+              <TableCell><Highlight text={e.position ?? "-"} term={q} /></TableCell>
+              <TableCell><Highlight text={e.department?.name ?? "-"} term={q} /></TableCell>
               <TableCell>{e.location?.name ?? "-"}</TableCell>
               <TableCell>
                 <StatusBadge status={e.status} />
