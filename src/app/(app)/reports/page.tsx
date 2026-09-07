@@ -80,11 +80,11 @@ export default async function ReportsDashboardPage({ searchParams }: { searchPar
   const alerts: AlertEntry[] = [];
   if (warranty.counts.expired > 0) alerts.push({ severity: "critical", title: "ประกันหมดอายุแล้ว / Warranty expired", count: warranty.counts.expired, href: "/reports/warranty", detail: "ทรัพย์สินที่ยังใช้งานแต่ประกันหมดแล้ว" });
   if (warranty.counts.within30 > 0) alerts.push({ severity: "warning", title: "ประกันจะหมดใน 30 วัน / Warranty expiring ≤30d", count: warranty.counts.within30, href: "/reports/warranty" });
-  if (borrowing.overdueCount > 0) alerts.push({ severity: "critical", title: "ยืมเกินกำหนดคืน / Overdue loans", count: borrowing.overdueCount, href: "/borrow" });
-  if (licenses.expired > 0) alerts.push({ severity: "critical", title: "ไลเซนส์หมดอายุ / Licenses expired", count: licenses.expired, href: "/licenses" });
-  if (subs.expiringSoon > 0) alerts.push({ severity: "warning", title: "Subscription ใกล้ต่ออายุ ≤30d", count: subs.expiringSoon, href: "/subscriptions" });
-  if (maint.highPriority > 0) alerts.push({ severity: "warning", title: "งานซ่อมความสำคัญสูง / High-priority maintenance", count: maint.highPriority, href: "/maintenance" });
-  if (proc.pending > 0) alerts.push({ severity: "info", title: "คำขอจัดซื้อรออนุมัติ / Purchase requests pending", count: proc.pending, href: "/procurement" });
+  if (borrowing.overdueCount > 0) alerts.push({ severity: "critical", title: "ยืมเกินกำหนดคืน / Overdue loans", count: borrowing.overdueCount, href: "/reports/borrowing" });
+  if (licenses.expired > 0) alerts.push({ severity: "critical", title: "ไลเซนส์หมดอายุ / Licenses expired", count: licenses.expired, href: "/reports/licenses" });
+  if (subs.expiringSoon > 0) alerts.push({ severity: "warning", title: "Subscription ใกล้ต่ออายุ ≤30d", count: subs.expiringSoon, href: "/reports/subscriptions" });
+  if (maint.highPriority > 0) alerts.push({ severity: "warning", title: "งานซ่อมความสำคัญสูง / High-priority maintenance", count: maint.highPriority, href: "/reports/maintenance" });
+  if (proc.pending > 0) alerts.push({ severity: "info", title: "คำขอจัดซื้อรออนุมัติ / Purchase requests pending", count: proc.pending, href: "/reports/procurement" });
   const critical = alerts.filter((a) => a.severity === "critical").length;
 
   const reportDate = sp.date || new Date().toISOString().slice(0, 10);
@@ -97,6 +97,22 @@ export default async function ReportsDashboardPage({ searchParams }: { searchPar
       </PageHeader>
 
       <ReportHeader reportName="IT Asset & IT Operations Dashboard" period={`ณ วันที่ / As of ${reportDate}`} generatedBy={user.name} />
+
+      {/* Report navigator */}
+      <div className="mb-4 flex flex-wrap gap-2">
+        {[
+          { href: "/reports/assets", label: "ทรัพย์สิน / Assets" },
+          { href: "/reports/warranty", label: "การรับประกัน / Warranty" },
+          { href: "/reports/borrowing", label: "ยืม-คืน / Borrowing" },
+          { href: "/reports/maintenance", label: "งานซ่อม / Maintenance" },
+          { href: "/reports/subscriptions", label: "Subscription" },
+          { href: "/reports/licenses", label: "License" },
+          { href: "/reports/procurement", label: "จัดซื้อ / Procurement" },
+          ...(user.permissions.has("audit:read") ? [{ href: "/reports/vault-audit", label: "Vault Audit" }] : []),
+        ].map((r) => (
+          <Button key={r.href} variant="outline" size="sm" asChild><Link href={r.href}>{r.label}</Link></Button>
+        ))}
+      </div>
 
       {/* Filters */}
       <form method="get" className="mb-4 grid gap-2 rounded-lg border bg-card p-3 sm:grid-cols-3 lg:grid-cols-6">
@@ -166,9 +182,9 @@ export default async function ReportsDashboardPage({ searchParams }: { searchPar
         <StatCard label="มูลค่าซื้อรวม / Total Cost" value={`฿${formatMoney(asset.totalPurchaseCost)}`} href={assetQs({})} />
         <StatCard label="มูลค่าปัจจุบัน / Current Value" value={`฿${formatMoney(asset.currentValue)}`} href={assetQs({})} />
         <StatCard label="ประกันใกล้หมด / Warranty ≤30d" value={warranty.counts.within30} tone={warranty.counts.within30 > 0 ? "warning" : "default"} href="/reports/warranty" />
-        <StatCard label="ยืมเกินกำหนด / Overdue" value={borrowing.overdueCount} tone={borrowing.overdueCount > 0 ? "danger" : "default"} href="/borrow" />
-        <StatCard label="งานซ่อมค้าง / Open Maint." value={maint.open + maint.inProgress} tone={(maint.open + maint.inProgress) > 0 ? "warning" : "default"} href="/maintenance" />
-        <StatCard label="Subscription/ปี / Annual" value={`฿${formatMoney(subs.annualCost)}`} href="/subscriptions" />
+        <StatCard label="ยืมเกินกำหนด / Overdue" value={borrowing.overdueCount} tone={borrowing.overdueCount > 0 ? "danger" : "default"} href="/reports/borrowing" />
+        <StatCard label="งานซ่อมค้าง / Open Maint." value={maint.open + maint.inProgress} tone={(maint.open + maint.inProgress) > 0 ? "warning" : "default"} href="/reports/maintenance" />
+        <StatCard label="Subscription/ปี / Annual" value={`฿${formatMoney(subs.annualCost)}`} href="/reports/subscriptions" />
       </div>
 
       {/* Charts */}
@@ -191,14 +207,14 @@ export default async function ReportsDashboardPage({ searchParams }: { searchPar
           <CardContent className="p-4">
             <p className="mb-3 text-sm font-semibold">สรุปการดำเนินงาน / Operations</p>
             <div className="grid gap-3 grid-cols-2 md:grid-cols-4">
-              <MiniStat icon={<Boxes className="h-4 w-4" />} label="License ใช้ไป / Utilization" value={`${licenses.utilization}%`} sub={`${licenses.assigned}/${licenses.totalSeats}`} href="/licenses" />
-              <MiniStat icon={<RefreshCcw className="h-4 w-4" />} label="Subscription active" value={subs.active} href="/subscriptions" />
-              <MiniStat icon={<ClipboardList className="h-4 w-4" />} label="จัดซื้อรออนุมัติ / PR pending" value={proc.pending} href="/procurement" />
-              <MiniStat icon={<Wrench className="h-4 w-4" />} label="ซ่อมเสร็จ / Completed" value={maint.completed} href="/maintenance" />
-              <MiniStat icon={<UserCheck className="h-4 w-4" />} label="กำลังยืม / Active loans" value={borrowing.active} href="/borrow" />
-              <MiniStat icon={<Wallet className="h-4 w-4" />} label="ค่าซ่อมรวม / Repair cost" value={`฿${formatMoney(maint.totalCost)}`} href="/maintenance" />
-              <MiniStat icon={<Clock className="h-4 w-4" />} label="เฉลี่ยเวลาซ่อม / Avg resolve" value={`${maint.avgResolutionHours}h`} href="/maintenance" />
-              <MiniStat icon={<TrendingDown className="h-4 w-4" />} label="License ใช้น้อย / Underused" value={licenses.rows.filter((r) => r.flag === "UNDERUTILIZED").length} href="/licenses" />
+              <MiniStat icon={<Boxes className="h-4 w-4" />} label="License ใช้ไป / Utilization" value={`${licenses.utilization}%`} sub={`${licenses.assigned}/${licenses.totalSeats}`} href="/reports/licenses" />
+              <MiniStat icon={<RefreshCcw className="h-4 w-4" />} label="Subscription active" value={subs.active} href="/reports/subscriptions" />
+              <MiniStat icon={<ClipboardList className="h-4 w-4" />} label="จัดซื้อรออนุมัติ / PR pending" value={proc.pending} href="/reports/procurement" />
+              <MiniStat icon={<Wrench className="h-4 w-4" />} label="ซ่อมเสร็จ / Completed" value={maint.completed} href="/reports/maintenance" />
+              <MiniStat icon={<UserCheck className="h-4 w-4" />} label="กำลังยืม / Active loans" value={borrowing.active} href="/reports/borrowing" />
+              <MiniStat icon={<Wallet className="h-4 w-4" />} label="ค่าซ่อมรวม / Repair cost" value={`฿${formatMoney(maint.totalCost)}`} href="/reports/maintenance" />
+              <MiniStat icon={<Clock className="h-4 w-4" />} label="เฉลี่ยเวลาซ่อม / Avg resolve" value={`${maint.avgResolutionHours}h`} href="/reports/maintenance" />
+              <MiniStat icon={<TrendingDown className="h-4 w-4" />} label="License ใช้น้อย / Underused" value={licenses.rows.filter((r) => r.flag === "UNDERUTILIZED").length} href="/reports/licenses" />
             </div>
           </CardContent>
         </Card>
