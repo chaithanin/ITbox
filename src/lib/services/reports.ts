@@ -421,3 +421,112 @@ export async function getDuplicateAssets(orgId: string) {
   const grouped = [...bySerial.entries()].map(([serialNumber, items]) => ({ serialNumber, items }));
   return { groups: grouped, count: grouped.length };
 }
+
+// ---------------------------------------------------------------------------
+// Access Review — periodic certification of access-request DOCUMENTS.
+//
+// This is a document-only feature: it reviews the access-request paperwork
+// (form 4.A) that has been recorded, it does NOT read or change any real
+// system permission. Policy: an access-request document is valid for up to
+// 1 year (per the form footer), so it is "due for review" one year after its
+// effective date (or, if set, on its stated expiry date). This lets a manager
+// certify / re-submit the paperwork on schedule instead of any auto-revoke.
+// ---------------------------------------------------------------------------
+export type ReviewBucket = "overdue" | "dueSoon" | "ok" | "draft" | "closed";
+
+export interface AccessReviewRow {
+  id: string;
+  refNo: string | null;
+  employeeId: string | null;
+  employeeCode: string;
+  name: string;
+  department: string;
+  position: string;
+  status: string;
+  itemCount: number;
+  effectiveDate: Date | null;
+  expiryDate: Date | null;
+  reviewDue: Date | null;
+  daysToReview: number | null;
+  bucket: ReviewBucket;
+}
+
+const YEAR_MS = 365 * 86_400_000;
+
+export async function getAccessReview(orgId: string) {
+  const [requests, activeEmployees] = await Promise.all([
+    prisma.accessRequest.findMany({
+      where: { organizationId: orgId, deletedAt: null },
+      select: {
+        id: true, refNo: true, employeeId: true, employeeCode: true, nameTh: true, nameEn: true,
+        department: true, position: true, status: true, effectiveDate: true, expiryDate: true,
+        createdAt: true,
+        employee: { select: { employeeCode: true, firstName: true, lastName: true, department: { select: { name: true } }, position: true } },
+        _count: { select: { items: true } },
+      },
+      orderBy: { createdAt: "desc" },
+    }),
+    prisma.employee.findMany({
+      where: { organizationId: orgId, deletedAt: null, status: "ACTIVE" },
+      select: { id: true, employeeCode: true, firstName: true, lastName: true, position: true, department: { select: { name: true } } },
+      orderBy: [{ employeeCode: "asc" }],
+    }),
+  ]);
+
+  const rows: AccessReviewRow[] = requests.map((r) => {
+    const name = r.employee ? `${r.employee.firstName} ${r.employee.lastName}` : (r.nameTh || r.nameEn || "—");
+    const base = r.effectiveDate ?? r.createdAt;
+    // Review-due = stated expiry, else 1 year after the effective/created date.
+    const reviewDue = r.expiryDate ?? (base ? new Date(base.getTime() + YEAR_MS) : null);
+    const daysToReview = daysUntil(reviewDue);
+    let bucket: ReviewBucket;
+    if (r.status === "DRAFT") bucket = "draft";
+    else if (r.status === "REJECTED" || r.status === "REVOKED") bucket = "closed";
+    else if (daysToReview !== null && daysToReview < 0) bucket = "overdue";
+    else if (daysToReview !== null && daysToReview <= 30) bucket = "dueSoon";
+    else bucket = "ok";
+    return {
+      id: r.id, refNo: r.refNo, employeeId: r.employeeId,
+      employeeCode: r.employee?.employeeCode ?? r.employeeCode ?? "—",
+      name,
+      department: r.employee?.department?.name ?? r.department ?? "—",
+      position: r.employee?.position ?? r.position ?? "—",
+      status: r.status, itemCount: r._count.items,
+      effectiveDate: r.effectiveDate, expiryDate: r.expiryDate,
+      reviewDue, daysToReview, bucket,
+    };
+  });
+
+  // Sort: overdue first (most overdue first), then due-soon, then the rest.
+  const order: Record<ReviewBucket, number> = { overdue: 0, dueSoon: 1, ok: 2, draft: 3, closed: 4 };
+  rows.sort((a, b) =>
+    order[a.bucket] - order[b.bucket] ||
+    ((a.daysToReview ?? Infinity) - (b.daysToReview ?? Infinity)));
+
+  // Active employees that have NO access-request document at all → nothing to
+  // review yet, but flagged so a document can be created for them.
+  const withDoc = new Set(requests.map((r) => r.employeeId).filter((v): v is string => !!v));
+  const noDoc = activeEmployees
+    .filter((e) => !withDoc.has(e.id))
+    .map((e) => ({
+      id: e.id, employeeCode: e.employeeCode, name: `${e.firstName} ${e.lastName}`,
+      department: e.department?.name ?? "—", position: e.position ?? "—",
+    }));
+
+  const counts = {
+    totalDocs: rows.length,
+    overdue: rows.filter((r) => r.bucket === "overdue").length,
+    dueSoon: rows.filter((r) => r.bucket === "dueSoon").length,
+    ok: rows.filter((r) => r.bucket === "ok").length,
+    draft: rows.filter((r) => r.bucket === "draft").length,
+    closed: rows.filter((r) => r.bucket === "closed").length,
+    activeEmployees: activeEmployees.length,
+    employeesWithDoc: withDoc.size,
+    employeesNoDoc: noDoc.length,
+  };
+
+  const byStatus: Record<string, number> = {};
+  for (const r of rows) byStatus[r.status] = (byStatus[r.status] ?? 0) + 1;
+
+  return { rows, noDoc, counts, byStatus };
+}

@@ -109,6 +109,7 @@ export default async function ReportsDashboardPage({ searchParams }: { searchPar
           { href: "/reports/subscriptions", label: "Subscription" },
           { href: "/reports/licenses", label: "License" },
           { href: "/reports/procurement", label: "จัดซื้อ / Procurement" },
+          ...(user.permissions.has("accessreq:read") ? [{ href: "/reports/access-review", label: "ทบทวนสิทธิ์ / Access Review" }] : []),
           ...(user.permissions.has("audit:read") ? [{ href: "/reports/vault-audit", label: "Vault Audit" }] : []),
         ].map((r) => (
           <Button key={r.href} variant="outline" size="sm" asChild><Link href={r.href}>{r.label}</Link></Button>

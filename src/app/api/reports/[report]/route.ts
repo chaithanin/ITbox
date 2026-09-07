@@ -7,6 +7,7 @@ import { apiHandler } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
 import { requirePermission, AuthError, type CurrentUser } from "@/lib/session";
 import { auditLog } from "@/lib/audit";
+import { getAccessReview } from "@/lib/services/reports";
 
 export const dynamic = "force-dynamic";
 
@@ -222,6 +223,7 @@ const REPORT_TITLES: Record<string, string> = {
   "borrow-requests": "คำขอยืมทรัพย์สิน / Borrow Requests",
   "borrow-overdue": "รายการเกินกำหนดคืน / Overdue Loans",
   "borrow-utilization": "อัตราการใช้งานทรัพย์สิน / Asset Borrow Utilization",
+  "access-review": "รายงานทบทวนสิทธิ์ / Access Review Report",
 };
 
 const REPORT_BUILDERS: Record<string, ReportBuilder> = {
@@ -635,6 +637,22 @@ const REPORT_BUILDERS: Record<string, ReportBuilder> = {
       }),
     };
   },
+
+  // Access Review — recertification of recorded access-request DOCUMENTS.
+  // Document-only: no real system permission is read or changed.
+  "access-review": async (user) => {
+    const r = await getAccessReview(user.organizationId);
+    return {
+      headers: [
+        "Ref No", "Employee Code", "Name", "Department", "Position", "Items", "Status",
+        "Effective Date", "Expiry Date", "Review Due", "Days To Review", "Review Status",
+      ],
+      rows: r.rows.map((row) => [
+        row.refNo, row.employeeCode, row.name, row.department, row.position, row.itemCount,
+        row.status, row.effectiveDate, row.expiryDate, row.reviewDue, row.daysToReview, row.bucket,
+      ]),
+    };
+  },
 };
 
 // ------------------------------------------------------------------
@@ -662,6 +680,11 @@ export const GET = apiHandler(
     // Audit-grade reports additionally require audit:read
     if ((report === "audit" || report === "vault-access") && !user.permissions.has("audit:read")) {
       throw new AuthError("FORBIDDEN:audit:read", 403);
+    }
+
+    // Access-review exposes access-request documents → require accessreq:read.
+    if (report === "access-review" && !user.permissions.has("accessreq:read")) {
+      throw new AuthError("FORBIDDEN:accessreq:read", 403);
     }
 
     const { headers, rows } = await builder(user);
