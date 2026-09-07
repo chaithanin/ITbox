@@ -51,3 +51,25 @@
     @apply bg-background text-foreground antialiased;
   }
 }
+
+/* Print / Print-to-PDF: hide app chrome so dashboards print as clean reports
+   (Executive Summary → KPIs → Charts → Detail, in document order). */
+@media print {
+  aside,
+  header,
+  .no-print {
+    display: none !important;
+  }
+  [data-app-content] {
+    padding-left: 0 !important;
+  }
+  main {
+    padding: 0 !important;
+  }
+  .print-avoid-break {
+    break-inside: avoid;
+  }
+  a[href]::after {
+    content: "";
+  }
+}

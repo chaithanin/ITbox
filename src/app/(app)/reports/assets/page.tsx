@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { StatCard } from "@/components/stat-card";
 import { StatusBadge } from "@/components/status-badge";
 import { ReportHeader, ExecutiveSummary, ChartCard } from "@/components/report/ui";
+import { PrintButton } from "@/components/report/print-button";
 import { Donut, Legend, HBars, type Segment } from "@/components/charts";
 import { SearchFilterBar, Pagination, parsePage } from "@/components/list-controls";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
@@ -99,8 +100,9 @@ export default async function AssetReport({ searchParams }: { searchParams: Prom
     <div>
       <Button variant="ghost" size="sm" asChild className="mb-2"><Link href="/reports"><ArrowLeft className="h-4 w-4" /> กลับ / Back</Link></Button>
       <PageHeader title="รายงานทรัพย์สิน / Asset Report" description="สรุป → กราฟ → รายละเอียด (รวมทะเบียน, ตามแผนก และรายการซ้ำไว้ในที่เดียว)">
-        <Button variant="outline" asChild><a href="/api/reports/assets?format=xlsx"><Download className="h-4 w-4" /> Excel</a></Button>
-        <Button variant="outline" asChild><a href="/api/reports/assets?format=pdf"><Download className="h-4 w-4" /> PDF</a></Button>
+        <PrintButton label="พิมพ์/บันทึก PDF" />
+        <Button variant="outline" asChild className="no-print"><a href="/api/reports/assets?format=xlsx"><Download className="h-4 w-4" /> Excel</a></Button>
+        <Button variant="outline" asChild className="no-print"><a href="/api/reports/assets?format=pdf"><Download className="h-4 w-4" /> PDF</a></Button>
       </PageHeader>
       <ReportHeader reportName="IT Asset Report" generatedBy={user.name} />
 

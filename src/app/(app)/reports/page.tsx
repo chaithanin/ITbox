@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { StatCard } from "@/components/stat-card";
 import { Card, CardContent } from "@/components/ui/card";
 import { ChartCard, ExecutiveSummary, AlertList, ReportHeader, type AlertEntry } from "@/components/report/ui";
+import { PrintButton } from "@/components/report/print-button";
 import { Donut, Legend, HBars, type Segment } from "@/components/charts";
 import { formatMoney } from "@/lib/utils";
 import {
@@ -92,14 +93,14 @@ export default async function ReportsDashboardPage({ searchParams }: { searchPar
   return (
     <div>
       <PageHeader title="IT Asset & IT Operations Dashboard" description="ภาพรวมสถานะ IT สำหรับผู้บริหาร — คลิก KPI/แจ้งเตือนเพื่อดูรายละเอียด">
-        <Button variant="outline" asChild><Link href="/reports/warranty">การรับประกัน / Warranty</Link></Button>
-        <Button variant="outline" asChild><Link href="/reports/export"><Download className="h-4 w-4" /> ส่งออกข้อมูลดิบ / Export</Link></Button>
+        <PrintButton label="พิมพ์/บันทึก PDF" />
+        <Button variant="outline" asChild className="no-print"><Link href="/reports/export"><Download className="h-4 w-4" /> ส่งออกข้อมูลดิบ / Export</Link></Button>
       </PageHeader>
 
       <ReportHeader reportName="IT Asset & IT Operations Dashboard" period={`ณ วันที่ / As of ${reportDate}`} generatedBy={user.name} />
 
       {/* Report navigator */}
-      <div className="mb-4 flex flex-wrap gap-2">
+      <div className="mb-4 flex flex-wrap gap-2 no-print">
         {[
           { href: "/reports/assets", label: "ทรัพย์สิน / Assets" },
           { href: "/reports/warranty", label: "การรับประกัน / Warranty" },
@@ -115,7 +116,7 @@ export default async function ReportsDashboardPage({ searchParams }: { searchPar
       </div>
 
       {/* Filters */}
-      <form method="get" className="mb-4 grid gap-2 rounded-lg border bg-card p-3 sm:grid-cols-3 lg:grid-cols-6">
+      <form method="get" className="mb-4 grid gap-2 rounded-lg border bg-card p-3 no-print sm:grid-cols-3 lg:grid-cols-6">
         <label className="text-xs">
           <span className="mb-1 block text-muted-foreground">วันที่ / Report Date</span>
           <input type="date" name="date" defaultValue={reportDate} className="w-full rounded-md border bg-background px-2 py-1.5 text-sm" />

@@ -38,7 +38,7 @@ export function AppShell({
         open={open}
         onClose={() => setOpen(false)}
       />
-      <div className="lg:pl-64">
+      <div className="lg:pl-64" data-app-content>
         <Topbar
           userName={userName}
           userEmail={userEmail}
