@@ -455,27 +455,53 @@ export function buildAccessMatrixPdf(d: DecodedMatrix): Promise<Buffer> {
 
     if (!d.hasAny) { ensure(16); doc.font(body).fontSize(9).fillColor("#6b7280").text("— ไม่ได้เลือกสิทธิ์ / No permissions selected —", left, y, { width, align: "center" }); y += 16; }
 
-    // signatures
-    ensure(56); y += 8;
-    const bw = width / 2;
+    // Signature block (width-aware so it works 2-up and 3-up).
     const nameTh = (r.nameTh || r.nameEn || "").trim();
     const today = fmtDate();
-    const sig = (bx: number, name: string, dateStr: string, role: string) => {
+    const sig = (bx: number, w: number, name: string, dateStr: string, role: string) => {
       doc.font(body).fontSize(8).fillColor("#111827");
-      doc.text("ลงชื่อ/Sign ............................................", bx, y + 4, { width: bw, align: "center", lineBreak: false });
-      doc.text(name ? `( ${name} )` : "(........................................................)", bx, y + 18, { width: bw, align: "center", lineBreak: false });
-      doc.fontSize(7.5).fillColor("#6b7280").text(`วันที่ / DD/MM/YYYY ${dateStr || "..................."}`, bx, y + 30, { width: bw, align: "center", lineBreak: false });
-      doc.fontSize(8).fillColor("#111827").text(role, bx, y + 40, { width: bw, align: "center", lineBreak: false });
+      doc.text("ลงชื่อ/Sign ...............................", bx, y + 4, { width: w, align: "center", lineBreak: false });
+      doc.text(name ? `( ${name} )` : "(..............................................)", bx, y + 18, { width: w, align: "center", lineBreak: false });
+      doc.fontSize(7.5).fillColor("#6b7280").text(`วันที่ / DD/MM/YYYY ${dateStr || "..............."}`, bx, y + 30, { width: w, align: "center", lineBreak: false });
+      doc.fontSize(8).fillColor("#111827").text(role, bx, y + 42, { width: w, align: "center", lineBreak: false });
     };
-    sig(left, nameTh, today, "ผู้ขอสิทธิ์ใช้งาน / License Requester");
-    sig(left + bw, "", "", "ผู้จัดการแผนก / Department Manager");
-    y += 56;
 
-    ensure(30);
-    doc.font(body).fontSize(7).fillColor("#6b7280");
-    doc.text("(1) ผู้ดูแลระบบจะตรวจสอบและเปิดสิทธิ์ภายใน 3 วันทำการ", left, y, { width }); y = doc.y;
-    doc.text("(2) ผู้ขอสิทธิ์ต้องยืนยันตัวตนก่อนการเข้าใช้งานทุกครั้ง", left, y, { width }); y = doc.y;
-    doc.text("(3) สิทธิ์ใช้งานมีอายุไม่เกิน 1 ปีนับจากวันยื่นขอ", left, y, { width });
+    // Requester + Department Manager signatures.
+    ensure(60); y += 8;
+    const bw2 = width / 2;
+    sig(left, bw2, nameTh, today, "ผู้ขอสิทธิ์ใช้งาน / License Requester");
+    sig(left + bw2, bw2, "", "", "ผู้จัดการแผนก / Department Manager");
+    y += 60;
+
+    // Conditions (1)–(4), bilingual.
+    const note = (th: string, en: string) => {
+      ensure(24);
+      doc.font(body).fontSize(7).fillColor("#111827").text(th, left, y, { width }); y = doc.y;
+      doc.fillColor("#6b7280").text(en, left, y, { width }); y = doc.y + 2; doc.fillColor("#111827");
+    };
+    ensure(12); doc.font(body).fontSize(7.5).fillColor("#374151").text("เงื่อนไข / Conditions", left, y, { width, lineBreak: false }); y += 11;
+    note("(1) ผู้ดูแลระบบจะตรวจสอบความถูกต้อง และเปิดสิทธิ์การใช้งานระบบภายใน 3 วันทำการ",
+      "The administrator will verify and activate the system license within 3 working days.");
+    note("(2) ผู้ขอสิทธิ์จะต้องทำการยืนยันตัวตนก่อนการเข้าใช้งานทุกครั้ง",
+      "The requester must verify identity before accessing every time.");
+    note("(3) ผู้ขอสิทธิ์สามารถเข้าใช้งานระบบได้ไม่เกิน 1 ปีนับจากวันที่ยื่นขอสิทธิ์ หากมีความประสงค์ที่จะใช้งานระบบต่อ กรุณายื่นเอกสารขอเปิดสิทธิ์ใหม่อีกครั้ง",
+      "The applicant can access the system for no more than 1 year from the date of application submission. If you wish to continue using the system, please submit the documents requesting to reactivate the privilege again.");
+    note("(4) เอกสารการขอสิทธิ์จะได้รับการดำเนินการก็ต่อเมื่อ ผู้จัดการแผนกได้ลงนามอนุมัติในเอกสารนี้เท่านั้น หากมิได้มีการลงนามจากผู้จัดการแผนก ถือว่าเอกสารนี้ไม่สมบูรณ์ และจะไม่ได้รับสิทธิ์การเข้าถึงข้อมูลตามที่ร้องขอ",
+      "Authorization documents will only be processed if the Department Manager has signed and approved this document. Without the signature of the Department Manager, this document is considered incomplete and will not be given the requested access rights.");
+    y += 4;
+
+    // Section 4 — For Access Administrators (checklist + 3 signatures).
+    bar("4. สำหรับเจ้าหน้าที่สิทธิ์ผู้ดูแลระบบ / For Access Administrators");
+    const bullet = (t: string) => { ensure(22); doc.font(body).fontSize(8).fillColor("#111827").text(`•  ${t}`, left + 4, y, { width: width - 8 }); y = doc.y + 2; };
+    bullet("ตรวจสอบความถูกต้อง / Check the Correctness");
+    bullet("ยกเลิกสิทธิ์ หรือ บันทึก User & Password เรียบร้อยแล้ว / Close permissions or Save User & Password successfully");
+    y += 8;
+    ensure(60);
+    const bw3 = width / 3;
+    sig(left, bw3, "", "", "ผู้ตรวจสอบ / IT Support");
+    sig(left + bw3, bw3, "", "", "หัวหน้าแผนก / IT Manager");
+    sig(left + bw3 * 2, bw3, "", "", "ฝ่ายบริหาร / Management");
+    y += 60;
 
     doc.end();
   });

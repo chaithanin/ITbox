@@ -199,11 +199,37 @@ export function AccessMatrixForm({ defaults }: { defaults?: { name?: string } })
         </CardContent>
       </Card>
 
-      <div className="rounded-md border bg-muted/20 p-3 text-xs text-muted-foreground">
-        <p>(1) ผู้ดูแลระบบจะตรวจสอบและเปิดสิทธิ์ภายใน 3 วันทำการ / The administrator will verify and activate within 3 working days.</p>
-        <p>(2) ผู้ขอสิทธิ์ต้องยืนยันตัวตนก่อนการเข้าใช้งานทุกครั้ง / The requester must verify identity before each access.</p>
-        <p>(3) สิทธิ์ใช้งานมีอายุไม่เกิน 1 ปีนับจากวันยื่นขอ หากต้องการใช้ต่อกรุณายื่นใหม่ / Access is valid up to 1 year; re-apply to continue.</p>
+      <div className="space-y-1.5 rounded-md border bg-muted/20 p-3 text-xs text-muted-foreground">
+        <p><span className="font-medium text-foreground">(1)</span> ผู้ดูแลระบบจะตรวจสอบความถูกต้อง และเปิดสิทธิ์การใช้งานระบบภายใน 3 วันทำการ<br /><span className="opacity-80">The administrator will verify and activate the system license within 3 working days.</span></p>
+        <p><span className="font-medium text-foreground">(2)</span> ผู้ขอสิทธิ์จะต้องทำการยืนยันตัวตนก่อนการเข้าใช้งานทุกครั้ง<br /><span className="opacity-80">The requester must verify identity before accessing every time.</span></p>
+        <p><span className="font-medium text-foreground">(3)</span> ผู้ขอสิทธิ์สามารถเข้าใช้งานระบบได้ไม่เกิน 1 ปีนับจากวันที่ยื่นขอสิทธิ์ หากมีความประสงค์ที่จะใช้งานระบบต่อ กรุณายื่นเอกสารขอเปิดสิทธิ์ใหม่อีกครั้ง<br /><span className="opacity-80">The applicant can access the system for no more than 1 year from the date of application submission. If you wish to continue using the system, please submit the documents requesting to reactivate the privilege again.</span></p>
+        <p><span className="font-medium text-foreground">(4)</span> เอกสารการขอสิทธิ์จะได้รับการดำเนินการก็ต่อเมื่อ ผู้จัดการแผนกได้ลงนามอนุมัติในเอกสารนี้เท่านั้น หากมิได้มีการลงนามจากผู้จัดการแผนก ถือว่าเอกสารนี้ไม่สมบูรณ์ และจะไม่ได้รับสิทธิ์การเข้าถึงข้อมูลตามที่ร้องขอ<br /><span className="opacity-80">Authorization documents will only be processed if the Department Manager has signed and approved this document. Without the signature of the Department Manager, this document is considered incomplete and will not be given the requested access rights.</span></p>
       </div>
+
+      {/* 4. For Access Administrators */}
+      <Card className="print-avoid-break">
+        <CardContent className="p-6">
+          <p className="mb-3 text-sm font-semibold">4. สำหรับเจ้าหน้าที่สิทธิ์ผู้ดูแลระบบ / For Access Administrators</p>
+          <ul className="mb-5 space-y-1 text-xs text-muted-foreground">
+            <li>• ตรวจสอบความถูกต้อง / Check the Correctness</li>
+            <li>• ยกเลิกสิทธิ์ หรือ บันทึก User &amp; Password เรียบร้อยแล้ว / Close permissions or Save User &amp; Password successfully</li>
+          </ul>
+          <div className="grid gap-8 sm:grid-cols-3">
+            {[
+              "ผู้ตรวจสอบ / IT Support",
+              "หัวหน้าแผนก / IT Manager",
+              "ฝ่ายบริหาร / Management",
+            ].map((role) => (
+              <div key={role} className="text-center text-xs">
+                <p>ลงชื่อ /Sign ...................................</p>
+                <p className="mt-3">(..............................................)</p>
+                <p className="mt-2 text-muted-foreground">DD/MM/YYYY .......................</p>
+                <p className="mt-1 font-medium">{role}</p>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
 
       <div className="flex justify-end gap-2 no-print">
         <Button type="submit" variant="outline" formAction="/api/doc-forms/access-matrix-pdf" formMethod="post" formTarget="_blank">พิมพ์ / บันทึก PDF (เฉพาะที่เลือก)</Button>
