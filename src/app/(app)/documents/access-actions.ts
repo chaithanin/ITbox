@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/session";
 import { auditLog } from "@/lib/audit";
+import { generateAccessRefNo } from "@/lib/documents/access-ref";
 
 const LEVELS = ["L0", "L1", "L2", "L3", "L4", "L5", "L6", "IT_ADMIN"] as const;
 const SOURCES = ["DEFAULT", "ADDITIONAL", "RESTRICTED"] as const;
@@ -52,7 +53,7 @@ export async function submitAccessRequest(formData: FormData) {
   const request = await prisma.accessRequest.create({
     data: {
       organizationId: org,
-      refNo: str(formData, "refNo"),
+      refNo: str(formData, "refNo") || (await generateAccessRefNo(org)),
       employeeId, employeeCode,
       nameTh: str(formData, "nameTh"),
       nameEn: str(formData, "nameEn"),
@@ -137,7 +138,7 @@ export async function submitAccessMatrix(formData: FormData) {
   const request = await prisma.accessRequest.create({
     data: {
       organizationId: org,
-      refNo: str(formData, "refNo"),
+      refNo: str(formData, "refNo") || (await generateAccessRefNo(org)),
       employeeId, employeeCode,
       nameTh: str(formData, "nameTh"), nameEn: str(formData, "nameEn"),
       phone: str(formData, "phone"), email: str(formData, "email"),

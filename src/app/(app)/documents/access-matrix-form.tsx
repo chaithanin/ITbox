@@ -42,7 +42,7 @@ export function AccessMatrixForm({ defaults }: { defaults?: { name?: string } })
         <CardContent className="p-4">
           <p className="mb-3 text-sm font-semibold">1. สำหรับผู้ขอสิทธิ์ / Requester Information</p>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            <Field name="refNo" label="Ref No" />
+            <Field name="refNo" label="Ref No (เว้นว่างเพื่อออกอัตโนมัติ REQ…)" placeholder="อัตโนมัติ เช่น REQ070926-01" />
             <StaffIdField name="employeeCode" label="รหัสพนักงาน / Staff ID" />
             <Field name="startWork" label="เริ่มงาน / Start work (dd/mm/yyyy)" />
             <Field name="nameTh" label="ชื่อ-สกุลภาษาไทย (นาย/นาง/นางสาว)" />
@@ -187,13 +187,13 @@ export function AccessMatrixForm({ defaults }: { defaults?: { name?: string } })
           <div className="text-center text-xs">
             <p>ลงชื่อ /Sign ..............................................</p>
             <p className="mt-3">(........................................................)</p>
-            <p className="mt-2 text-muted-foreground">DD/MM/YYYY .............................</p>
+            <p className="mt-2 text-muted-foreground">วันที่ / Date .............................</p>
             <p className="mt-1 font-medium">ผู้ขอสิทธิ์ใช้งาน / License Requester</p>
           </div>
           <div className="text-center text-xs">
             <p>ลงชื่อ /Sign ..............................................</p>
             <p className="mt-3">(........................................................)</p>
-            <p className="mt-2 text-muted-foreground">DD/MM/YYYY .............................</p>
+            <p className="mt-2 text-muted-foreground">วันที่ / Date .............................</p>
             <p className="mt-1 font-medium">ผู้จัดการแผนก / Department Manager</p>
           </div>
         </CardContent>
@@ -223,7 +223,7 @@ export function AccessMatrixForm({ defaults }: { defaults?: { name?: string } })
               <div key={role} className="text-center text-xs">
                 <p>ลงชื่อ /Sign ...................................</p>
                 <p className="mt-3">(..............................................)</p>
-                <p className="mt-2 text-muted-foreground">DD/MM/YYYY .......................</p>
+                <p className="mt-2 text-muted-foreground">วันที่ / Date .......................</p>
                 <p className="mt-1 font-medium">{role}</p>
               </div>
             ))}

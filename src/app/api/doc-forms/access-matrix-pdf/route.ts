@@ -3,6 +3,7 @@ import { apiHandler } from "@/lib/api";
 import { requireUser } from "@/lib/session";
 import { decodeMatrix } from "@/lib/documents/access-matrix-decode";
 import { buildAccessMatrixPdf } from "@/lib/documents/pdf";
+import { generateAccessRefNo } from "@/lib/documents/access-ref";
 
 export const dynamic = "force-dynamic";
 
@@ -12,9 +13,13 @@ export const dynamic = "force-dynamic";
  * menus/permissions. The matrix form posts its fields here (target=_blank).
  */
 export const POST = apiHandler(async (req: Request) => {
-  await requireUser();
+  const user = await requireUser();
   const fd = await req.formData();
   const decoded = decodeMatrix(fd);
+  // Auto-assign the daily-sequenced Ref No (REQ{DDMMYY}-{NN}) when left blank.
+  if (!decoded.requester.refNo) {
+    decoded.requester.refNo = await generateAccessRefNo(user.organizationId);
+  }
   const pdf = await buildAccessMatrixPdf(decoded);
   return new NextResponse(new Uint8Array(pdf), {
     status: 200,

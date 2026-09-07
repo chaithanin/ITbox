@@ -249,7 +249,7 @@ export function buildDocumentPdf(form: FormDef, v: ValueSource): Promise<Buffer>
           } else {
             doc.text("(........................................................)", bx, y + 18, { width: blockW, align: "center", lineBreak: false });
           }
-          doc.fontSize(7.5).fillColor("#6b7280").text(`วันที่ / DD/MM/YYYY ${dateStr || "..................."}`, bx, y + 30, { width: blockW, align: "center", lineBreak: false });
+          doc.fontSize(7.5).fillColor("#6b7280").text(`วันที่ / Date ${dateStr || "..............................."}`, bx, y + 30, { width: blockW, align: "center", lineBreak: false });
           doc.fontSize(8).fillColor("#111827").text(SIGNATURE_LABEL[role], bx, y + 40, { width: blockW, align: "center", lineBreak: false });
         }
         y += blockH + 6;
@@ -368,7 +368,7 @@ export function buildAccessRequestPdf(d: AccessPdfData): Promise<Buffer> {
         } else {
           doc.text("(........................................................)", bx, y + 18, { width: bw, align: "center", lineBreak: false });
         }
-        doc.fontSize(7.5).fillColor("#6b7280").text(`วันที่ / DD/MM/YYYY ${dateStr || "..................."}`, bx, y + 30, { width: bw, align: "center", lineBreak: false });
+        doc.fontSize(7.5).fillColor("#6b7280").text(`วันที่ / Date ${dateStr || "..............................."}`, bx, y + 30, { width: bw, align: "center", lineBreak: false });
         doc.fontSize(8).fillColor("#111827").text(roles[i + j], bx, y + 40, { width: bw, align: "center", lineBreak: false });
       }
       y += bh + 6;
@@ -462,7 +462,7 @@ export function buildAccessMatrixPdf(d: DecodedMatrix): Promise<Buffer> {
       doc.font(body).fontSize(8).fillColor("#111827");
       doc.text("ลงชื่อ/Sign ...............................", bx, y + 4, { width: w, align: "center", lineBreak: false });
       doc.text(name ? `( ${name} )` : "(..............................................)", bx, y + 18, { width: w, align: "center", lineBreak: false });
-      doc.fontSize(7.5).fillColor("#6b7280").text(`วันที่ / DD/MM/YYYY ${dateStr || "..............."}`, bx, y + 30, { width: w, align: "center", lineBreak: false });
+      doc.fontSize(7.5).fillColor("#6b7280").text(`วันที่ / Date ${dateStr || "..............................."}`, bx, y + 30, { width: w, align: "center", lineBreak: false });
       doc.fontSize(8).fillColor("#111827").text(role, bx, y + 42, { width: w, align: "center", lineBreak: false });
     };
 
