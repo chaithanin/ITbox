@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
  * and employment status current. Authenticated by the org collector API key.
  *
  * Body: { employees: [{
- *   employeeCode, firstName, lastName, email?, phone?, position?,
+ *   employeeCode, firstName, lastName, nickname?, email?, phone?, position?,
  *   department?(code or name), location?(code or name), managerCode?,
  *   status?("ACTIVE"|"TERMINATED"|"ON_LEAVE"|"OFFBOARDING"|"RESIGNED"),
  *   hireDate?(ISO), terminationDate?(ISO)
@@ -112,7 +112,7 @@ export async function POST(req: Request) {
         select: { id: true, departmentId: true, position: true, firstName: true, lastName: true, status: true },
       });
       const data = {
-        firstName, lastName,
+        firstName, lastName, nickname: str(e.nickname, 100),
         email: str(e.email, 200), phone: str(e.phone, 50),
         position, status,
         startDate: date(e.hireDate), endDate: date(e.terminationDate),

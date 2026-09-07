@@ -28,21 +28,30 @@ export const GET = apiHandler(async (req: Request) => {
     select: {
       firstName: true,
       lastName: true,
+      nickname: true,
       position: true,
       phone: true,
       email: true,
+      startDate: true,
       department: { select: { name: true } },
     },
   });
 
   if (!emp) return NextResponse.json({ found: false });
 
+  // Start-work is rendered dd/mm/yyyy to match the document forms' field.
+  const startWork = emp.startDate
+    ? `${String(emp.startDate.getDate()).padStart(2, "0")}/${String(emp.startDate.getMonth() + 1).padStart(2, "0")}/${emp.startDate.getFullYear()}`
+    : null;
+
   return NextResponse.json({
     found: true,
     name: `${emp.firstName} ${emp.lastName}`.trim(),
+    nickname: emp.nickname ?? null,
     department: emp.department?.name ?? null,
     position: emp.position ?? null,
     phone: emp.phone ?? null,
     email: emp.email ?? null,
+    startWork,
   });
 });

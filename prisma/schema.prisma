@@ -306,6 +306,7 @@ model Employee {
   employeeCode   String
   firstName      String
   lastName       String
+  nickname       String?
   email          String?
   phone          String?
   position       String?

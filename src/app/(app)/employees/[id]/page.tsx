@@ -203,6 +203,10 @@ export default async function EmployeeDetailPage({
         <CardContent>
           <dl className="grid grid-cols-1 gap-x-6 gap-y-3 text-sm sm:grid-cols-2 lg:grid-cols-3">
             <div>
+              <dt className="text-muted-foreground">ชื่อเล่น / Nickname</dt>
+              <dd>{employee.nickname ?? "-"}</dd>
+            </div>
+            <div>
               <dt className="text-muted-foreground">อีเมล / Email</dt>
               <dd>{employee.email ?? "-"}</dd>
             </div>

@@ -28,18 +28,21 @@ export function StaffIdField({ name, label }: { name: string; label: string }) {
     try {
       const res = await fetch(`/api/doc-forms/lookup?code=${encodeURIComponent(code)}`);
       const data = (await res.json()) as {
-        found: boolean; name?: string; department?: string | null;
+        found: boolean; name?: string; nickname?: string | null; department?: string | null;
         position?: string | null; phone?: string | null; email?: string | null;
+        startWork?: string | null;
       };
       if (!data.found) { setStatus("notfound"); return; }
       // Fill both TH/EN name fields (the directory keeps a single name).
       setIfEmpty(form, "nameTh", data.name ?? null);
       setIfEmpty(form, "nameEn", data.name ?? null);
+      setIfEmpty(form, "nickName", data.nickname ?? null);
       setIfEmpty(form, "department2", data.department ?? null);
       setIfEmpty(form, "department", data.department ?? null);
       setIfEmpty(form, "position", data.position ?? null);
       setIfEmpty(form, "phone", data.phone ?? null);
       setIfEmpty(form, "email", data.email ?? null);
+      setIfEmpty(form, "startWork", data.startWork ?? null);
       setStatus("found");
     } catch {
       setStatus("idle");
