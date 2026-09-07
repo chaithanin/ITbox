@@ -7,6 +7,7 @@ import { auditLog } from "@/lib/audit";
 import { formatDate, formatDateTime } from "@/lib/utils";
 import { PageHeader } from "@/components/page-header";
 import { StatusBadge } from "@/components/status-badge";
+import { Badge } from "@/components/ui/badge";
 import { ConfirmButton } from "@/components/confirm-button";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -18,7 +19,8 @@ import {
   TableHead,
   TableCell,
 } from "@/components/ui/table";
-import { softDeleteEmployee, startOffboarding } from "../actions";
+import { softDeleteEmployee, startOffboarding, applyDefaultProfile } from "../actions";
+import { resolveAccessProfile } from "@/lib/documents/access-profile";
 
 const DELETE_ERRORS: Record<string, string> = {
   active: "ลบไม่ได้: พนักงานยังสถานะ ACTIVE — ตั้งเป็นลาออก/ทำ Offboarding ก่อน / Cannot delete an ACTIVE employee — resign or run Offboarding first.",
@@ -134,10 +136,24 @@ export default async function EmployeeDetailPage({
 
   const fullName = `${employee.firstName} ${employee.lastName}`;
 
+  // Access & Permissions (Phase C/E): matched default profile + current roles.
+  const canManageAccess = user.permissions.has("permprofile:manage");
+  const [defaultProfile, userRoles] = await Promise.all([
+    canManageAccess ? resolveAccessProfile(user.organizationId, { department: employee.department?.name ?? null, position: employee.position ?? null }) : Promise.resolve(null),
+    employee.user ? prisma.userRole.findMany({ where: { userId: employee.user.id }, select: { role: { select: { key: true, name: true } } } }) : Promise.resolve([]),
+  ]);
+  const applyProfile = applyDefaultProfile.bind(null, employee.id);
+
   return (
     <div className="space-y-5">
       {deleteError && (
         <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">{deleteError}</p>
+      )}
+      {sp.access === "applied" && (
+        <p className="rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-700 dark:text-emerald-400">ใช้โปรไฟล์สิทธิ์เริ่มต้นแล้ว (เพิ่มแบบไม่ทับของเดิม){sp.role ? ` · role: ${sp.role}` : ""} — บันทึกใน Audit Log</p>
+      )}
+      {sp.access === "no-profile" && (
+        <p className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-400">ไม่พบ Default Profile ที่ตรงกับแผนก/ตำแหน่งนี้ — สร้าง/ปรับได้ที่ Default Permission</p>
       )}
       <PageHeader title={fullName} description={`${employee.employeeCode} · ${employee.position ?? "-"}`}>
         {user.permissions.has("employee:update") && (
@@ -427,6 +443,49 @@ export default async function EmployeeDetailPage({
                   ))}
                 </TableBody>
               </Table>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {canManageAccess && (
+        <Card>
+          <CardHeader>
+            <CardTitle>สิทธิ์การใช้งาน / Access & Permissions</CardTitle>
+            <CardDescription>สิทธิ์ในระบบปัจจุบัน และโปรไฟล์เริ่มต้นตามตำแหน่ง (Least Privilege)</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <p className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">บัญชีในระบบ / Login Account</p>
+                {employee.user ? (
+                  <div className="text-sm">
+                    <p>{employee.user.email} · <span className={employee.user.status === "ACTIVE" ? "text-emerald-600 dark:text-emerald-400" : "text-destructive"}>{employee.user.status}</span></p>
+                    <p className="mt-1 flex flex-wrap gap-1">
+                      {userRoles.length === 0 ? <span className="text-muted-foreground">ยังไม่มี role</span> : userRoles.map((r) => <Badge key={r.role.key} variant="secondary">{r.role.key}</Badge>)}
+                    </p>
+                  </div>
+                ) : <p className="text-sm text-muted-foreground">ยังไม่ผูกบัญชีเข้าสู่ระบบ / No linked login account</p>}
+              </div>
+              <div>
+                <p className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">Default Profile (ตาม {employee.department?.name ?? "—"} / {employee.position ?? "—"})</p>
+                {defaultProfile?.matched ? (
+                  <div className="text-sm">
+                    <p className="font-medium">{defaultProfile.code ? `${defaultProfile.code} · ` : ""}{defaultProfile.profileName}</p>
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      role: {defaultProfile.roleKey ?? "—"} · scope: {defaultProfile.projectScope ?? "—"} · {defaultProfile.items.length} สิทธิ์ระบบภายนอก · match: {defaultProfile.matchLevel}
+                    </p>
+                  </div>
+                ) : <p className="text-sm text-muted-foreground">ไม่พบโปรไฟล์ที่ตรง / No matching default profile</p>}
+              </div>
+            </div>
+            {defaultProfile?.matched && (
+              <form action={applyProfile}>
+                <Button type="submit" size="sm" variant="outline" disabled={!employee.user && !defaultProfile.items.length}>
+                  ใช้โปรไฟล์เริ่มต้น (เพิ่มแบบไม่ทับของเดิม) / Apply default (additive)
+                </Button>
+                <span className="ml-2 text-xs text-muted-foreground">เพิ่ม role ในระบบ + เตรียมคำขอสิทธิ์ระบบภายนอก · ไม่ลบสิทธิ์เดิม · บันทึก Audit</span>
+              </form>
             )}
           </CardContent>
         </Card>

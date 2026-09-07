@@ -48,6 +48,9 @@ export interface ResolvedProfile {
   matchLevel: string; // which fallback tier matched
   profileId: string | null;
   profileName: string | null;
+  code: string | null;
+  roleKey: string | null;
+  projectScope: string | null;
   items: ResolvedItem[];
   approval: {
     manager: boolean;
@@ -98,6 +101,9 @@ export async function resolveAccessProfile(orgId: string, c: Criteria): Promise<
         matchLevel: tier.label,
         profileId: profile.id,
         profileName: profile.name,
+        code: profile.code,
+        roleKey: profile.roleKey,
+        projectScope: profile.projectScope,
         items: profile.items.map((i) => ({ system: i.system, resource: i.resource, permissionLevel: i.permissionLevel, defaultStatus: i.defaultStatus, requiresApproval: i.requiresApproval })),
         approval: {
           manager: profile.requiresManagerApproval,
@@ -109,7 +115,7 @@ export async function resolveAccessProfile(orgId: string, c: Criteria): Promise<
     }
   }
 
-  return { matched: false, matchLevel: "none", profileId: null, profileName: null, items: [], approval: { manager: true, systemOwner: false, itManager: false, management: false } };
+  return { matched: false, matchLevel: "none", profileId: null, profileName: null, code: null, roleKey: null, projectScope: null, items: [], approval: { manager: true, systemOwner: false, itManager: false, management: false } };
 }
 
 // Drop undefined criteria so an unset tier field is not matched as NULL.

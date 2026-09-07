@@ -318,3 +318,59 @@ export async function startOffboarding(formData: FormData) {
   revalidatePath("/offboarding");
   redirect(`/offboarding/${offboarding.id}`);
 }
+
+// ===========================================================================
+// Apply the position's Default Permission profile to an employee's login user.
+// ADDITIVE ONLY — it never removes existing roles (manual grants are preserved),
+// never assigns an admin role, and audits every grant. External-system items
+// are filed as an AccessRequest for the normal provisioning workflow.
+// ===========================================================================
+export async function applyDefaultProfile(employeeId: string) {
+  const user = await requirePermission("permprofile:manage");
+  const org = user.organizationId;
+  const { resolveAccessProfile } = await import("@/lib/documents/access-profile");
+
+  const emp = await prisma.employee.findFirst({
+    where: { id: employeeId, organizationId: org, deletedAt: null },
+    select: { id: true, firstName: true, lastName: true, position: true, userId: true, employeeCode: true, department: { select: { name: true } } },
+  });
+  if (!emp) redirect("/employees");
+
+  const resolved = await resolveAccessProfile(org, { department: emp.department?.name ?? null, position: emp.position ?? null });
+  if (!resolved.matched) redirect(`/employees/${employeeId}?access=no-profile`);
+
+  const BLOCKED = new Set(["ADMIN", "SUPER_ADMIN"]);
+  let grantedRole: string | null = null;
+
+  // 1) In-app role (additive) — only if the employee has a linked login account.
+  if (emp.userId && resolved.roleKey && !BLOCKED.has(resolved.roleKey)) {
+    const role = await prisma.role.findFirst({ where: { organizationId: org, key: resolved.roleKey }, select: { id: true } });
+    if (role) {
+      const already = await prisma.userRole.findFirst({ where: { userId: emp.userId, roleId: role.id }, select: { userId: true } });
+      if (!already) {
+        await prisma.userRole.create({ data: { userId: emp.userId, roleId: role.id } });
+        grantedRole = resolved.roleKey;
+        await auditLog(user, { action: "PERMISSION_GRANTED", entityType: "USER", entityId: emp.userId, detail: { role: resolved.roleKey, source: "DEFAULT_POSITION_PROFILE", profile: resolved.code ?? resolved.profileName, employeeId } });
+      }
+    }
+  }
+
+  // 2) External-system items → a persisted AccessRequest (provisioning workflow).
+  const extItems = resolved.items.filter((i) => i.defaultStatus !== "NOT_ALLOWED");
+  if (extItems.length) {
+    const req = await prisma.accessRequest.create({
+      data: {
+        organizationId: org, employeeId: emp.id, employeeCode: emp.employeeCode,
+        nameTh: `${emp.firstName} ${emp.lastName}`, department: emp.department?.name ?? null, position: emp.position ?? null,
+        businessJustification: `Auto-prepared from default profile ${resolved.code ?? resolved.profileName}`,
+        status: "SUBMITTED", createdById: user.id,
+        items: { create: extItems.map((i) => ({ system: i.system, resource: i.resource, permissionLevel: i.permissionLevel, source: "DEFAULT" as const })) },
+      },
+      select: { id: true },
+    });
+    await auditLog(user, { action: "PROFILE_ASSIGNED", entityType: "ACCESS_REQUEST", entityId: req.id, detail: { profile: resolved.code ?? resolved.profileName, items: extItems.length, employeeId } });
+  }
+
+  revalidatePath(`/employees/${employeeId}`);
+  redirect(`/employees/${employeeId}?access=applied&role=${grantedRole ?? ""}`);
+}
