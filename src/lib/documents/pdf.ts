@@ -3,6 +3,7 @@ import path from "node:path";
 import PDFDocument from "pdfkit";
 import type { FormDef, OptionGroup, Section, SignatureRole, TableSpec } from "./forms";
 import { SIGNATURE_LABEL } from "./forms";
+import type { DecodedMatrix } from "./access-matrix-decode";
 
 function loadThaiFont(): Buffer | null {
   try { return fs.readFileSync(path.join(process.cwd(), "src/assets/fonts/NotoSansThai-Regular.ttf")); }
@@ -372,6 +373,110 @@ export function buildAccessRequestPdf(d: AccessPdfData): Promise<Buffer> {
       }
       y += bh + 6;
     }
+    doc.end();
+  });
+}
+
+// ---------------------------------------------------------------------------
+// ERP access-matrix PDF (form 4.A) — renders ONLY the selected permissions,
+// grouped by module, matching the company form layout.
+// ---------------------------------------------------------------------------
+export function buildAccessMatrixPdf(d: DecodedMatrix): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const thai = loadThaiFont();
+    const serif = loadSerifFont();
+    const margin = 40;
+    const doc = new PDFDocument({ size: "A4", margin, font: "" });
+    const chunks: Buffer[] = [];
+    doc.on("data", (c) => chunks.push(c));
+    doc.on("end", () => resolve(Buffer.concat(chunks)));
+    doc.on("error", reject);
+    if (thai) doc.registerFont("th", thai);
+    const logoFont = serif ? "serif" : thai ? "th" : "Helvetica";
+    if (serif) doc.registerFont("serif", serif);
+    const body = thai ? "th" : "Helvetica";
+    const left = margin, width = doc.page.width - margin * 2, bottom = doc.page.height - margin;
+    let y = margin;
+    const ensure = (h: number) => { if (y + h > bottom) { doc.addPage(); y = margin; } };
+    const r = d.requester;
+
+    // header (CHTNN wordmark)
+    doc.font(logoFont).fillColor("#111827");
+    const big = 22, sm = 15, kern = 3;
+    const wCH = doc.fontSize(sm).widthOfString("CH"), wT = doc.fontSize(big).widthOfString("T"), wNN = doc.fontSize(sm).widthOfString("NN");
+    let gx = left + (width - (wCH + kern + wT + kern + wNN)) / 2;
+    doc.fontSize(sm).text("CH", gx, margin + (big - sm) * 0.62, { lineBreak: false }); gx += wCH + kern;
+    doc.fontSize(big).text("T", gx, margin, { lineBreak: false }); gx += wT + kern;
+    doc.fontSize(sm).text("NN", gx, margin + (big - sm) * 0.62, { lineBreak: false });
+    doc.font(logoFont).fontSize(10).text("Chaithanin Co.,Ltd.", left, margin + big + 1, { width, align: "center", lineBreak: false });
+    doc.font(body).fontSize(8).fillColor("#374151").text(`Ref No : ${r.refNo || "________"}`, left, margin + 2, { width, align: "right", lineBreak: false });
+    y = margin + 40;
+    doc.font(body).fillColor("#111827").fontSize(13).text("แบบฟอร์มขอสิทธิ์การใช้งานระบบสารสนเทศ", left, y, { width, align: "center" });
+    y = doc.y + 1;
+    doc.fontSize(9).fillColor("#4b5563").text("Information System Access Request", left, y, { width, align: "center" });
+    y = doc.y + 8; doc.fillColor("#111827");
+
+    const bar = (t: string) => { ensure(18); doc.rect(left, y, width, 15).fill("#e5edff"); doc.fillColor("#1e3a8a").font(body).fontSize(9).text(t, left + 5, y + 3, { width: width - 10, lineBreak: false }); y += 20; doc.fillColor("#111827"); };
+    const kv = (label: string, val: string, x: number, w: number) => { doc.font(body).fontSize(8.5).fillColor("#111827").text(`${label}: `, x, y, { width: w, continued: true, lineBreak: false }); doc.fillColor("#1d4ed8").text(val || "—", { lineBreak: false }); doc.fillColor("#111827"); };
+
+    // requester
+    bar("สำหรับผู้ขอสิทธิ์ / Requester Information");
+    ensure(15); kv("รหัสพนักงาน / Staff ID", r.employeeCode, left, width / 2); kv("เริ่มงาน / Start", r.startWork, left + width / 2, width / 2); y += 15;
+    ensure(15); kv("ชื่อ-สกุล (TH)", r.nameTh, left, width / 2); kv("ชื่อเล่น / Nickname", r.nickName, left + width / 2, width / 2); y += 15;
+    ensure(15); kv("ชื่อ-สกุล (EN)", r.nameEn, left, width); y += 15;
+    ensure(15); kv("เบอร์โทร / Phone", r.phone, left, width / 2); kv("อีเมล / Email", r.email, left + width / 2, width / 2); y += 15;
+    ensure(15); kv("ตำแหน่ง / Position", r.position, left, width / 2); kv("แผนก / Department", r.department, left + width / 2, width / 2); y += 15;
+    if (d.departments.length) { ensure(14); kv("แผนกที่เกี่ยวข้อง / Departments", d.departments.join(", "), left, width); y += 15; }
+    if (r.note) { ensure(14); kv("หมายเหตุ / Note", r.note, left, width); y += 15; }
+    y += 4;
+
+    const item = (text: string, tail?: string) => {
+      ensure(13);
+      doc.font(body).fontSize(8.5).fillColor("#111827").text(`•  ${text}`, left + 4, y, { width: width * 0.66, lineBreak: false, ellipsis: true });
+      if (tail) doc.fillColor("#1d4ed8").fontSize(8).text(tail, left + width * 0.68, y, { width: width * 0.32, lineBreak: false, ellipsis: true });
+      doc.fillColor("#111827"); y += 13;
+    };
+
+    // ERP modules (selected only)
+    if (d.modules.length) {
+      bar("สิทธิ์การใช้งานรายเมนู (ERP) / Per-menu Permissions");
+      for (const m of d.modules) {
+        ensure(15);
+        doc.font(body).fontSize(9).fillColor("#111827").text(m.title, left, y, { width, lineBreak: false, ellipsis: true }); y += 13;
+        if (m.moduleAccess) item("เข้าใช้งาน Module นี้ / Module Access", "✔");
+        for (const mn of m.menus) item(mn.label, mn.flags.join(", "));
+        y += 3;
+      }
+    }
+    // Online Marketing / Sales / Rental (selected only)
+    if (d.marketing.length) { bar("Online Marketing Permission"); for (const x of d.marketing) item(x.label, x.cols.join(", ")); }
+    if (d.sales.length) { bar("Sales Permission / Venio CRM"); for (const x of d.sales) item(x.label, x.cols.join(", ")); }
+    if (d.rental.length) { bar("Rental Permission / Horganice"); for (const x of d.rental) item(x.label, x.cols.join(", ")); }
+
+    if (!d.hasAny) { ensure(16); doc.font(body).fontSize(9).fillColor("#6b7280").text("— ไม่ได้เลือกสิทธิ์ / No permissions selected —", left, y, { width, align: "center" }); y += 16; }
+
+    // signatures
+    ensure(56); y += 8;
+    const bw = width / 2;
+    const nameTh = (r.nameTh || r.nameEn || "").trim();
+    const today = fmtDate();
+    const sig = (bx: number, name: string, dateStr: string, role: string) => {
+      doc.font(body).fontSize(8).fillColor("#111827");
+      doc.text("ลงชื่อ/Sign ............................................", bx, y + 4, { width: bw, align: "center", lineBreak: false });
+      doc.text(name ? `( ${name} )` : "(........................................................)", bx, y + 18, { width: bw, align: "center", lineBreak: false });
+      doc.fontSize(7.5).fillColor("#6b7280").text(`วันที่ / DD/MM/YYYY ${dateStr || "..................."}`, bx, y + 30, { width: bw, align: "center", lineBreak: false });
+      doc.fontSize(8).fillColor("#111827").text(role, bx, y + 40, { width: bw, align: "center", lineBreak: false });
+    };
+    sig(left, nameTh, today, "ผู้ขอสิทธิ์ใช้งาน / License Requester");
+    sig(left + bw, "", "", "ผู้จัดการแผนก / Department Manager");
+    y += 56;
+
+    ensure(30);
+    doc.font(body).fontSize(7).fillColor("#6b7280");
+    doc.text("(1) ผู้ดูแลระบบจะตรวจสอบและเปิดสิทธิ์ภายใน 3 วันทำการ", left, y, { width }); y = doc.y;
+    doc.text("(2) ผู้ขอสิทธิ์ต้องยืนยันตัวตนก่อนการเข้าใช้งานทุกครั้ง", left, y, { width }); y = doc.y;
+    doc.text("(3) สิทธิ์ใช้งานมีอายุไม่เกิน 1 ปีนับจากวันยื่นขอ", left, y, { width });
+
     doc.end();
   });
 }

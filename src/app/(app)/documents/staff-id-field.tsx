@@ -36,6 +36,7 @@ export function StaffIdField({ name, label }: { name: string; label: string }) {
       setIfEmpty(form, "nameTh", data.name ?? null);
       setIfEmpty(form, "nameEn", data.name ?? null);
       setIfEmpty(form, "department2", data.department ?? null);
+      setIfEmpty(form, "department", data.department ?? null);
       setIfEmpty(form, "position", data.position ?? null);
       setIfEmpty(form, "phone", data.phone ?? null);
       setIfEmpty(form, "email", data.email ?? null);

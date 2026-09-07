@@ -1,6 +1,9 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { PrintButton } from "@/components/report/print-button";
+import { StaffIdField } from "./staff-id-field";
+import { MatrixPresets } from "./matrix-presets";
+import { MatrixPrintFilter } from "./matrix-print-filter";
 import { submitAccessMatrix } from "./access-actions";
 import {
   ERP_MODULES, ERP_FLAGS, TOP_DEPARTMENTS,
@@ -23,11 +26,13 @@ function Field({ name, label, placeholder }: { name: string; label: string; plac
 export function AccessMatrixForm({ defaults }: { defaults?: { name?: string } }) {
   return (
     <form action={submitAccessMatrix} className="space-y-4">
+      <MatrixPrintFilter />
       {/* Actions */}
       <div className="flex flex-wrap items-center justify-between gap-2 no-print">
         <p className="text-sm text-muted-foreground">กรอกข้อมูลผู้ขอ เลือกสิทธิ์รายเมนู แล้วกด “ส่งคำขอ” หรือ “พิมพ์/บันทึก PDF”</p>
         <div className="flex gap-2">
-          <PrintButton label="พิมพ์/บันทึก PDF" />
+          <Button type="submit" variant="outline" formAction="/api/doc-forms/access-matrix-pdf" formMethod="post" formTarget="_blank">Export PDF (เฉพาะที่เลือก)</Button>
+          <PrintButton label="พิมพ์ / Print" />
           <Button type="submit">ส่งคำขอ / Submit</Button>
         </div>
       </div>
@@ -38,7 +43,7 @@ export function AccessMatrixForm({ defaults }: { defaults?: { name?: string } })
           <p className="mb-3 text-sm font-semibold">1. สำหรับผู้ขอสิทธิ์ / Requester Information</p>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             <Field name="refNo" label="Ref No" />
-            <Field name="employeeCode" label="รหัสพนักงาน / Staff ID" />
+            <StaffIdField name="employeeCode" label="รหัสพนักงาน / Staff ID" />
             <Field name="startWork" label="เริ่มงาน / Start work (dd/mm/yyyy)" />
             <Field name="nameTh" label="ชื่อ-สกุลภาษาไทย (นาย/นาง/นางสาว)" />
             <Field name="nameEn" label="ชื่อ-สกุลภาษาอังกฤษ (Mr./Mrs./Ms.)" />
@@ -67,6 +72,7 @@ export function AccessMatrixForm({ defaults }: { defaults?: { name?: string } })
 
       {/* ERP modules */}
       <p className="text-sm font-semibold">สิทธิ์การใช้งานรายเมนู (ERP) / Per-menu Permissions</p>
+      <MatrixPresets />
       {ERP_MODULES.map((m) => {
         let idx = -1;
         return (

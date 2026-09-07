@@ -69,6 +69,10 @@
   .print-avoid-break {
     break-inside: avoid;
   }
+  /* Rows/modules the print filter marked as unselected are removed from print. */
+  .pm-print-hide {
+    display: none !important;
+  }
   a[href]::after {
     content: "";
   }
