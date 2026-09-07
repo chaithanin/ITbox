@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { PrintButton } from "@/components/report/print-button";
 import { StaffIdField } from "./staff-id-field";
 import { MatrixPresets } from "./matrix-presets";
+import { MatrixProfilePicker } from "./matrix-profile-picker";
 import { MatrixPrintFilter } from "./matrix-print-filter";
 import { submitAccessMatrix } from "./access-actions";
 import {
@@ -72,6 +73,7 @@ export function AccessMatrixForm({ defaults }: { defaults?: { name?: string } })
 
       {/* ERP modules */}
       <p className="text-sm font-semibold">สิทธิ์การใช้งานรายเมนู (ERP) / Per-menu Permissions</p>
+      <MatrixProfilePicker />
       <MatrixPresets />
       {ERP_MODULES.map((m) => {
         let idx = -1;
