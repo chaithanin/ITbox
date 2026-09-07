@@ -1,6 +1,5 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { PrintButton } from "@/components/report/print-button";
 import { StaffIdField } from "./staff-id-field";
 import { MatrixPresets } from "./matrix-presets";
 import { MatrixProfilePicker } from "./matrix-profile-picker";
@@ -30,10 +29,10 @@ export function AccessMatrixForm({ defaults }: { defaults?: { name?: string } })
       <MatrixPrintFilter />
       {/* Actions */}
       <div className="flex flex-wrap items-center justify-between gap-2 no-print">
-        <p className="text-sm text-muted-foreground">กรอกข้อมูลผู้ขอ เลือกสิทธิ์รายเมนู แล้วกด “ส่งคำขอ” หรือ “พิมพ์/บันทึก PDF”</p>
+        <p className="text-sm text-muted-foreground">กรอกข้อมูลผู้ขอ เลือกสิทธิ์รายเมนู แล้วกด “พิมพ์ / Print” หรือ “ส่งคำขอ” — เอกสารที่พิมพ์จะแสดงเฉพาะสิทธิ์ที่เลือก</p>
         <div className="flex gap-2">
-          <Button type="submit" variant="outline" formAction="/api/doc-forms/access-matrix-pdf" formMethod="post" formTarget="_blank">Export PDF (เฉพาะที่เลือก)</Button>
-          <PrintButton label="พิมพ์ / Print" />
+          <Button type="submit" variant="outline" formAction="/api/doc-forms/access-matrix-pdf" formMethod="post" formTarget="_blank">บันทึก PDF (เฉพาะที่เลือก)</Button>
+          <Button type="submit" formAction="/api/doc-forms/access-matrix-pdf" formMethod="post" formTarget="_blank">พิมพ์ / Print</Button>
           <Button type="submit">ส่งคำขอ / Submit</Button>
         </div>
       </div>
@@ -207,7 +206,7 @@ export function AccessMatrixForm({ defaults }: { defaults?: { name?: string } })
       </div>
 
       <div className="flex justify-end gap-2 no-print">
-        <PrintButton label="พิมพ์/บันทึก PDF" />
+        <Button type="submit" variant="outline" formAction="/api/doc-forms/access-matrix-pdf" formMethod="post" formTarget="_blank">พิมพ์ / บันทึก PDF (เฉพาะที่เลือก)</Button>
         <Button type="submit">ส่งคำขอ / Submit</Button>
       </div>
       {defaults?.name && <input type="hidden" value={defaults.name} readOnly name="_requestedBy" />}
