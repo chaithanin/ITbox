@@ -273,11 +273,14 @@ export function buildDocumentPdf(form: FormDef, v: ValueSource): Promise<Buffer>
 // source (Default / Additional / Restricted) + justification + approval chain.
 // ---------------------------------------------------------------------------
 export interface AccessPdfItem { systemLabel: string; permissionLevel: string; resource?: string | null; source: "DEFAULT" | "ADDITIONAL" | "RESTRICTED" }
+export interface AccessPdfApprover { name?: string | null; date?: string | null }
 export interface AccessPdfData {
   refNo?: string; employeeCode?: string; nameTh?: string; nameEn?: string; phone?: string; email?: string;
   company?: string; department?: string; position?: string; jobLevel?: string;
   effectiveDate?: string; expiryDate?: string; businessJustification?: string;
   approvalChain?: string[]; items: AccessPdfItem[];
+  // Captured document sign-offs (index-aligned to the 5 signature roles below).
+  approvals?: { manager?: AccessPdfApprover; itSupport?: AccessPdfApprover; itManager?: AccessPdfApprover; management?: AccessPdfApprover };
 }
 
 export function buildAccessRequestPdf(d: AccessPdfData): Promise<Buffer> {
@@ -353,14 +356,19 @@ export function buildAccessRequestPdf(d: AccessPdfData): Promise<Buffer> {
 
     // signatures
     const roles = ["ผู้ขอสิทธิ์ / Requester", "ผู้จัดการแผนก / Dept Manager", "ผู้ตรวจสอบ / IT Support", "หัวหน้าแผนก / IT Manager", "ฝ่ายบริหาร / Management"];
+    const ap = d.approvals ?? {};
+    const signOff: (AccessPdfApprover | undefined)[] = [
+      { name: (d.nameTh || d.nameEn || "").trim(), date: fmtDate(d.effectiveDate) || fmtDate() },
+      ap.manager, ap.itSupport, ap.itManager, ap.management,
+    ];
     y += 6; const bw = width / 2, bh = 46;
     for (let i = 0; i < roles.length; i += 2) {
       ensure(bh);
       for (let j = 0; j < 2 && i + j < roles.length; j++) {
         const bx = left + j * bw;
-        const isRequester = i + j === 0;
-        const name = isRequester ? (d.nameTh || d.nameEn || "").trim() : "";
-        const dateStr = isRequester ? (fmtDate(d.effectiveDate) || fmtDate()) : "";
+        const so = signOff[i + j];
+        const name = (so?.name || "").trim();
+        const dateStr = (so?.date || "").trim();
         doc.font(body).fontSize(8).fillColor("#111827");
         doc.text("ลงชื่อ/Sign ............................................", bx, y + 4, { width: bw, align: "center", lineBreak: false });
         if (name) {

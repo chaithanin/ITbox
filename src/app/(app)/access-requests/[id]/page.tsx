@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, FileText } from "lucide-react";
 import { requirePermission } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import { PageHeader } from "@/components/page-header";
@@ -44,6 +44,7 @@ export default async function AccessRequestDetailPage({ params, searchParams }: 
     <div className="mx-auto max-w-4xl">
       <Button variant="ghost" size="sm" asChild className="mb-2"><Link href="/access-requests"><ArrowLeft className="h-4 w-4" /> กลับ / Back</Link></Button>
       <PageHeader title={`คำขอสิทธิ์ — ${r.nameEn || r.nameTh || r.employeeCode || ""}`} description={[r.department, r.position, r.jobLevel].filter(Boolean).join(" · ")}>
+        <Button variant="outline" asChild><a href={`/api/access-requests/${r.id}/pdf`} target="_blank" rel="noopener"><FileText className="h-4 w-4" /> พิมพ์ / PDF</a></Button>
         <StatusBadge status={r.status} />
       </PageHeader>
 
