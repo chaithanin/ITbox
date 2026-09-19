@@ -1,9 +1,10 @@
 import Link from "next/link";
-import { KeyRound } from "lucide-react";
+import { KeyRound, Download } from "lucide-react";
 import type { Prisma } from "@prisma/client";
 import { requirePermission } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import { PageHeader } from "@/components/page-header";
+import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/status-badge";
 import { SearchFilterBar, Pagination, parsePage } from "@/components/list-controls";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
@@ -35,9 +36,33 @@ export default async function AccessRequestsPage({ searchParams }: { searchParam
   ]);
   const pageCount = Math.max(1, Math.ceil(total / take));
 
+  // Status breakdown across the whole org (ignores search/filter) for the summary strip.
+  const byStatus = await prisma.accessRequest.groupBy({
+    by: ["status"], where: { organizationId: user.organizationId, deletedAt: null }, _count: true,
+  });
+  const statusCount = (s: string) => byStatus.find((b) => b.status === s)?._count ?? 0;
+  const canExport = user.permissions.has("report:export");
+  const exportQs = new URLSearchParams({ ...(status ? { status } : {}) }).toString();
+
   return (
     <div>
-      <PageHeader title="คำขอสิทธิ์ / Access Requests" description={`ทั้งหมด ${total} คำขอ`} />
+      <PageHeader title="คำขอสิทธิ์ / Access Requests" description={`ทั้งหมด ${total} คำขอ`}>
+        {canExport && (
+          <>
+            <Button variant="outline" asChild><a href={`/api/reports/access-requests?format=xlsx${exportQs ? "&" + exportQs : ""}`}><Download className="h-4 w-4" /> Excel</a></Button>
+            <Button variant="outline" asChild><a href={`/api/reports/access-requests?format=pdf${exportQs ? "&" + exportQs : ""}`}><Download className="h-4 w-4" /> PDF</a></Button>
+          </>
+        )}
+      </PageHeader>
+
+      <div className="mb-4 flex flex-wrap gap-2 text-xs">
+        {STATUSES.map((s) => (
+          <Link key={s} href={`/access-requests?status=${s}`} className="rounded-full border px-2.5 py-1 hover:bg-muted">
+            <StatusBadge status={s} /> <span className="ml-1 font-semibold tabular-nums">{statusCount(s)}</span>
+          </Link>
+        ))}
+      </div>
+
       <SearchFilterBar
         action="/access-requests" q={sp.q} placeholder="ค้นหา ชื่อ / รหัส / แผนก..."
         filters={[{ name: "status", value: sp.status, allLabel: "ทุกสถานะ / All", options: STATUSES.map((s) => ({ value: s, label: s })) }]}

@@ -224,6 +224,7 @@ const REPORT_TITLES: Record<string, string> = {
   "borrow-overdue": "รายการเกินกำหนดคืน / Overdue Loans",
   "borrow-utilization": "อัตราการใช้งานทรัพย์สิน / Asset Borrow Utilization",
   "access-review": "รายงานทบทวนสิทธิ์ / Access Review Report",
+  "access-requests": "ทะเบียนคำขอสิทธิ์ / Access Request Register",
 };
 
 const REPORT_BUILDERS: Record<string, ReportBuilder> = {
@@ -653,6 +654,35 @@ const REPORT_BUILDERS: Record<string, ReportBuilder> = {
       ]),
     };
   },
+
+  // Access-request register — all recorded requests with approval sign-off state.
+  // Document-only; requires accessreq:read (guarded below).
+  "access-requests": async (user) => {
+    const rows = await prisma.accessRequest.findMany({
+      where: { organizationId: user.organizationId, deletedAt: null },
+      select: {
+        refNo: true, employeeCode: true, nameTh: true, nameEn: true, department: true, position: true,
+        status: true, createdAt: true, effectiveDate: true, expiryDate: true,
+        managerApprovedBy: true, managerApprovedAt: true,
+        itSupportBy: true, itManagerBy: true, managementBy: true, rejectionReason: true,
+        _count: { select: { items: true } },
+      },
+      orderBy: { createdAt: "desc" },
+      take: MAX_ROWS,
+    });
+    return {
+      headers: [
+        "Ref No", "Employee Code", "Name", "Department", "Position", "Items", "Status",
+        "Created At", "Effective Date", "Expiry Date",
+        "Dept Manager", "Manager Approved At", "IT Support", "IT Manager", "Management", "Rejection Reason",
+      ],
+      rows: rows.map((r) => [
+        r.refNo, r.employeeCode, `${r.nameEn || r.nameTh || ""}`.trim(), r.department, r.position,
+        r._count.items, r.status, r.createdAt, r.effectiveDate, r.expiryDate,
+        r.managerApprovedBy, r.managerApprovedAt, r.itSupportBy, r.itManagerBy, r.managementBy, r.rejectionReason,
+      ]),
+    };
+  },
 };
 
 // ------------------------------------------------------------------
@@ -682,8 +712,8 @@ export const GET = apiHandler(
       throw new AuthError("FORBIDDEN:audit:read", 403);
     }
 
-    // Access-review exposes access-request documents → require accessreq:read.
-    if (report === "access-review" && !user.permissions.has("accessreq:read")) {
+    // Access-review / access-request register expose access data → require accessreq:read.
+    if ((report === "access-review" || report === "access-requests") && !user.permissions.has("accessreq:read")) {
       throw new AuthError("FORBIDDEN:accessreq:read", 403);
     }
 
