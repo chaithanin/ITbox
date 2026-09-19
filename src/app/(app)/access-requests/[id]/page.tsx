@@ -10,7 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select } from "@/components/ui/select";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import { formatDate } from "@/lib/utils";
-import { setRequestStatus, setItemProvision } from "../actions";
+import { setRequestStatus, setItemProvision, recordApprovalStep } from "../actions";
 
 const REQ_STATUS = ["DRAFT", "SUBMITTED", "APPROVED", "REJECTED", "PROVISIONED", "REVOKED"];
 const PROV_STATUS = ["PENDING", "ACCOUNT_CREATED", "ACCESS_GRANTED", "FAILED", "REVOKED"];
@@ -29,6 +29,16 @@ export default async function AccessRequestDetailPage({ params, searchParams }: 
   if (!r) notFound();
   const setStatus = setRequestStatus.bind(null, r.id);
   const setProv = setItemProvision.bind(null, r.id);
+  const recordStep = recordApprovalStep.bind(null, r.id);
+
+  const fmtSign = (at: Date | null, by: string | null) =>
+    at && by ? `${by} · ${formatDate(at)}` : null;
+  const STEPS: { key: string; label: string; by: string | null; at: Date | null }[] = [
+    { key: "manager", label: "ผู้จัดการแผนก / Dept Manager", by: r.managerApprovedBy, at: r.managerApprovedAt },
+    { key: "itSupport", label: "ผู้ตรวจสอบ / IT Support", by: r.itSupportBy, at: r.itSupportAt },
+    { key: "itManager", label: "หัวหน้าแผนก / IT Manager", by: r.itManagerBy, at: r.itManagerAt },
+    { key: "management", label: "ฝ่ายบริหาร / Management", by: r.managementBy, at: r.managementAt },
+  ];
 
   return (
     <div className="mx-auto max-w-4xl">
@@ -95,6 +105,51 @@ export default async function AccessRequestDetailPage({ params, searchParams }: 
           </CardContent>
         </Card>
       </div>
+
+      {/* Approval workflow (document sign-off — records who approved the paperwork) */}
+      <Card className="mt-4">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm">ขั้นตอนการอนุมัติเอกสาร / Document Approval Workflow</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {r.status === "REJECTED" && (
+            <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+              ปฏิเสธคำขอ / Rejected{r.rejectionReason ? ` — ${r.rejectionReason}` : ""}
+            </div>
+          )}
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {STEPS.map((s) => {
+              const signed = fmtSign(s.at, s.by);
+              return (
+                <div key={s.key} className="rounded-md border p-3">
+                  <p className="text-xs font-medium">{s.label}</p>
+                  {signed ? (
+                    <p className="mt-1 text-xs text-emerald-600 dark:text-emerald-400">✓ {signed}</p>
+                  ) : canManage && r.status !== "REJECTED" ? (
+                    <form action={recordStep} className="mt-2 space-y-1.5">
+                      <input type="hidden" name="step" value={s.key} />
+                      <input type="hidden" name="decision" value="approve" />
+                      <input name="signer" placeholder="ชื่อผู้ลงนาม / Signer" className="w-full rounded border bg-background px-2 py-1 text-xs" />
+                      <Button type="submit" size="sm" variant="outline" className="h-7 w-full text-xs">ลงนามอนุมัติ / Approve</Button>
+                    </form>
+                  ) : (
+                    <p className="mt-1 text-xs text-muted-foreground">รอลงนาม / Pending</p>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          {canManage && r.status !== "REJECTED" && (
+            <form action={recordStep} className="flex flex-wrap items-center gap-2 border-t pt-3">
+              <input type="hidden" name="step" value="manager" />
+              <input type="hidden" name="decision" value="reject" />
+              <input name="note" placeholder="เหตุผลที่ปฏิเสธ / Rejection reason" className="h-8 flex-1 min-w-[200px] rounded border bg-background px-2 text-sm" />
+              <Button type="submit" size="sm" variant="destructive">ปฏิเสธคำขอ / Reject</Button>
+            </form>
+          )}
+          <p className="text-xs text-muted-foreground">การลงนามนี้เป็นการอนุมัติ “เอกสาร” เท่านั้น ไม่ได้ให้สิทธิ์ระบบจริง / Document sign-off only; grants no real system access.</p>
+        </CardContent>
+      </Card>
     </div>
   );
 }

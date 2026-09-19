@@ -3072,6 +3072,18 @@ model AccessRequest {
   status         AccessRequestStatus @default(DRAFT)
   createdById    String?             @db.Uuid
 
+  // Document approval workflow (records who signed off on the paperwork —
+  // matches the 4.A signature blocks; document-only, grants no real access).
+  managerApprovedBy   String?
+  managerApprovedAt   DateTime?
+  itSupportBy         String?
+  itSupportAt         DateTime?
+  itManagerBy         String?
+  itManagerAt         DateTime?
+  managementBy        String?
+  managementAt        DateTime?
+  rejectionReason     String?
+
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
