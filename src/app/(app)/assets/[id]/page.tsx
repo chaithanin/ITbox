@@ -26,7 +26,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { retireAsset, disposeAsset, deleteAsset } from "../actions";
+import { retireAsset, disposeAsset, deleteAsset, setDeviceLockPasscode } from "../actions";
 import { AssetDocumentsCard } from "./documents-card";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -78,7 +78,7 @@ export default async function AssetDetailPage({
       vaultLinks: {
         include: {
           vaultItem: {
-            select: { id: true, name: true, classification: true, username: true, deletedAt: true },
+            select: { id: true, name: true, classification: true, username: true, tags: true, deletedAt: true },
           },
         },
       },
@@ -105,6 +105,8 @@ export default async function AssetDetailPage({
     });
   }
   const vaultLinks = asset.vaultLinks.filter((l) => !l.vaultItem.deletedAt);
+  const deviceLock = vaultLinks.find((l) => (l.vaultItem.tags ?? []).includes("device-lock"));
+  const setPasscode = setDeviceLockPasscode.bind(null, asset.id);
   const warrantyDays = daysUntil(asset.warrantyEnd);
   const has = (p: string) => user.permissions.has(p);
 
@@ -422,6 +424,28 @@ export default async function AssetDetailPage({
                   </li>
                 ))}
               </ul>
+            )}
+
+            {has("vault:create") && (
+              <form action={setPasscode} className="mt-4 space-y-1.5 border-t pt-3">
+                <label htmlFor="passcode" className="block text-xs font-medium">
+                  รหัสล็อกเครื่อง / Device lock passcode
+                  {deviceLock && <span className="ml-1 font-normal text-emerald-600 dark:text-emerald-400">• ตั้งไว้แล้ว (พิมพ์เพื่อเปลี่ยน)</span>}
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    id="passcode" name="passcode" type="password" autoComplete="off"
+                    placeholder={deviceLock ? "••••••••  (เปลี่ยนรหัส)" : "ใส่รหัสปลดล็อกเครื่อง"}
+                    className="w-full rounded-md border bg-background px-2 py-1.5 text-sm"
+                  />
+                  <Button type="submit" size="sm">{deviceLock ? "อัปเดต" : "บันทึก"}</Button>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  เก็บเข้ารหัสใน Vault (AES-256/KMS) ไม่ใช่ข้อความธรรมดา — {deviceLock ? (
+                    <Link href={`/vault/${deviceLock.vaultItem.id}`} className="text-primary hover:underline">เปิดดู/คัดลอก (บันทึก audit)</Link>
+                  ) : "ดู/คัดลอกได้ที่ Vault พร้อมบันทึก audit"}
+                </p>
+              </form>
             )}
           </CardContent>
         </Card>

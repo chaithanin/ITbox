@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/session";
 import { auditLog } from "@/lib/audit";
+import { createVaultItem, updateVaultItem } from "@/lib/services/vault";
 
 // "use server" files may only export async functions — keep constants local.
 const ASSET_CONDITIONS = ["NEW", "GOOD", "FAIR", "DAMAGED", "CRITICAL"] as const;
@@ -563,4 +564,49 @@ export async function transferAsset(formData: FormData) {
   revalidatePath("/assets");
   revalidatePath(`/assets/${asset.id}`);
   redirect(`/assets/${asset.id}`);
+}
+
+/**
+ * Set / update the DEVICE LOCK PASSCODE for an asset. Per the security policy a
+ * passcode is a credential, so it is NEVER stored plaintext on the asset — it is
+ * kept in the encrypted Vault (AES-256-GCM + KMS) as a HIGH-classification item
+ * tagged "device-lock" and linked to the asset. Reveal/copy go through the Vault
+ * (masked + audited). Requires vault:create.
+ */
+export async function setDeviceLockPasscode(assetId: string, formData: FormData) {
+  const user = await requirePermission("vault:create");
+  const passcode = String(formData.get("passcode") ?? "").trim();
+  if (!passcode || passcode.length > 128) redirect(`/assets/${assetId}`);
+
+  const asset = await prisma.asset.findFirst({
+    where: { id: assetId, organizationId: user.organizationId, deletedAt: null },
+    select: { id: true, assetTag: true },
+  });
+  if (!asset) redirect("/assets");
+
+  // Reuse the already-linked device-lock secret if one exists (rotate its value).
+  const existing = await prisma.assetVaultLink.findFirst({
+    where: { assetId, vaultItem: { organizationId: user.organizationId, deletedAt: null, tags: { has: "device-lock" } } },
+    select: { vaultItemId: true },
+  });
+
+  if (existing) {
+    await updateVaultItem(user, existing.vaultItemId, { secret: { password: passcode } });
+  } else {
+    const item = await createVaultItem(user, {
+      name: `Device Lock Passcode — ${asset.assetTag}`,
+      type: "PASSWORD",
+      classification: "HIGH",
+      tags: ["device-lock"],
+      notes: `รหัสปลดล็อกเครื่อง / Device unlock passcode for asset ${asset.assetTag}`,
+      secret: { password: passcode },
+    });
+    await prisma.assetVaultLink.create({
+      data: { assetId, vaultItemId: item.id, label: "รหัสล็อกเครื่อง / Device Lock Passcode" },
+    });
+  }
+
+  await auditLog(user, { action: "UPDATE", entityType: "ASSET", entityId: assetId, detail: { deviceLockPasscode: "set" } });
+  revalidatePath(`/assets/${assetId}`);
+  redirect(`/assets/${assetId}`);
 }
