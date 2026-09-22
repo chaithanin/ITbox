@@ -23,6 +23,7 @@ const ALIASES: Record<string, string[]> = {
   monthlyFee: ["monthlyfee", "fee", "ค่าบริการ"],
   department: ["department", "dept", "แผนก"],
   notes: ["notes", "note", "remark", "หมายเหตุ"],
+  assetTag: ["assettag", "asset", "device", "อุปกรณ์"],
 };
 
 const norm = (s: string) => s.trim().toLowerCase().replace(/[\s_]+/g, "");
@@ -111,6 +112,8 @@ export const POST = apiHandler(async (req: Request) => {
   const orgId = user.organizationId;
   const depts = await prisma.department.findMany({ where: { organizationId: orgId, deletedAt: null }, select: { id: true, name: true } });
   const deptMap = new Map(depts.map((d) => [d.name.toLowerCase(), d.id]));
+  const assetRows = await prisma.asset.findMany({ where: { organizationId: orgId, deletedAt: null }, select: { id: true, assetTag: true } });
+  const assetByTag = new Map(assetRows.map((a) => [a.assetTag.toLowerCase(), a.id]));
   const cell = (r: string[], c: string) => (idx[c] === undefined ? "" : (r[idx[c]] ?? "").trim());
 
   // Optional: match the holder text (e.g. "K.Ann-Acc") to an employee.
@@ -161,6 +164,7 @@ export const POST = apiHandler(async (req: Request) => {
     const feeRaw = cell(r, "monthlyFee");
     const fee = feeRaw ? Number(feeRaw.replace(/[^0-9.]/g, "")) : null;
     const deptId = deptMap.get(cell(r, "department").toLowerCase()) ?? null;
+    const assetId = cell(r, "assetTag") ? (assetByTag.get(cell(r, "assetTag").toLowerCase()) ?? null) : null;
 
     const payload = {
       carrier, accountName,
@@ -170,6 +174,7 @@ export const POST = apiHandler(async (req: Request) => {
       plan: cell(r, "plan") || null,
       monthlyFee: fee != null && !Number.isNaN(fee) ? fee : null,
       departmentId: deptId,
+      assetId,
       notes: cell(r, "notes") || null,
     };
 

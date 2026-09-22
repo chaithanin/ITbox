@@ -30,6 +30,7 @@ const COLUMNS = [
   "name", "category", "type", "classification", "environment",
   "username", "url", "host", "port", "protocol", "tags", "notes",
   "password", "apikey", "token", "sshprivatekey", "sshpublickey", "certificate",
+  "assettag",
 ] as const;
 
 const TEMPLATE_HEADERS = [
@@ -164,6 +165,14 @@ export const POST = apiHandler(async (req: Request) => {
   });
   const catByName = new Map(existingCats.map((c) => [c.name.toLowerCase(), c.id]));
 
+  // Optional: link each secret to an asset by its assetTag (case-insensitive).
+  const assetRows = await prisma.asset.findMany({
+    where: { organizationId: user.organizationId, deletedAt: null },
+    select: { id: true, assetTag: true },
+  });
+  const assetByTag = new Map(assetRows.map((a) => [a.assetTag.toLowerCase(), a.id]));
+  let linked = 0;
+
   const get = (r: string[], col: (typeof COLUMNS)[number]): string => {
     const i = colIndex[col];
     return i === undefined ? "" : (r[i] ?? "").trim();
@@ -227,7 +236,7 @@ export const POST = apiHandler(async (req: Request) => {
         continue;
       }
 
-      await createVaultItem(user, {
+      const item = await createVaultItem(user, {
         name: name.slice(0, 200),
         type,
         classification,
@@ -248,6 +257,19 @@ export const POST = apiHandler(async (req: Request) => {
         secret,
       });
       created++;
+      // Optional link to an asset by assetTag.
+      const assetTag = get(r, "assettag");
+      if (assetTag) {
+        const assetId = assetByTag.get(assetTag.toLowerCase());
+        if (assetId) {
+          await prisma.assetVaultLink.upsert({
+            where: { assetId_vaultItemId: { assetId, vaultItemId: item.id } },
+            update: {},
+            create: { assetId, vaultItemId: item.id, label: name.slice(0, 100) },
+          });
+          linked++;
+        }
+      }
     } catch (e) {
       if (e instanceof AuthError) throw e; // permission problems bubble up
       errors.push({ row: rowNo, name, error: "import failed / นำเข้าไม่สำเร็จ" });
@@ -257,11 +279,12 @@ export const POST = apiHandler(async (req: Request) => {
   await auditLog(user, {
     action: "IMPORT",
     entityType: "VAULT_ITEM",
-    detail: { created, failed: errors.length, fileName: file.name.slice(0, 200) },
+    detail: { created, linked, failed: errors.length, fileName: file.name.slice(0, 200) },
   });
 
   return NextResponse.json({
     created,
+    linked,
     failed: errors.length,
     errors: errors.slice(0, MAX_ERRORS_RETURNED),
   });
