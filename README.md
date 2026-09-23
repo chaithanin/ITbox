@@ -24,6 +24,16 @@ Mobile-first responsive
   generator + strength meter, **Asset ↔ Credential linking** (เปิดหน้า
   Server เห็นทันทีว่ามี credential อะไรเกี่ยวข้อง โดยสิทธิ์แยกรายการ)
 - **RBAC**: 11 บทบาท × สิทธิ์ราย resource:action แก้ไขได้จาก UI + audit ทุก mutation
+- **Access requests & documents (form 4.A)**: ฟอร์มขอสิทธิ์ ERP รายเมนู +
+  Staff-ID auto-fill + โปรไฟล์ค่าเริ่มต้น (RBAC baseline) + PDF เฉพาะที่เลือก
+  (พิมพ์ = PDF), **workflow อนุมัติ** (ลงนามผู้จัดการ/IT Support/IT Manager/
+  Management บนเอกสาร) + ทะเบียนคำขอ + **รายงานทบทวนสิทธิ์** — *เป็นเอกสารเท่านั้น
+  ไม่ให้สิทธิ์ระบบจริง*; Ref No อัตโนมัติ `REQ{DDMMYY}-NN`
+- **Device secrets**: รหัสปลดล็อกเครื่อง (device passcode) เก็บใน Vault (เข้ารหัส
+  KMS) ผูกกับทรัพย์สิน; Vault/SIM import ผูกกับ asset อัตโนมัติผ่าน `assetTag`
+- **HR/ATS sync**: รับ roster (ชื่อ/ชื่อเล่น/เบอร์/แผนก/วันเริ่มงาน) จาก HR-ATS,
+  joiner/mover/leaver → onboarding/offboarding อัตโนมัติ; คีย์ integration
+  reveal/rotate/test ได้ที่ Settings → Integrations
 - **Business**: licenses + seat assignment, subscriptions, vendors,
   maintenance tickets (ผูกสถานะเครื่องอัตโนมัติ), purchase request +
   3-step approval (Manager→IT→Finance), IT offboarding console

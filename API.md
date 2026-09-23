@@ -46,7 +46,7 @@ Borrow create/submit/approve/issue/return are **Server Actions**
 | `/api/employees` · `/api/employees/[id]` · `/api/employees/[id]/assets` | GET | `employee:read` |
 | `/api/employees/directory` | GET | Org directory. |
 | `/api/employees/import` | POST | `employee:create` |
-| `/api/hr/employees/sync` | POST | **API key** (`hr.ingest`) — HR push sync (upsert by employeeCode). |
+| `/api/hr/employees/sync` | POST | **API key** (`hr.ingest`) — HR push sync (upsert by employeeCode; carries name/nickname/phone/dept/position/start-date). |
 | `/api/hr/employees/link-users` | POST | **API key** — reconcile employee↔user links. |
 | `/api/hr/employees/match-report` | GET | Link coverage report. |
 | `/api/public/employee-lookup` | POST | **Public** — staff-ID confirm step (no PII beyond match). |
@@ -57,7 +57,7 @@ Borrow create/submit/approve/issue/return are **Server Actions**
 |---|---|---|
 | `/api/vault` · `/api/vault/[id]` | GET | `vault:read` |
 | `/api/vault/[id]/reveal` | POST | `vault:reveal` — decrypts, audits, may require MFA. |
-| `/api/vault/import` | POST | `vault:manage` — KMS-encrypted bulk import. |
+| `/api/vault/import` | POST | `vault:manage` — KMS-encrypted bulk import (optional `assetTag` column auto-links each secret to its asset). |
 
 ## Support (ITSM)
 | Route | Method | Notes |
@@ -73,8 +73,20 @@ Borrow create/submit/approve/issue/return are **Server Actions**
 
 Report keys include: `assets`, `assets-by-department`, `assignments`,
 `maintenance`, `warranty`, `licenses`, `subscriptions`, `purchases`, `audit`,
-`vault-access`, `borrow-requests`, `borrow-overdue`, `borrow-utilization`.
-`audit` / `vault-access` also require `audit:read`.
+`vault-access`, `borrow-requests`, `borrow-overdue`, `borrow-utilization`,
+`access-review`, `access-requests`.
+`audit` / `vault-access` also require `audit:read`; `access-review` /
+`access-requests` require `accessreq:read`.
+
+## Documents & access requests
+| Route | Method | Notes |
+|---|---|---|
+| `/api/doc-forms/lookup?code=` | GET | Staff-ID → name/dept/position/phone/nickname/start-work for form auto-fill (session). |
+| `/api/doc-forms/access-matrix-pdf` | POST | Selected-only 4.A PDF from the ERP matrix form (session). |
+| `/api/access-requests/[id]/pdf` | GET | Saved access request as the 4.A document with captured approval sign-offs filled (`accessreq:read`). |
+
+Access-request submit / approval sign-offs / provisioning are **Server Actions**
+(`src/app/(app)/access-requests/actions.ts`, `documents/access-actions.ts`).
 
 ## Ingest (API-key authenticated)
 | Route | Pipeline |

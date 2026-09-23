@@ -4,6 +4,45 @@ Notable changes, newest first. Dates are approximate to the build history.
 The project is continuously deployed; each entry maps to one or more commits on
 the active branch.
 
+## 2026-09 — Access-request documents, HR sync fields, device passcode
+
+**Added**
+- **Access-request document module (form 4.A)** — ERP per-menu permission matrix
+  (15 modules + Online Marketing + Venio + Horganice), Staff-ID auto-fill
+  (`/api/doc-forms/lookup`), default-value presets, **recommended RBAC default
+  profiles** (25 profiles generated from the company matrix), and a
+  **selected-only PDF** (`/api/doc-forms/access-matrix-pdf`) where Print === PDF.
+- **Document approval workflow** — records sign-offs (Dept Manager / IT Support /
+  IT Manager / Management) with name + date + reject reason on the request;
+  manager approval advances SUBMITTED→APPROVED. Print a saved request with the
+  captured signatures via `/api/access-requests/[id]/pdf`. **Document-only —
+  grants no real access.**
+- **Access-request register report** (`/api/reports/access-requests`) + list
+  export/status summary, and an **Access Review** recertification report
+  (`/reports/access-review`, `access-review` export key).
+- **Positions master + default-permission profiles** (document-only) and an
+  employee Access panel that drafts a request from the matched profile.
+- **Device lock passcode** on assets — stored in the Vault (HIGH,
+  `device-lock` tag) and linked via `AssetVaultLink`; masked, audited reveal.
+- **Import linking** — Vault and SIM imports accept an optional `assetTag`
+  column to auto-link secrets / SIMs to their asset.
+- **Integrations settings** — reveal (KMS-decrypt), rotate, and **Test
+  connection** for the collector / HR sync keys.
+- Live/debounced search across list pages; reports overhaul
+  (Dashboard→Summary→Chart→Alert→Detail, server-rendered charts).
+
+**Changed**
+- **HR employee sync** now carries `nickname` + `phone` + start date; the
+  receiver stores them and forms auto-fill them. Ingest keys are additionally
+  **KMS-encrypted at rest** so they can be revealed again without rotating.
+- Access-request Ref No auto-generates `REQ{DDMMYY}-{NN}` (Bangkok-day
+  sequence); signature date lines dropped the `DD/MM/YYYY` literal.
+
+**Fixed**
+- Granted `accessreq:read` / `accessreq:manage` / `permprofile:manage` to
+  existing orgs' roles via migration (gated access-request pages 500'd even for
+  SUPER_ADMIN); added an access-requests segment error boundary.
+
 ## 2026-09-02 — Asset Borrowing & Return + hardening
 
 **Added**

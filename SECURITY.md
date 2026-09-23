@@ -28,6 +28,10 @@
   approval step.
 - **Multi-tenancy:** every query filters by `organizationId`; a cross-org id
   returns 404. Isolation is enforced in the application layer.
+- **Document-only access requests:** the access-request / positions /
+  default-permission feature produces request paperwork (form 4.A) and records
+  approval sign-offs — it **never** grants real system roles or permissions.
+  Real grants happen only via Settings → Roles / a data migration.
 
 ## 3. Secrets & data protection
 
@@ -44,13 +48,20 @@
   SUPER_ADMIN / SECURITY_ADMIN only).
 - **Environment secrets:** in production all secrets come from **Google Secret
   Manager**, injected into Cloud Run. `.env` is never committed.
+- **No plaintext credentials outside the Vault:** device/asset secrets (e.g. a
+  device **lock passcode**) are stored as Vault items (HIGH, `device-lock` tag)
+  linked to the asset via `AssetVaultLink` — masked on the asset page, revealed
+  only through the audited Vault flow. Never store a passcode/password on an
+  asset, note, or generic field.
 
 ## 4. Ingest & machine auth
 
 - Collector endpoints authenticate by **API key** (`x-api-key` / bearer), matched
   by **SHA-256 hash** against a per-org `SystemSetting` — the raw key is never
   stored. Distinct pipelines use distinct keys (e.g. `hr.ingest` is separate from
-  the shared `itreport.ingest`).
+  the shared `itreport.ingest`). Keys are additionally **KMS-encrypted at rest**
+  so an admin can reveal/rotate/test them at Settings → Integrations without
+  re-generating (the SHA-256 hash remains the auth of record).
 - `clientIp(req)` trusts only the right-most `INGEST_TRUSTED_PROXIES` hops of
   `X-Forwarded-For` to prevent IP spoofing.
 - Ingest routes and the `CRON_SECRET`-authed `/api/cron/*` jobs are the only
