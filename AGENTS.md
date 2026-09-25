@@ -80,7 +80,8 @@ next.config.ts              # standalone + CSP headers + outputFileTracingInclud
   (e.g. `*_permissions_grant/migration.sql` — insert the `permissions` catalog
   rows + `role_permissions` for the relevant roles). Without it, even
   SUPER_ADMIN lacks the permission and gated pages 500. Precedents:
-  `borrow_permissions_grant`, `accessreq_permissions_grant`.
+  `borrow_permissions_grant`, `accessreq_permissions_grant`,
+  `evaluation_permissions_grant`.
 - A thrown `AuthError` on a page with no `error.tsx` renders a white
   "server-side exception". Add a segment `error.tsx` for graceful degradation.
 

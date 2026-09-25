@@ -4,6 +4,29 @@ Notable changes, newest first. Dates are approximate to the build history.
 The project is continuously deployed; each entry maps to one or more commits on
 the active branch.
 
+## 2026-09 — Probation 30/60/90 KPI assessment
+
+**Added**
+- **Probation 30/60/90-day KPI evaluation module** (`/evaluations`) — a
+  document-only HR review with two role templates:
+  - **IT Support** — 8 weighted KPIs (Ticket/SLA/Incident 25%, Technical 20%,
+    Problem Solving 15%, Network/M365/Endpoint 10%, Security 10%,
+    Asset & Documentation 10%, User Service 5%, Teamwork 5%) with 30/60/90-day
+    descriptors, numeric KPI targets, and a manager assessment checklist.
+  - **IT Assistant Manager** — 9 weighted KPIs (Infrastructure 15%, Project 20%,
+    Application/Integration 15%, Digital/AI 15%, Data/MIS 10%, Business 10%,
+    Vendor/Team 5%, Governance 5%, Reporting 5%) with outcome-based numeric
+    targets and an IT-Manager-backup capability checklist.
+  - Each KPI scored **1–5 per checkpoint**; overall is a stage-weighted
+    (30 → 20% / 60 → 30% / 90 → 50%), KPI-weighted **0–100** score with a grade
+    band (Exceeds / Meets / Needs Improvement / Unsatisfactory), normalized over
+    what has been filled. Evidence/comment per KPI + manager/employee comments +
+    action plan; **A4 PDF export** (`/api/evaluations/[id]/pdf`); auto Ref No
+    `EVAL{DDMMYY}-NN`. **Grants no system access.**
+- Granted `evaluation:read` / `evaluation:manage` to existing orgs
+  (SUPER_ADMIN, ADMIN, IT_MANAGER, HR; read also to AUDITOR) via migration;
+  seed synced; nav item under People & Access; segment error boundary.
+
 ## 2026-09 — Access-request documents, HR sync fields, device passcode
 
 **Added**

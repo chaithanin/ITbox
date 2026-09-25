@@ -84,9 +84,16 @@ Report keys include: `assets`, `assets-by-department`, `assignments`,
 | `/api/doc-forms/lookup?code=` | GET | Staff-ID → name/dept/position/phone/nickname/start-work for form auto-fill (session). |
 | `/api/doc-forms/access-matrix-pdf` | POST | Selected-only 4.A PDF from the ERP matrix form (session). |
 | `/api/access-requests/[id]/pdf` | GET | Saved access request as the 4.A document with captured approval sign-offs filled (`accessreq:read`). |
+| `/api/evaluations/[id]/pdf` | GET | Probation 30/60/90-day KPI evaluation as an A4 document (`evaluation:read`). |
 
 Access-request submit / approval sign-offs / provisioning are **Server Actions**
 (`src/app/(app)/access-requests/actions.ts`, `documents/access-actions.ts`).
+
+Probation KPI evaluation create / score / status are **Server Actions**
+(`src/app/(app)/evaluations/actions.ts`); role templates + the scoring engine live
+in `src/lib/documents/evaluation-templates.ts` (IT Support · IT Assistant Manager,
+30/60/90-day checkpoints, weighted 0–100 score + grade band). Document-only — the
+review record grants no system access.
 
 ## Ingest (API-key authenticated)
 | Route | Pipeline |

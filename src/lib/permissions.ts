@@ -56,6 +56,8 @@ export const PERMISSIONS = [
   "cctv:view", "cctv:manage",
   // Access-request profiles (RBAC matrix)
   "permprofile:manage", "accessreq:read", "accessreq:manage",
+  // Probation 30/60/90 KPI evaluations (document-only HR review)
+  "evaluation:read", "evaluation:manage",
   // Admin
   "user:manage", "role:manage", "settings:manage",
   "offboarding:read", "offboarding:manage",
@@ -100,6 +102,7 @@ export const ROLE_PERMISSIONS: Record<string, PermissionKey[]> = {
     "onboarding:read", "onboarding:manage", "catalog:read", "catalog:manage", "monitoring:read",
     "cctv:view", "cctv:manage",
     "permprofile:manage", "accessreq:read", "accessreq:manage",
+    "evaluation:read", "evaluation:manage",
   ],
   IT_STAFF: [
     "asset:read", "asset:create", "asset:update",
@@ -134,6 +137,7 @@ export const ROLE_PERMISSIONS: Record<string, PermissionKey[]> = {
     "department:read", "location:read", "asset:read", "borrow:read",
     "offboarding:read", "offboarding:manage", "report:read", "support:create",
     "onboarding:read", "onboarding:manage", "catalog:read",
+    "evaluation:read", "evaluation:manage",
   ],
   FINANCE: [
     ...READ_ONLY, "procurement:approve", "report:export", "support:create",
@@ -148,6 +152,7 @@ export const ROLE_PERMISSIONS: Record<string, PermissionKey[]> = {
   ],
   AUDITOR: [
     ...READ_ONLY, "audit:read", "vault:audit", "security:read", "report:export",
+    "evaluation:read",
   ],
   VIEWER: READ_ONLY,
 };

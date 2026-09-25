@@ -45,6 +45,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     ...(has("role:manage") ? [{ href: "/settings/roles", label: "Roles & Permissions", icon: "security" }] : []),
     ...(has("permprofile:manage") ? [{ href: "/settings/permission-profiles", label: "Default Permission", icon: "security" }] : []),
     ...(has("accessreq:read") ? [{ href: "/access-requests", label: "คำขอสิทธิ์ / Permission Requests", icon: "onboarding" }] : []),
+    ...(has("evaluation:read") ? [{ href: "/evaluations", label: "แบบประเมิน KPI / KPI Assessment", icon: "evaluations" }] : []),
     ...((has("onboarding:read") || has("offboarding:read"))
       ? [{
           href: "/employees?tab=onboarding", label: "Onboarding / Offboarding", icon: "offboarding",

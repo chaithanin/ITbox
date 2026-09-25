@@ -72,6 +72,7 @@ model Organization {
   configItems       ConfigurationItem[]
   ciRelationships   CiRelationship[]
   onboardings       Onboarding[]
+  evaluations       Evaluation[]
   serviceCatalog    ServiceCatalogItem[]
   endpointPostures  EndpointPosture[]
   monitoringHosts   MonitoringHost[]
@@ -334,6 +335,7 @@ model Employee {
   licenseAssignments LicenseAssignment[]
   offboardings       Offboarding[]
   onboardings        Onboarding[]
+  evaluations        Evaluation[]
   supportCases       SupportCase[]  @relation("CaseRequesterEmployee")
   borrowRequests     BorrowRequest[] @relation("BorrowRequester")
   simCards           SimCard[]
@@ -3112,4 +3114,60 @@ model AccessRequestItem {
 
   @@index([accessRequestId])
   @@map("access_request_items")
+}
+
+// ==================== Probation 30/60/90 KPI Evaluation ====================
+// Document/HR review record. Captures per-KPI 1–5 scores at the 30/60/90-day
+// checkpoints for a role template (IT Support / IT Assistant Manager), the
+// weighted overall score + grade, and manager/employee comments + action plan.
+// This is a review artifact only — it grants no system access.
+
+enum EvaluationTemplate {
+  IT_SUPPORT
+  IT_ASSISTANT_MANAGER
+}
+
+enum EvaluationStatus {
+  DRAFT
+  IN_REVIEW
+  COMPLETED
+}
+
+model Evaluation {
+  id             String             @id @default(uuid()) @db.Uuid
+  organizationId String             @db.Uuid
+  employeeId     String             @db.Uuid
+  template       EvaluationTemplate
+  status         EvaluationStatus   @default(DRAFT)
+  refNo          String?
+  // Snapshot of the reviewee (kept for the document even if the employee changes)
+  employeeName   String?
+  position       String?
+  department     String?
+  reviewPeriodStart DateTime?
+  probationEndDate  DateTime?
+  currentStage   String? // "d30" | "d60" | "d90" — checkpoint under review
+  // Per-KPI scores as { [kpiKey]: { d30?, d60?, d90?, note? } }
+  scores         Json               @default("{}")
+  overallScore   Float? // 0..100 weighted
+  grade          String? // grade band label at time of save
+  managerComment String?
+  employeeComment String?
+  actionPlan     String?
+  reviewerName   String?
+  reviewerId     String?            @db.Uuid
+  employeeAckAt  DateTime?
+  completedAt    DateTime?
+  createdById    String?            @db.Uuid
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  employee     Employee     @relation(fields: [employeeId], references: [id])
+
+  @@index([organizationId, status])
+  @@index([organizationId, employeeId])
+  @@map("evaluations")
 }

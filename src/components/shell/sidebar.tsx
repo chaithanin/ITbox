@@ -9,7 +9,7 @@ import {
   ShieldAlert, Settings, UserMinus, Boxes, LifeBuoy,
   Router, GitPullRequest, DatabaseBackup, FileText, Bug, BookOpen, ShieldX, Network,
   UserPlus, LayoutGrid, Activity, MonitorSmartphone, Cctv, HandHelping, ChevronDown, Smartphone,
-  Server, ShieldCheck,
+  Server, ShieldCheck, ClipboardCheck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { BrandLogo } from "@/components/brand-logo";
@@ -63,6 +63,7 @@ const ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   vulnerabilities: ShieldX,
   cmdb: Network,
   onboarding: UserPlus,
+  evaluations: ClipboardCheck,
   catalog: LayoutGrid,
   monitoring: Activity,
   endpoints: MonitorSmartphone,

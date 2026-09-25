@@ -29,6 +29,10 @@ Mobile-first responsive
   (พิมพ์ = PDF), **workflow อนุมัติ** (ลงนามผู้จัดการ/IT Support/IT Manager/
   Management บนเอกสาร) + ทะเบียนคำขอ + **รายงานทบทวนสิทธิ์** — *เป็นเอกสารเท่านั้น
   ไม่ให้สิทธิ์ระบบจริง*; Ref No อัตโนมัติ `REQ{DDMMYY}-NN`
+- **Probation KPI assessment (30/60/90)**: แบบประเมินผลทดลองงาน IT Support และ
+  IT Assistant Manager — ให้คะแนน KPI 1–5 ต่อรอบ 30/60/90 วัน, ถ่วงน้ำหนักเป็น
+  คะแนนรวม 0–100 + เกรด, KPI เป้าหมายเชิงตัวเลข, Manager Assessment, แผนพัฒนา,
+  PDF พิมพ์ได้ — *เป็นเอกสารเท่านั้น ไม่ให้สิทธิ์ระบบจริง*
 - **Device secrets**: รหัสปลดล็อกเครื่อง (device passcode) เก็บใน Vault (เข้ารหัส
   KMS) ผูกกับทรัพย์สิน; Vault/SIM import ผูกกับ asset อัตโนมัติผ่าน `assetTag`
 - **HR/ATS sync**: รับ roster (ชื่อ/ชื่อเล่น/เบอร์/แผนก/วันเริ่มงาน) จาก HR-ATS,

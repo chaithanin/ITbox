@@ -515,3 +515,185 @@ export function buildAccessMatrixPdf(d: DecodedMatrix): Promise<Buffer> {
     doc.end();
   });
 }
+
+// ---------------------------------------------------------------------------
+// Probation 30/60/90 KPI evaluation PDF (IT Support / IT Assistant Manager).
+// ---------------------------------------------------------------------------
+export interface EvalPdfKpi {
+  index: number;
+  label: string; // "labelTh / label"
+  weight: number;
+  target: string;
+  s30: string; s60: string; s90: string; // "-" or "1".."5"
+  percent: string; // "" or "82%"
+  note: string;
+}
+export interface EvalPdfData {
+  refNo?: string;
+  title: string;
+  subtitle: string;
+  roleLabel: string;
+  employeeName?: string;
+  position?: string;
+  department?: string;
+  reviewPeriodStart?: string;
+  probationEndDate?: string;
+  currentStage?: string;
+  status?: string;
+  overall?: string; // "82" or "—"
+  grade?: string;
+  stageWeights: string;
+  scaleLegend: string;
+  kpis: EvalPdfKpi[];
+  numericKpis: { label: string; target: string }[];
+  managerChecklist: string[];
+  managerComment?: string;
+  employeeComment?: string;
+  actionPlan?: string;
+  reviewerName?: string;
+}
+
+export function buildEvaluationPdf(d: EvalPdfData): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const thai = loadThaiFont();
+    const serif = loadSerifFont();
+    const margin = 40;
+    const doc = new PDFDocument({ size: "A4", margin, font: "" });
+    const chunks: Buffer[] = [];
+    doc.on("data", (c) => chunks.push(c));
+    doc.on("end", () => resolve(Buffer.concat(chunks)));
+    doc.on("error", reject);
+    if (thai) doc.registerFont("th", thai);
+    const logoFont = serif ? "serif" : thai ? "th" : "Helvetica";
+    if (serif) doc.registerFont("serif", serif);
+    const body = thai ? "th" : "Helvetica";
+    const left = margin, width = doc.page.width - margin * 2, bottom = doc.page.height - margin;
+    let y = margin;
+    const ensure = (h: number) => { if (y + h > bottom) { doc.addPage(); y = margin; } };
+
+    // header (company mark, matches the access-request form)
+    doc.font(logoFont).fillColor("#111827");
+    const big = 22, sm = 15, kern = 3;
+    const wCH = doc.fontSize(sm).widthOfString("CH"), wT = doc.fontSize(big).widthOfString("T"), wNN = doc.fontSize(sm).widthOfString("NN");
+    let gx = left + (width - (wCH + kern + wT + kern + wNN)) / 2;
+    doc.fontSize(sm).text("CH", gx, margin + (big - sm) * 0.62, { lineBreak: false }); gx += wCH + kern;
+    doc.fontSize(big).text("T", gx, margin, { lineBreak: false }); gx += wT + kern;
+    doc.fontSize(sm).text("NN", gx, margin + (big - sm) * 0.62, { lineBreak: false });
+    doc.font(logoFont).fontSize(10).text("Chaithanin Co.,Ltd.", left, margin + big + 1, { width, align: "center", lineBreak: false });
+    doc.font(body).fontSize(8).fillColor("#374151").text(`Ref No : ${d.refNo || "________"}`, left, margin + 2, { width, align: "right", lineBreak: false });
+    y = margin + 40;
+    doc.font(body).fillColor("#111827").fontSize(13).text(d.title, left, y, { width, align: "center" });
+    y = doc.y + 1;
+    doc.fontSize(9).fillColor("#4b5563").text(d.subtitle, left, y, { width, align: "center" });
+    y = doc.y + 8; doc.fillColor("#111827");
+
+    const bar = (t: string) => { ensure(18); doc.rect(left, y, width, 15).fill("#e5edff"); doc.fillColor("#1e3a8a").font(body).fontSize(9).text(t, left + 5, y + 3, { width: width - 10, lineBreak: false }); y += 20; doc.fillColor("#111827"); };
+    const kv = (label: string, val: string, x: number, w: number) => { doc.font(body).fontSize(8.5).fillColor("#111827").text(`${label}: `, x, y, { continued: true, lineBreak: false, width: w }); doc.fillColor("#1d4ed8").text(val || "—", { lineBreak: false }); doc.fillColor("#111827"); };
+
+    // employee / review info
+    bar("ข้อมูลผู้ถูกประเมิน / Employee & Review Information");
+    ensure(15); kv("ชื่อ / Name", d.employeeName || "", left, width / 2); kv("ตำแหน่ง / Role", d.roleLabel || "", left + width / 2, width / 2); y += 15;
+    ensure(15); kv("แผนก / Dept", d.department || "", left, width / 2); kv("Position", d.position || "", left + width / 2, width / 2); y += 15;
+    ensure(15); kv("เริ่มงาน / Start", d.reviewPeriodStart || "", left, width / 2); kv("ครบทดลองงาน / Probation end", d.probationEndDate || "", left + width / 2, width / 2); y += 15;
+    ensure(15); kv("รอบประเมิน / Checkpoint", d.currentStage || "", left, width / 2); kv("สถานะ / Status", d.status || "", left + width / 2, width / 2); y += 15;
+
+    // overall score
+    bar("คะแนนรวม / Overall Score");
+    ensure(16);
+    doc.font(body).fontSize(11).fillColor("#111827").text(`${d.overall ?? "—"} / 100`, left + 4, y, { lineBreak: false, continued: true });
+    doc.fillColor("#1d4ed8").fontSize(10).text(`   ${d.grade || ""}`, { lineBreak: false });
+    doc.fillColor("#111827"); y += 16;
+    ensure(12); doc.font(body).fontSize(7.5).fillColor("#6b7280").text(`${d.stageWeights}  ·  ${d.scaleLegend}`, left + 4, y, { width: width - 8 }); y = doc.y + 6; doc.fillColor("#111827");
+
+    // KPI table
+    bar("รายการ KPI / KPI Scoring (คะแนน 1–5 ต่อรอบ 30/60/90)");
+    const cols = { kpi: 0.40, w: 0.08, t30: 0.09, t60: 0.09, t90: 0.09, pct: 0.10, tgt: 0.15 };
+    const cx = {
+      kpi: left, w: left + width * cols.kpi, t30: left + width * (cols.kpi + cols.w),
+      t60: left + width * (cols.kpi + cols.w + cols.t30), t90: left + width * (cols.kpi + cols.w + cols.t30 + cols.t60),
+      pct: left + width * (cols.kpi + cols.w + cols.t30 + cols.t60 + cols.t90),
+      tgt: left + width * (cols.kpi + cols.w + cols.t30 + cols.t60 + cols.t90 + cols.pct),
+    };
+    const head = () => {
+      ensure(14); doc.font(body).fontSize(7.5).fillColor("#374151");
+      doc.text("KPI", cx.kpi + 2, y, { width: width * cols.kpi - 4, lineBreak: false });
+      doc.text("W%", cx.w, y, { width: width * cols.w, align: "center", lineBreak: false });
+      doc.text("30", cx.t30, y, { width: width * cols.t30, align: "center", lineBreak: false });
+      doc.text("60", cx.t60, y, { width: width * cols.t60, align: "center", lineBreak: false });
+      doc.text("90", cx.t90, y, { width: width * cols.t90, align: "center", lineBreak: false });
+      doc.text("%", cx.pct, y, { width: width * cols.pct, align: "center", lineBreak: false });
+      doc.text("Target", cx.tgt, y, { width: width * cols.tgt, lineBreak: false });
+      y += 11; doc.moveTo(left, y).lineTo(left + width, y).strokeColor("#d1d5db").stroke(); y += 3; doc.fillColor("#111827");
+    };
+    head();
+    for (const k of d.kpis) {
+      const labelH = doc.font(body).fontSize(7.5).heightOfString(`${k.index}. ${k.label}`, { width: width * cols.kpi - 4 });
+      const tgtH = doc.fontSize(6.5).heightOfString(k.target, { width: width * cols.tgt - 2 });
+      const rowH = Math.max(labelH, tgtH, 11) + (k.note ? 9 : 0) + 4;
+      ensure(rowH);
+      const rowTop = y;
+      doc.font(body).fontSize(7.5).fillColor("#111827").text(`${k.index}. ${k.label}`, cx.kpi + 2, rowTop, { width: width * cols.kpi - 4 });
+      doc.fontSize(8).fillColor("#111827");
+      doc.text(`${k.weight}`, cx.w, rowTop, { width: width * cols.w, align: "center", lineBreak: false });
+      doc.text(k.s30, cx.t30, rowTop, { width: width * cols.t30, align: "center", lineBreak: false });
+      doc.text(k.s60, cx.t60, rowTop, { width: width * cols.t60, align: "center", lineBreak: false });
+      doc.text(k.s90, cx.t90, rowTop, { width: width * cols.t90, align: "center", lineBreak: false });
+      doc.fillColor("#1d4ed8").text(k.percent || "—", cx.pct, rowTop, { width: width * cols.pct, align: "center", lineBreak: false });
+      doc.fillColor("#374151").fontSize(6.5).text(k.target, cx.tgt, rowTop, { width: width * cols.tgt - 2 });
+      let yy = rowTop + Math.max(labelH, tgtH, 11);
+      if (k.note) { doc.fontSize(6.5).fillColor("#6b7280").text(`หมายเหตุ/Evidence: ${k.note}`, cx.kpi + 6, yy, { width: width - 12 }); yy = doc.y; }
+      y = yy + 4;
+      doc.moveTo(left, y - 2).lineTo(left + width, y - 2).strokeColor("#eef2f7").stroke();
+      doc.fillColor("#111827");
+    }
+
+    // numeric KPI targets
+    bar("KPI เป้าหมายเชิงตัวเลข / Numeric KPI Targets (90 วัน)");
+    for (let i = 0; i < d.numericKpis.length; i += 2) {
+      ensure(12);
+      for (let j = 0; j < 2 && i + j < d.numericKpis.length; j++) {
+        const n = d.numericKpis[i + j]; const bx = left + j * (width / 2);
+        doc.font(body).fontSize(7.5).fillColor("#111827").text(`• ${n.label}: `, bx + 2, y, { width: width / 2 - 6, continued: true, lineBreak: false });
+        doc.fillColor("#1d4ed8").text(n.target, { lineBreak: false });
+      }
+      doc.fillColor("#111827"); y += 11;
+    }
+    y += 2;
+
+    // manager assessment checklist
+    bar("การประเมินโดยผู้จัดการ / Manager Assessment");
+    for (const c of d.managerChecklist) { ensure(11); doc.font(body).fontSize(7.5).fillColor("#111827").text(`☐  ${c}`, left + 4, y, { width: width - 8 }); y = doc.y + 2; }
+    y += 2;
+
+    const para = (title: string, text?: string) => {
+      if (!text) return;
+      ensure(24); doc.font(body).fontSize(8.5).fillColor("#1e3a8a").text(title, left, y); y = doc.y + 1;
+      doc.fontSize(8).fillColor("#111827").text(text, left + 4, y, { width: width - 8 }); y = doc.y + 6;
+    };
+    para("ความเห็นผู้จัดการ / Manager comment", d.managerComment);
+    para("ความเห็นพนักงาน / Employee comment", d.employeeComment);
+    para("แผนพัฒนา / Action plan", d.actionPlan);
+
+    // signatures
+    ensure(70); y += 6;
+    const bw2 = width / 2, bh = 46;
+    const sroles = [`ผู้ประเมิน / Reviewer${d.reviewerName ? `  (${d.reviewerName})` : ""}`, "ผู้ถูกประเมิน / Employee", "ผู้จัดการฝ่าย / IT Manager", "ฝ่ายบุคคล / HR"];
+    for (let i = 0; i < sroles.length; i += 2) {
+      ensure(bh);
+      for (let j = 0; j < 2 && i + j < sroles.length; j++) {
+        const bx = left + j * bw2;
+        doc.font(body).fontSize(8).fillColor("#111827");
+        doc.text("ลงชื่อ/Sign ............................................", bx, y + 4, { width: bw2, align: "center", lineBreak: false });
+        doc.text("(........................................................)", bx, y + 18, { width: bw2, align: "center", lineBreak: false });
+        doc.fontSize(7.5).fillColor("#6b7280").text("วันที่ / Date ...............................", bx, y + 30, { width: bw2, align: "center", lineBreak: false });
+        doc.fontSize(8).fillColor("#111827").text(sroles[i + j], bx, y + 40, { width: bw2, align: "center", lineBreak: false });
+      }
+      y += bh + 6;
+    }
+
+    ensure(14);
+    doc.font(body).fontSize(7).fillColor("#6b7280").text("เอกสารประเมินผลการทดลองงานเท่านั้น — ไม่ได้ให้สิทธิ์การใช้งานระบบใด ๆ / Probation review document only; grants no system access.", left, y, { width, align: "center" });
+
+    doc.end();
+  });
+}

@@ -100,6 +100,7 @@ const PERMISSIONS = [
   "user:manage","role:manage","settings:manage","offboarding:read","offboarding:manage",
   "sim:read","sim:manage",
   "permprofile:manage","accessreq:read","accessreq:manage",
+  "evaluation:read","evaluation:manage",
 ];
 
 const READ_ONLY = [
@@ -130,6 +131,7 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
     "onboarding:read","onboarding:manage","catalog:read","catalog:manage","monitoring:read",
     "cctv:view","cctv:manage",
     "permprofile:manage","accessreq:read","accessreq:manage",
+    "evaluation:read","evaluation:manage",
   ],
   IT_STAFF: [
     "asset:read","asset:create","asset:update","asset:assign","asset:return","asset:transfer",
@@ -157,11 +159,12 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
     "employee:read","employee:create","employee:update","employee:delete",
     "department:read","location:read","asset:read","borrow:read","offboarding:read","offboarding:manage","report:read","support:create",
     "onboarding:read","onboarding:manage","catalog:read",
+    "evaluation:read","evaluation:manage",
   ],
   FINANCE: [...READ_ONLY, "procurement:approve", "report:export", "support:create"],
   MANAGER: [...READ_ONLY, "procurement:create", "procurement:approve", "support:create", "support:read", "borrow:create", "borrow:approve"],
   EMPLOYEE: ["asset:read","vault:read","procurement:read","procurement:create","support:create","borrow:read","borrow:create"],
-  AUDITOR: [...READ_ONLY, "audit:read","vault:audit","security:read","report:export"],
+  AUDITOR: [...READ_ONLY, "audit:read","vault:audit","security:read","report:export","evaluation:read"],
   VIEWER: READ_ONLY,
 };
 
