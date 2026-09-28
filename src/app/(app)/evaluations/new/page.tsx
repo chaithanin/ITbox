@@ -39,7 +39,7 @@ export default async function NewEvaluationPage({ searchParams }: { searchParams
                 <option value="" disabled>— เลือกพนักงาน / Select —</option>
                 {employees.map((e) => (
                   <option key={e.id} value={e.id}>
-                    {e.firstName} {e.lastName} · {e.employeeCode}{e.department?.name ? ` · ${e.department.name}` : ""}{e.position ? ` · ${e.position}` : ""}
+                    {e.firstName} {e.lastName}
                   </option>
                 ))}
               </Select>
