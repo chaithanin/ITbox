@@ -3151,9 +3151,13 @@ model Evaluation {
   scores         Json               @default("{}")
   overallScore   Float? // 0..100 weighted
   grade          String? // grade band label at time of save
-  managerComment String?
+  managerComment String? // ความเห็นผู้ประเมิน / จุดแข็ง–สิ่งที่ต้องพัฒนา
   employeeComment String?
-  actionPlan     String?
+  actionPlan     String? // แผนพัฒนา / เป้าหมายรอบถัดไป
+  improvementNote String? // งานปรับปรุง (Improvement) ที่พนักงานเสนอเอง — 90 วัน
+  probationResult String? // PASS | FAIL | OTHER — ผลการพิจารณาทดลองงาน (90 วัน)
+  probationEffectiveFrom DateTime? // มีผลตั้งแต่ (เมื่อ PASS)
+  decisionNote   String? // เหตุผลประกอบผลการพิจารณา
   reviewerName   String?
   reviewerId     String?            @db.Uuid
   employeeAckAt  DateTime?

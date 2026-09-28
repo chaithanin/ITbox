@@ -29,7 +29,7 @@ export default async function EvaluationsPage({ searchParams }: { searchParams: 
   const status = STATUSES.includes(sp.status as (typeof STATUSES)[number]) ? (sp.status as (typeof STATUSES)[number]) : undefined;
   const template = TEMPLATES.includes(sp.template as (typeof TEMPLATES)[number]) ? (sp.template as (typeof TEMPLATES)[number]) : undefined;
   const { page, skip, take } = parsePage(sp.page);
-  const canManage = user.permissions.has("evaluation:manage");
+  const canAssign = user.permissions.has("evaluation:assign");
 
   const where: Prisma.EvaluationWhereInput = {
     organizationId: user.organizationId, deletedAt: null,
@@ -54,7 +54,7 @@ export default async function EvaluationsPage({ searchParams }: { searchParams: 
   return (
     <div>
       <PageHeader title="แบบประเมิน KPI 30/60/90 วัน / Probation KPI Assessment" description={`ทั้งหมด ${total} รายการ`}>
-        {canManage && (
+        {canAssign && (
           <Button asChild><Link href="/evaluations/new"><Plus className="h-4 w-4" /> สร้างแบบประเมิน / New</Link></Button>
         )}
       </PageHeader>

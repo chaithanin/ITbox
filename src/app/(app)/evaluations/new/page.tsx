@@ -12,7 +12,7 @@ import { EVAL_TEMPLATE_LIST } from "@/lib/documents/evaluation-templates";
 import { createEvaluation } from "../actions";
 
 export default async function NewEvaluationPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
-  const user = await requirePermission("evaluation:manage");
+  const user = await requirePermission("evaluation:assign");
   const sp = await searchParams;
 
   const employees = await prisma.employee.findMany({

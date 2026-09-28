@@ -8,24 +8,28 @@ the active branch.
 
 **Added**
 - **Probation 30/60/90-day KPI evaluation module** (`/evaluations`) — a
-  document-only HR review with two role templates:
-  - **IT Support** — 8 weighted KPIs (Ticket/SLA/Incident 25%, Technical 20%,
-    Problem Solving 15%, Network/M365/Endpoint 10%, Security 10%,
-    Asset & Documentation 10%, User Service 5%, Teamwork 5%) with 30/60/90-day
-    descriptors, numeric KPI targets, and a manager assessment checklist.
-  - **IT Assistant Manager** — 9 weighted KPIs (Infrastructure 15%, Project 20%,
-    Application/Integration 15%, Digital/AI 15%, Data/MIS 10%, Business 10%,
-    Vendor/Team 5%, Governance 5%, Reporting 5%) with outcome-based numeric
-    targets and an IT-Manager-backup capability checklist.
-  - Each KPI scored **1–5 per checkpoint**; overall is a stage-weighted
-    (30 → 20% / 60 → 30% / 90 → 50%), KPI-weighted **0–100** score with a grade
-    band (Exceeds / Meets / Needs Improvement / Unsatisfactory), normalized over
-    what has been filled. Evidence/comment per KPI + manager/employee comments +
-    action plan; **A4 PDF export** (`/api/evaluations/[id]/pdf`); auto Ref No
-    `EVAL{DDMMYY}-NN`. **Grants no system access.**
-- Granted `evaluation:read` / `evaluation:manage` to existing orgs
-  (SUPER_ADMIN, ADMIN, IT_MANAGER, HR; read also to AUDITOR) via migration;
-  seed synced; nav item under People & Access; segment error boundary.
+  document-only HR review built to the company form
+  (`แบบประเมินผลการทดลองงาน`), with two role templates:
+  - **IT Support** — **12 KPIs scored 1–5 per round**, rolled up into 8 weighted
+    categories (Ticket/SLA/Incident 25%, Technical Skill 20%, Problem Solving
+    15%, Network/M365/Endpoint 10%, Security 10%, Asset & Documentation 10%,
+    User Service 5%, Teamwork 5%) with per-round descriptors, "สิ่งที่ต้องทำได้"
+    checklists, numeric KPI targets, Improvement, Manager Assessment, and a
+    probation decision (ผ่าน/ไม่ผ่าน/อื่นๆ).
+  - **IT Assistant Manager** — 9 outcome-based weighted categories (Infra 15%,
+    Project 20%, App/Integration 15%, Digital/AI 15%, Data/MIS 10%, Business
+    10%, Vendor/Team 5%, Governance 5%, Reporting 5%).
+  - **Each round (30/60/90) is totalled independently** on 100 —
+    `category = (avg of its KPIs ÷ 5) × weight`, normalized over filled
+    categories — with a grade band (Exceeds ≥90 / Meets ≥80 / Needs Improvement
+    ≥70 / Unsatisfactory), 90-day used for the decision. **Two A4 PDFs**: the
+    filled assessment and the **goal-notification letter**
+    (`/api/evaluations/[id]/pdf?doc=notice`). Auto Ref No `EVAL{DDMMYY}-NN`.
+    **Grants no system access.**
+- **Only the IT Manager can create/issue a review** — new `evaluation:assign`
+  permission (SUPER_ADMIN, ADMIN, IT_MANAGER); `evaluation:manage` scores/edits
+  (adds HR); `evaluation:read` views (adds AUDITOR). Granted to existing orgs via
+  migration; seed synced; nav item under People & Access; segment error boundary.
 
 ## 2026-09 — Access-request documents, HR sync fields, device passcode
 

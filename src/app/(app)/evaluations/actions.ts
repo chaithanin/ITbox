@@ -41,9 +41,9 @@ function optStr(v: FormDataEntryValue | null): string | null {
   return typeof v === "string" && v.trim() !== "" ? v.trim() : null;
 }
 
-/** Create a new evaluation for an employee from a role template. */
+/** Create/issue a new evaluation for an employee — IT Manager only (evaluation:assign). */
 export async function createEvaluation(formData: FormData) {
-  const user = await requirePermission("evaluation:manage");
+  const user = await requirePermission("evaluation:assign");
   const employeeId = z.string().uuid().parse(formData.get("employeeId"));
   const template = z.enum(TEMPLATES).parse(formData.get("template")) as EvalTemplateKey;
 
@@ -129,6 +129,10 @@ export async function saveEvaluation(id: string, formData: FormData) {
       managerComment: optStr(formData.get("managerComment")),
       employeeComment: optStr(formData.get("employeeComment")),
       actionPlan: optStr(formData.get("actionPlan")),
+      improvementNote: optStr(formData.get("improvementNote")),
+      probationResult: z.enum(["PASS", "FAIL", "OTHER"]).nullable().catch(null).parse(optStr(formData.get("probationResult"))),
+      probationEffectiveFrom: optDate(formData.get("probationEffectiveFrom")),
+      decisionNote: optStr(formData.get("decisionNote")),
       reviewPeriodStart: optDate(formData.get("reviewPeriodStart")),
       probationEndDate: optDate(formData.get("probationEndDate")),
       completedAt: status === "COMPLETED" ? new Date() : null,

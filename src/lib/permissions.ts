@@ -57,7 +57,8 @@ export const PERMISSIONS = [
   // Access-request profiles (RBAC matrix)
   "permprofile:manage", "accessreq:read", "accessreq:manage",
   // Probation 30/60/90 KPI evaluations (document-only HR review)
-  "evaluation:read", "evaluation:manage",
+  // assign = create/issue a review (IT Manager only); manage = score/edit; read = view
+  "evaluation:read", "evaluation:manage", "evaluation:assign",
   // Admin
   "user:manage", "role:manage", "settings:manage",
   "offboarding:read", "offboarding:manage",
@@ -102,7 +103,7 @@ export const ROLE_PERMISSIONS: Record<string, PermissionKey[]> = {
     "onboarding:read", "onboarding:manage", "catalog:read", "catalog:manage", "monitoring:read",
     "cctv:view", "cctv:manage",
     "permprofile:manage", "accessreq:read", "accessreq:manage",
-    "evaluation:read", "evaluation:manage",
+    "evaluation:read", "evaluation:manage", "evaluation:assign",
   ],
   IT_STAFF: [
     "asset:read", "asset:create", "asset:update",
