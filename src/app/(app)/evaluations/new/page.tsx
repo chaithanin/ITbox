@@ -10,17 +10,19 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { EVAL_TEMPLATE_LIST } from "@/lib/documents/evaluation-templates";
 import { createEvaluation } from "../actions";
+import { EmployeeCombobox } from "../employee-combobox";
 
 export default async function NewEvaluationPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const user = await requirePermission("evaluation:assign");
   const sp = await searchParams;
 
-  const employees = await prisma.employee.findMany({
+  const rows = await prisma.employee.findMany({
     where: { organizationId: user.organizationId, deletedAt: null, status: "ACTIVE" },
-    select: { id: true, firstName: true, lastName: true, employeeCode: true, position: true, department: { select: { name: true } } },
+    select: { id: true, firstName: true, lastName: true, employeeCode: true },
     orderBy: [{ firstName: "asc" }],
-    take: 500,
+    take: 2000,
   });
+  const employees = rows.map((e) => ({ id: e.id, name: `${e.firstName} ${e.lastName}`.trim(), code: e.employeeCode }));
 
   return (
     <div className="mx-auto max-w-2xl">
@@ -34,15 +36,8 @@ export default async function NewEvaluationPage({ searchParams }: { searchParams
         <CardContent>
           <form action={createEvaluation} className="space-y-4">
             <div className="space-y-1.5">
-              <Label htmlFor="employeeId">พนักงาน / Employee <span className="text-destructive">*</span></Label>
-              <Select id="employeeId" name="employeeId" required defaultValue="">
-                <option value="" disabled>— เลือกพนักงาน / Select —</option>
-                {employees.map((e) => (
-                  <option key={e.id} value={e.id}>
-                    {e.firstName} {e.lastName}
-                  </option>
-                ))}
-              </Select>
+              <Label>พนักงาน / Employee <span className="text-destructive">*</span></Label>
+              <EmployeeCombobox employees={employees} />
               {employees.length === 0 && <p className="text-xs text-muted-foreground">ยังไม่มีพนักงานในระบบ / No active employees</p>}
             </div>
 

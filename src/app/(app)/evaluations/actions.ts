@@ -44,7 +44,9 @@ function optStr(v: FormDataEntryValue | null): string | null {
 /** Create/issue a new evaluation for an employee — IT Manager only (evaluation:assign). */
 export async function createEvaluation(formData: FormData) {
   const user = await requirePermission("evaluation:assign");
-  const employeeId = z.string().uuid().parse(formData.get("employeeId"));
+  const parsedId = z.string().uuid().safeParse(formData.get("employeeId"));
+  if (!parsedId.success) redirect("/evaluations/new?error=emp");
+  const employeeId = parsedId.data;
   const template = z.enum(TEMPLATES).parse(formData.get("template")) as EvalTemplateKey;
 
   const emp = await prisma.employee.findFirst({
