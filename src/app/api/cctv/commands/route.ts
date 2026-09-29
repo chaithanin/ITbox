@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { resolveIngestOrg } from "@/lib/ingest-auth";
+import { CCTV_ENABLED } from "@/lib/features";
 
 export const dynamic = "force-dynamic";
 
@@ -13,6 +14,7 @@ export const dynamic = "force-dynamic";
  * Response: { recheckSerials: ["<serial>", ...] }
  */
 export async function GET(req: Request) {
+  if (!CCTV_ENABLED) return NextResponse.json({ error: "not_found" }, { status: 404 });
   const auth = await resolveIngestOrg(req);
   if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
   const rows = await prisma.cctvRecorder.findMany({

@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/session";
 import { auditLog } from "@/lib/audit";
 import { getCctvSettings, retentionStatus, gapStatus } from "@/lib/services/cctv-settings";
+import { CCTV_ENABLED } from "@/lib/features";
 
 export const dynamic = "force-dynamic";
 
@@ -79,6 +80,7 @@ async function toXlsx(r: Report): Promise<Buffer> {
 }
 
 export const GET = apiHandler(async (req: Request, ctx: { params: Promise<{ report: string }> }) => {
+  if (!CCTV_ENABLED) return NextResponse.json({ error: "not_found" }, { status: 404 });
   const user = await requirePermission("cctv:view");
   const { report } = await ctx.params;
   const format = new URL(req.url).searchParams.get("format") === "csv" ? "csv" : "xlsx";

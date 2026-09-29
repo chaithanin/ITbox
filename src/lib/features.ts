@@ -7,3 +7,7 @@
 //
 // To re-open Procurement later, set this back to `true` and redeploy.
 export const PROCUREMENT_ENABLED = false;
+
+// CCTV monitoring module. Set to `true` and redeploy to re-open it (sidebar
+// link, /cctv pages, CCTV API/ingest routes and the daily CCTV cron).
+export const CCTV_ENABLED = false;

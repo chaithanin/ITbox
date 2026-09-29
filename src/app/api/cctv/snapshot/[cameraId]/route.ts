@@ -3,11 +3,13 @@ import { apiHandler } from "@/lib/api";
 import { requirePermission, AuthError } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import { getStorageProvider } from "@/lib/storage";
+import { CCTV_ENABLED } from "@/lib/features";
 
 export const dynamic = "force-dynamic";
 
 /** Serve a camera's latest stored snapshot JPEG (org-scoped, cctv:view). */
 export const GET = apiHandler(async (_req: Request, ctx: { params: Promise<{ cameraId: string }> }) => {
+  if (!CCTV_ENABLED) throw new AuthError("NOT_FOUND", 404);
   const user = await requirePermission("cctv:view");
   const { cameraId } = await ctx.params;
   const cam = await prisma.cctvCamera.findFirst({

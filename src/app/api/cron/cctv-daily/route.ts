@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { sendDailyCctvReports } from "@/lib/services/cctv-report";
 import { verifyCronSecret } from "@/lib/cron-auth";
+import { CCTV_ENABLED } from "@/lib/features";
 
 export const dynamic = "force-dynamic";
 
@@ -13,6 +14,7 @@ export async function POST(req: Request) {
   if (!verifyCronSecret(req)) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
+  if (!CCTV_ENABLED) return NextResponse.json({ ok: true, skipped: "cctv_disabled" });
   const result = await sendDailyCctvReports();
   return NextResponse.json({ ok: true, ...result });
 }

@@ -7,11 +7,19 @@ import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/session";
 import { auditLog } from "@/lib/audit";
 import { parseDeviceXml, importRecordersFromXml } from "@/lib/services/cctv";
+import { CCTV_ENABLED } from "@/lib/features";
+import { notFound } from "next/navigation";
 
 const MAX_XML_BYTES = 1 * 1024 * 1024; // 1 MB
 
+/** The CCTV module is closed via CCTV_ENABLED — refuse every action when off. */
+function assertCctvEnabled() {
+  if (!CCTV_ENABLED) notFound();
+}
+
 /** Import a Dahua device.xml (uploaded by an admin) into the CCTV device master. */
 export async function importDeviceXml(formData: FormData) {
+  assertCctvEnabled();
   const user = await requirePermission("cctv:manage");
   const file = formData.get("file");
   if (!(file instanceof File) || file.size === 0) redirect("/cctv/import?error=nofile");
@@ -43,6 +51,7 @@ const incidentSchema = z.object({
 });
 
 export async function updateCctvIncident(formData: FormData) {
+  assertCctvEnabled();
   const user = await requirePermission("cctv:manage");
   const i = incidentSchema.parse(Object.fromEntries(formData));
   const incident = await prisma.cctvIncident.findFirst({
@@ -71,6 +80,7 @@ export async function updateCctvIncident(formData: FormData) {
 
 /** "Check Now" — flag a recorder for an immediate re-poll by the collector. */
 export async function requestRecheck(formData: FormData) {
+  assertCctvEnabled();
   const user = await requirePermission("cctv:manage");
   const recorderId = z.string().uuid().parse(formData.get("recorderId"));
   await prisma.cctvRecorder.updateMany({

@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/session";
 import { getT } from "@/lib/i18n";
 import { prisma } from "@/lib/prisma";
-import { PROCUREMENT_ENABLED } from "@/lib/features";
+import { PROCUREMENT_ENABLED, CCTV_ENABLED } from "@/lib/features";
 import { AppShell } from "@/components/shell/app-shell";
 import type { NavGroup, NavItem } from "@/components/shell/sidebar";
 import { KpiPopup } from "@/components/kpi-popup";
@@ -125,7 +125,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         { href: "/network/ipam", label: "IP / Subnet / VLAN" },
       ],
     }] : []),
-    ...(has("cctv:view")
+    ...(CCTV_ENABLED && has("cctv:view")
       ? [{
           href: "/cctv", label: "CCTV", icon: "cctv",
           children: [
