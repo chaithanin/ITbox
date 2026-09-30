@@ -74,6 +74,7 @@ const nextConfig: NextConfig = {
     "/api/doc-forms/access-matrix-pdf": ["./src/assets/fonts/*.ttf"],
     "/api/access-requests/[id]/pdf": ["./src/assets/fonts/*.ttf"],
     "/api/evaluations/[id]/pdf": ["./src/assets/fonts/*.ttf"],
+    "/api/drive-mappings/[id]/pdf": ["./src/assets/fonts/*.ttf"],
     "/api/it-report/export": ["./src/assets/fonts/*.ttf"],
   },
   async headers() {

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, KeyRound, Trash2 } from "lucide-react";
+import { ArrowLeft, KeyRound, Trash2, FileText, FileCode } from "lucide-react";
 import { requirePermission } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import { PageHeader } from "@/components/page-header";
@@ -40,6 +40,8 @@ export default async function DriveMappingDetailPage({ params, searchParams }: {
     <div className="mx-auto max-w-3xl">
       <Button variant="ghost" size="sm" asChild className="mb-2"><Link href="/drive-mappings"><ArrowLeft className="h-4 w-4" /> กลับ / Back</Link></Button>
       <PageHeader title={r.employeeName || r.computerName || "Drive & User Setup"} description={[r.employeeCode, r.nickname, r.position].filter(Boolean).join(" · ")}>
+        <Button variant="outline" asChild><a href={`/api/drive-mappings/${r.id}/pdf`} target="_blank" rel="noopener"><FileText className="h-4 w-4" /> ใบส่งมอบ / PDF</a></Button>
+        <Button variant="outline" asChild><a href={`/api/drive-mappings/${r.id}/script`}><FileCode className="h-4 w-4" /> สคริปต์ .bat</a></Button>
         <StatusBadge status={r.status} />
       </PageHeader>
 

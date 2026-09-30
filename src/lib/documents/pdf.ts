@@ -822,3 +822,82 @@ export function buildEvaluationNoticePdf(d: EvalNoticeData): Promise<Buffer> {
     doc.end();
   });
 }
+
+// ---------------------------------------------------------------------------
+// Drive & User Setup handover sheet (ใบส่งมอบ). Never includes the password —
+// the login credential lives in the Vault; this sheet lists drives + identity.
+// ---------------------------------------------------------------------------
+export interface DriveMappingPdfData {
+  refNo?: string;
+  date?: string;
+  employeeName?: string;
+  employeeCode?: string;
+  nickname?: string;
+  position?: string;
+  computerName?: string;
+  userShare?: string;
+  loginUsername?: string;
+  drives: string[];
+  notes?: string;
+}
+
+export function buildDriveMappingPdf(d: DriveMappingPdfData): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const thai = loadThaiFont();
+    const serif = loadSerifFont();
+    const margin = 40;
+    const doc = new PDFDocument({ size: "A4", margin, font: "" });
+    const chunks: Buffer[] = [];
+    doc.on("data", (c) => chunks.push(c));
+    doc.on("end", () => resolve(Buffer.concat(chunks)));
+    doc.on("error", reject);
+    if (thai) doc.registerFont("th", thai);
+    const logoFont = serif ? "serif" : thai ? "th" : "Helvetica";
+    if (serif) doc.registerFont("serif", serif);
+    const body = thai ? "th" : "Helvetica";
+    const left = margin, width = doc.page.width - margin * 2, bottom = doc.page.height - margin;
+    let y = evalHeader(doc, logoFont, body, left, width, margin, "ใบส่งมอบการตั้งค่าเครื่องและไดรฟ์", "Drive & User Setup Handover", d.refNo);
+    doc.fillColor("#111827");
+    const ensure = (h: number) => { if (y + h > bottom) { doc.addPage(); y = margin; } };
+    const bar = (t: string) => { ensure(18); doc.rect(left, y, width, 15).fill("#e5edff"); doc.fillColor("#1e3a8a").font(body).fontSize(9).text(t, left + 5, y + 3, { width: width - 10, lineBreak: false }); y += 20; doc.fillColor("#111827"); };
+    const kv = (label: string, val: string, x: number, w: number) => { doc.font(body).fontSize(8.5).fillColor("#111827").text(`${label}: `, x, y, { continued: true, lineBreak: false, width: w }); doc.fillColor("#1d4ed8").text(val || "—", { lineBreak: false }); doc.fillColor("#111827"); };
+
+    ensure(12); doc.font(body).fontSize(8).fillColor("#374151").text(`วันที่ / Date: ${d.date || "......./......./......."}`, left, y, { width, align: "right", lineBreak: false }); y += 14; doc.fillColor("#111827");
+
+    bar("ข้อมูลพนักงาน / Employee");
+    ensure(15); kv("ชื่อ / Name", d.employeeName || "", left, width / 2); kv("ชื่อเล่น / Nickname", d.nickname || "", left + width / 2, width / 2); y += 15;
+    ensure(15); kv("รหัสพนักงาน / Staff ID", d.employeeCode || "", left, width / 2); kv("ตำแหน่ง / Position", d.position || "", left + width / 2, width / 2); y += 15;
+
+    bar("การตั้งค่าเครื่องและบัญชี / Machine & Account");
+    ensure(15); kv("Computer and User name", d.computerName || "", left, width / 2); kv("User Share", d.userShare || "", left + width / 2, width / 2); y += 15;
+    ensure(15); kv("Login user name", d.loginUsername || d.computerName || "", left, width / 2); kv("รหัสผ่าน / Password", "เก็บใน Vault (ไม่พิมพ์)", left + width / 2, width / 2); y += 15;
+
+    bar(`ไดรฟ์ที่ Map / Mapped Drives (${d.drives.length})`);
+    if (d.drives.length === 0) { ensure(13); doc.font(body).fontSize(8).fillColor("#6b7280").text("— ไม่มี / none —", left + 4, y); y += 14; doc.fillColor("#111827"); }
+    for (const path of d.drives) {
+      ensure(12);
+      doc.font(body).fontSize(8.5).fillColor("#111827").text("•  ", left + 4, y, { continued: true, lineBreak: false });
+      doc.fillColor("#1d4ed8").text(path, { width: width - 16 });
+      y = doc.y + 2; doc.fillColor("#111827");
+    }
+    y += 4;
+
+    if (d.notes) { bar("หมายเหตุ / Notes"); ensure(24); doc.font(body).fontSize(8.5).fillColor("#111827").text(d.notes, left + 4, y, { width: width - 8 }); y = doc.y + 6; }
+
+    // signatures
+    ensure(70); y += 10;
+    const bw2 = width / 2, bh = 46;
+    const sroles = ["ผู้ส่งมอบ / IT (Handed over by)", "ผู้รับมอบ / Employee (Received by)"];
+    for (let j = 0; j < sroles.length; j++) {
+      const bx = left + j * bw2;
+      doc.font(body).fontSize(8).fillColor("#111827");
+      doc.text("ลงชื่อ/Sign ............................................", bx, y + 4, { width: bw2, align: "center", lineBreak: false });
+      doc.text("(........................................................)", bx, y + 18, { width: bw2, align: "center", lineBreak: false });
+      doc.fontSize(7.5).fillColor("#6b7280").text("วันที่ / Date ...............................", bx, y + 30, { width: bw2, align: "center", lineBreak: false });
+      doc.fontSize(8).fillColor("#111827").text(sroles[j], bx, y + 40, { width: bw2, align: "center", lineBreak: false });
+    }
+    y += bh + 8;
+    ensure(12); doc.font(body).fontSize(7).fillColor("#6b7280").text("รหัสผ่านไม่ถูกพิมพ์ในเอกสารนี้ — เปิดผ่าน Vault ที่มีการบันทึก log เท่านั้น / Password is never printed; reveal via the audited Vault.", left, y, { width, align: "center" });
+    doc.end();
+  });
+}
