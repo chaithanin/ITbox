@@ -89,6 +89,12 @@ Report keys include: `assets`, `assets-by-department`, `assignments`,
 Access-request submit / approval sign-offs / provisioning are **Server Actions**
 (`src/app/(app)/access-requests/actions.ts`, `documents/access-actions.ts`).
 
+Drive & User Setup (new-user provisioning: computer/user name, user share, drive
+list) is **Server Actions** (`src/app/(app)/drive-mappings/actions.ts`); read =
+`support:read`, create/edit/delete = `support:work`. The login username/password
+is written only to the Vault (`vault:create`) and linked via
+`DriveMapping.credentialVaultItemId` — never stored plaintext on the record.
+
 Probation KPI evaluation create / score / status are **Server Actions**
 (`src/app/(app)/evaluations/actions.ts`); role templates + the scoring engine live
 in `src/lib/documents/evaluation-templates.ts` (IT Support · IT Assistant Manager).

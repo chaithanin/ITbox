@@ -4,6 +4,25 @@ Notable changes, newest first. Dates are approximate to the build history.
 The project is continuously deployed; each entry maps to one or more commits on
 the active branch.
 
+## 2026-09 — Drive & User Setup (Service Desk) + CCTV module toggle
+
+**Added**
+- **Drive & User Setup** (`/drive-mappings`, under Service Desk) — a new-user
+  provisioning sheet: Computer/User name, User Share, and the list of network
+  drives (UNC paths) to map. The **login username/password is stored only in the
+  Vault** (AES-256-GCM + KMS, HIGH, `drive-mapping`/`user-account` tags) and
+  linked to the sheet — masked, revealed only through the audited Vault flow.
+  Searchable employee picker auto-fills name/nickname/staff-ID/position. Read =
+  `support:read`, create/edit/delete = `support:work`, set/rotate password =
+  `vault:create`.
+- Shared searchable **employee combobox** (`src/components/employee-combobox.tsx`),
+  now used by both the KPI assessment and Drive & User Setup forms.
+
+**Changed**
+- **CCTV module closed** behind a `CCTV_ENABLED` feature flag (default off) —
+  sidebar link hidden, all `/cctv` pages 404, CCTV actions/API/ingest routes 404,
+  daily CCTV cron no-ops. Data retained; flip the flag to re-open.
+
 ## 2026-09 — Probation 30/60/90 KPI assessment
 
 **Added**

@@ -73,6 +73,7 @@ model Organization {
   ciRelationships   CiRelationship[]
   onboardings       Onboarding[]
   evaluations       Evaluation[]
+  driveMappings     DriveMapping[]
   serviceCatalog    ServiceCatalogItem[]
   endpointPostures  EndpointPosture[]
   monitoringHosts   MonitoringHost[]
@@ -336,6 +337,7 @@ model Employee {
   offboardings       Offboarding[]
   onboardings        Onboarding[]
   evaluations        Evaluation[]
+  driveMappings      DriveMapping[]
   supportCases       SupportCase[]  @relation("CaseRequesterEmployee")
   borrowRequests     BorrowRequest[] @relation("BorrowRequester")
   simCards           SimCard[]
@@ -3174,4 +3176,39 @@ model Evaluation {
   @@index([organizationId, status])
   @@index([organizationId, employeeId])
   @@map("evaluations")
+}
+
+// ==================== Drive & User Setup (Service Desk) ====================
+// New-user provisioning sheet: computer/user name, user share, and the list of
+// network drives (UNC paths) to map. The login username/password is a credential
+// and lives ONLY in the Vault (AES-256-GCM + KMS) — never plaintext here.
+
+model DriveMapping {
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String    @db.Uuid
+  employeeId     String?   @db.Uuid
+  // Snapshot of the person (kept on the sheet even if the employee record changes)
+  employeeCode   String?
+  employeeName   String?
+  nickname       String?
+  position       String?
+  computerName   String? // "Computer and User name" e.g. Sales-Trainer
+  userShare      String? // e.g. salestrainer
+  loginUsername  String? // login/user name (mirrors the Vault item username; not the secret)
+  drives         String[]  @default([]) // UNC paths to map
+  credentialVaultItemId String? @db.Uuid // username/password in the Vault
+  status         String    @default("ACTIVE") // DRAFT | ACTIVE | DONE
+  notes          String?
+  createdById    String?   @db.Uuid
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  employee     Employee?    @relation(fields: [employeeId], references: [id])
+
+  @@index([organizationId, status])
+  @@index([organizationId, employeeId])
+  @@map("drive_mappings")
 }

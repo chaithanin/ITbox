@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { EVAL_TEMPLATE_LIST } from "@/lib/documents/evaluation-templates";
 import { createEvaluation } from "../actions";
-import { EmployeeCombobox } from "../employee-combobox";
+import { EmployeeCombobox } from "@/components/employee-combobox";
 
 export default async function NewEvaluationPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const user = await requirePermission("evaluation:assign");
