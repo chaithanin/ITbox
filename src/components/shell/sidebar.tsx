@@ -76,7 +76,7 @@ const ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   default: Boxes,
 };
 
-const STORAGE_KEY = "itbox.nav.collapsed";
+const STORAGE_KEY = "itbox.nav.open";
 
 function isActive(pathname: string, href: string) {
   if (href === "/dashboard") return pathname === href;
@@ -156,20 +156,22 @@ export function Sidebar({
   onClose: () => void;
 }) {
   const pathname = usePathname();
-  // Which workspaces the user has explicitly collapsed (persisted per browser).
-  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  // Which workspaces the user has explicitly opened (persisted per browser).
+  // Default is collapsed: the sidebar shows just the group headers plus the
+  // items of whichever workspace the current page lives in, so it stays compact.
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) setCollapsed(JSON.parse(raw));
+      if (raw) setOpenGroups(JSON.parse(raw));
     } catch {
       /* ignore unavailable/broken storage */
     }
   }, []);
 
   const toggle = (id: string) => {
-    setCollapsed((prev) => {
+    setOpenGroups((prev) => {
       const next = { ...prev, [id]: !prev[id] };
       try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
@@ -210,9 +212,9 @@ export function Sidebar({
           {groups.map((group) => {
             const GroupIcon = ICONS[group.icon] ?? ICONS.default;
             const active = groupIsActive(pathname, group);
-            // Expanded when: the user hasn't collapsed it, OR a child route is
-            // active (an active workspace always shows its items).
-            const expanded = active || !collapsed[group.id];
+            // Collapsed by default; expanded when the user has opened it, OR a
+            // child route is active (an active workspace always shows its items).
+            const expanded = active || !!openGroups[group.id];
             return (
               <div key={group.id}>
                 <button

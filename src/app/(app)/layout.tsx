@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/session";
 import { getT } from "@/lib/i18n";
 import { prisma } from "@/lib/prisma";
-import { PROCUREMENT_ENABLED, CCTV_ENABLED } from "@/lib/features";
+import { PROCUREMENT_ENABLED, CCTV_ENABLED, CMDB_ENABLED, BACKUP_ENABLED, VULN_ENABLED, ENDPOINTS_ENABLED } from "@/lib/features";
 import { AppShell } from "@/components/shell/app-shell";
 import type { NavGroup, NavItem } from "@/components/shell/sidebar";
 import { KpiPopup } from "@/components/kpi-popup";
@@ -141,15 +141,15 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           ],
         }]
       : []),
-    ...(has("cmdb:read") ? [{ href: "/cmdb", label: "CMDB", icon: "cmdb" }] : []),
-    ...(has("backup:read") ? [{ href: "/backup", label: "Backup & DR", icon: "backup" }] : []),
+    ...(CMDB_ENABLED && has("cmdb:read") ? [{ href: "/cmdb", label: "CMDB", icon: "cmdb" }] : []),
+    ...(BACKUP_ENABLED && has("backup:read") ? [{ href: "/backup", label: "Backup & DR", icon: "backup" }] : []),
   ];
 
   // Security
   const security: NavItem[] = [
     ...(has("security:read") ? [{ href: "/security", label: "Security Center", icon: "security" }] : []),
-    ...(has("monitoring:read") ? [{ href: "/endpoints", label: "Endpoint Security", icon: "endpoints" }] : []),
-    ...(has("vuln:read") ? [{ href: "/vulnerabilities", label: "Vulnerabilities", icon: "vulnerabilities" }] : []),
+    ...(ENDPOINTS_ENABLED && has("monitoring:read") ? [{ href: "/endpoints", label: "Endpoint Security", icon: "endpoints" }] : []),
+    ...(VULN_ENABLED && has("vuln:read") ? [{ href: "/vulnerabilities", label: "Vulnerabilities", icon: "vulnerabilities" }] : []),
     ...(has("vault:read")
       ? [{
           href: "/vault", label: "Password Vault", icon: "vault",
