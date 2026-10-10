@@ -88,9 +88,15 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     ...(has("support:read") ? [{ href: "/drive-mappings", label: "ตั้งค่าไดรฟ์/ผู้ใช้ / Drive & User Setup", icon: "driveMapping" }] : []),
     ...(has("maintenance:read") ? [{ href: "/maintenance", label: "งานซ่อม / Maintenance", icon: "maintenance" }] : []),
     ...(has("catalog:read") ? [{ href: "/catalog", label: "Service Catalog", icon: "catalog" }] : []),
-    ...(has("kb:read") ? [{ href: "/kb", label: "Knowledge Base", icon: "kb" }] : []),
-    ...(has("problem:read") ? [{ href: "/problems", label: "Problem Management", icon: "problems" }] : []),
-    ...(has("change:read") ? [{ href: "/changes", label: "Change Management", icon: "changes" }] : []),
+    // KB / Problem / Change folded into one expandable item to keep the group short.
+    ...(() => {
+      const itsm = [
+        ...(has("kb:read") ? [{ href: "/kb", label: "Knowledge Base" }] : []),
+        ...(has("problem:read") ? [{ href: "/problems", label: "Problem Management" }] : []),
+        ...(has("change:read") ? [{ href: "/changes", label: "Change Management" }] : []),
+      ];
+      return itsm.length ? [{ href: itsm[0].href, label: "ITSM (KB / Problem / Change)", icon: "kb", children: itsm }] : [];
+    })(),
   ];
 
   // Assets & Procurement

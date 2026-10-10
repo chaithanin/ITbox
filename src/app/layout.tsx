@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { getLocale } from "@/lib/i18n";
+import { PwaRegister } from "@/components/pwa-register";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -21,11 +22,21 @@ export const metadata: Metadata = {
   title: { default: "TECHCORE — Enterprise IT Management", template: "%s | TECHCORE" },
   description:
     "Enterprise IT Management System: assets, password vault, licenses, procurement",
+  applicationName: "TECHCORE",
+  appleWebApp: { capable: true, title: "TECHCORE", statusBarStyle: "black-translucent" },
+  icons: {
+    icon: [
+      { url: "/icon.svg", type: "image/svg+xml" },
+      { url: "/icon-192.png", sizes: "192x192", type: "image/png" },
+    ],
+    apple: [{ url: "/apple-touch-icon.png", sizes: "180x180" }],
+  },
 };
 
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
+  themeColor: "#0a1830",
 };
 
 const themeScript = `
@@ -53,7 +64,7 @@ export default async function RootLayout({
           rel="stylesheet"
         />
       </head>
-      <body className="min-h-screen font-sans">{children}</body>
+      <body className="min-h-screen font-sans">{children}<PwaRegister /></body>
     </html>
   );
 }

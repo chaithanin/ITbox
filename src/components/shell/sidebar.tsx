@@ -101,7 +101,12 @@ function NavLink({
   onClose: () => void;
 }) {
   const Icon = item.icon ? ICONS[item.icon] ?? ICONS.default : null;
-  const active = isActive(pathname, item.href);
+  // Highlight / expand when the item's own route OR any of its children is active,
+  // so a folded group (e.g. KB / Problem / Change) opens on any of those pages.
+  const childActive = (item.children ?? []).some(
+    (c) => pathname === c.href || pathname.startsWith(c.href + "/")
+  );
+  const active = isActive(pathname, item.href) || childActive;
   return (
     <div>
       <Link
